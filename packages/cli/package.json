@@ -1,5 +1,5 @@
 {
-  "name": "@moorline/cli",
+  "name": "moorline",
   "version": "0.0.1",
   "description": "Moorline command line interface",
   "type": "module",

@@ -18,7 +18,7 @@ bun run build
 - `packages/core`: Moorline core runtime, config, state, policy, package services, and control-plane implementation.
 - `packages/control-api`: typed route table, validators, HTTP client, and local connection-record helpers.
 - `packages/http`: official HTTP API adapter.
-- `packages/cli`: the `moorline` command.
+- `packages/cli`: the unscoped `moorline` npm package and command.
 
 Official provider, transport, plugin, skill, and bundle packages live in `Moorline/packages`. Package authoring, validation, and bundling tools live in `Moorline/kit`.
 

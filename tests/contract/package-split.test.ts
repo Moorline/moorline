@@ -38,7 +38,7 @@ describe('host repository split contract', () => {
     expect(packageJson('contracts').name).toBe('@moorline/contracts');
     expect(packageJson('core').name).toBe('@moorline/core');
     expect(packageJson('control-api').name).toBe('@moorline/control-api');
-    expect(packageJson('cli').name).toBe('@moorline/cli');
+    expect(packageJson('cli').name).toBe('moorline');
     expect(packageJson('http').name).toBe('@moorline/http');
     expect((packageJson('cli').bin as Record<string, string>).moorline).toBe('./dist/main.js');
   });
@@ -63,7 +63,7 @@ describe('host repository split contract', () => {
 
   it('keeps core free of CLI, HTTP, and moved package implementation imports', () => {
     const source = readSourceTree(join(root, 'packages', 'core', 'src'));
-    expect(source).not.toMatch(/@moorline\/(cli|http|codex|discord)/);
+    expect(source).not.toMatch(/@moorline\/(http|codex|discord)/);
     expect(source).not.toMatch(/from ['"][^'"]*packages\/(cli|http|codex|discord)/);
   });
 
