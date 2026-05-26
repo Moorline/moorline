@@ -1,0 +1,59 @@
+{
+  "name": "@moorline/core",
+  "version": "0.0.1",
+  "description": "Moorline core runtime, state, package, policy, and control-plane services",
+  "type": "module",
+  "private": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./core/*.js": {
+      "types": "./dist/core/*.d.ts",
+      "default": "./dist/core/*.js"
+    },
+    "./core/*": {
+      "types": "./dist/core/*.d.ts",
+      "default": "./dist/core/*.js"
+    },
+    "./types/*.js": {
+      "types": "./dist/types/*.d.ts",
+      "default": "./dist/types/*.js"
+    },
+    "./types/*": {
+      "types": "./dist/types/*.d.ts",
+      "default": "./dist/types/*.js"
+    },
+    "./app/*.js": {
+      "types": "./dist/app/*.d.ts",
+      "default": "./dist/app/*.js"
+    },
+    "./app/*": {
+      "types": "./dist/app/*.d.ts",
+      "default": "./dist/app/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "resources"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/clean-package-dist.mjs core && tsc -p tsconfig.json && node ../../scripts/flatten-package-dist.mjs core",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@moorline/contracts": "0.0.1",
+    "semver": "^7.7.4",
+    "tar": "^7.4.3",
+    "yauzl": "^3.2.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/Moorline/moorline.git",
+    "directory": "packages/core"
+  }
+}

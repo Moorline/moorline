@@ -1,0 +1,56 @@
+{
+  "name": "moorline-workspace",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Moorline host runtime, CLI, control API, and default HTTP adapter",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/Moorline/moorline.git"
+  },
+  "packageManager": "bun@1.3.11",
+  "workspaces": [
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/clean-dist.mjs && bun run build:packages && bun scripts/copy-migrations.mjs",
+    "build:packages": "bun run --filter './packages/*' build",
+    "build:cli-artifact": "node scripts/build-cli-artifact.mjs",
+    "validate:release-runtime": "node tools/release/verify-node-sqlite-runtime.mjs",
+    "start": "node packages/cli/dist/main.js run",
+    "dev": "bun run build:packages && tsx packages/cli/src/main.ts",
+    "moorline": "node packages/cli/dist/main.js",
+    "setup": "node packages/cli/dist/main.js run",
+    "reset:fresh": "node scripts/reset-runtime.mjs",
+    "check:fast": "bun run typecheck && bun run lint && bun run test:fast",
+    "check": "bun run typecheck && bun run lint && bun run test:full",
+    "knip": "node scripts/clean-dist.mjs && knip",
+    "typecheck": "bun run --filter './packages/*' typecheck",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:fast": "vitest run tests/contract/*.test.ts tests/unit/*.test.ts",
+    "test:integration": "vitest run tests/integration/*.test.ts",
+    "test:full": "bun run test:fast && bun run test:integration && bun run build:cli-artifact -- --platform linux-x64"
+  },
+  "engines": {
+    "bun": ">=1.3.11",
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "@types/node": "^22.13.10",
+    "@types/semver": "^7.7.1",
+    "@types/yauzl": "^2.10.3",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "@vitest/coverage-v8": "^3.2.4",
+    "eslint": "^9.21.0",
+    "knip": "^5.86.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8",
+    "yazl": "^3.3.1"
+  }
+}

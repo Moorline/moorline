@@ -1,0 +1,444 @@
+[
+  {
+    "kind": "api-adapter",
+    "surface": "api-adapter",
+    "packageId": "official/http",
+    "name": "HTTP API Adapter",
+    "description": "Expose Moorline control over HTTP with bearer-token auth.",
+    "version": "0.0.1",
+    "recommendedForSetup": true,
+    "tags": [
+      "official",
+      "http",
+      "control-api"
+    ],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/moorline/releases/download/v0.0.1/moorline-api-adapter-http-0.0.1.tar.gz",
+      "sha256": "581440a424471901ccd7b6e9ab2f4c76d3f96bac1e81c7bfee4555408dd0c13e"
+    },
+    "requires": []
+  },
+  {
+    "kind": "bundle",
+    "surface": "bundle",
+    "packageId": "official/basic-essentials",
+    "name": "Basic Essentials",
+    "description": "Shared official plugins for memory, model selection, skills, self-editing, and session orchestration.",
+    "version": "0.0.1",
+    "recommendedForSetup": true,
+    "tags": [
+      "official",
+      "shared",
+      "bundle",
+      "essentials"
+    ],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/packages/releases/download/v0.0.1/moorline-bundle-basic-essentials-0.0.1.tar.gz",
+      "sha256": "8f74f90e33dd3af2f2d4e3a6891ecfdeba74ac14a250cde882141132f613bd54"
+    },
+    "requires": [],
+    "members": [
+      {
+        "kind": "plugin",
+        "surface": "plugin",
+        "packageId": "official/memory",
+        "version": "~0.0.1",
+        "activation": "enable"
+      },
+      {
+        "kind": "plugin",
+        "surface": "plugin",
+        "packageId": "official/model-picker",
+        "version": "~0.0.1",
+        "activation": "enable"
+      },
+      {
+        "kind": "plugin",
+        "surface": "plugin",
+        "packageId": "official/persona",
+        "version": "~0.0.1",
+        "activation": "enable"
+      },
+      {
+        "kind": "plugin",
+        "surface": "plugin",
+        "packageId": "official/self-edit",
+        "version": "~0.0.1",
+        "activation": "enable"
+      },
+      {
+        "kind": "plugin",
+        "surface": "plugin",
+        "packageId": "official/session-orchestration",
+        "version": "~0.0.1",
+        "activation": "enable"
+      },
+      {
+        "kind": "plugin",
+        "surface": "plugin",
+        "packageId": "official/skills",
+        "version": "~0.0.1",
+        "activation": "enable"
+      }
+    ]
+  },
+  {
+    "kind": "bundle",
+    "surface": "bundle",
+    "packageId": "official/codex-default",
+    "name": "Codex Default",
+    "description": "Official Codex provider for local Moorline sessions.",
+    "version": "0.0.1",
+    "recommendedForSetup": true,
+    "tags": [
+      "official",
+      "codex",
+      "bundle",
+      "provider"
+    ],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/packages/releases/download/v0.0.1/moorline-bundle-codex-default-0.0.1.tar.gz",
+      "sha256": "4364cc11b13df111e95c1fe9a096ab36bceb1e88e925fe569533fdacb4cf0347"
+    },
+    "requires": [],
+    "members": [
+      {
+        "kind": "provider",
+        "surface": "provider",
+        "packageId": "official/codex",
+        "version": "~0.0.1",
+        "activation": "select"
+      }
+    ]
+  },
+  {
+    "kind": "bundle",
+    "surface": "bundle",
+    "packageId": "official/discord-default",
+    "name": "Discord Default",
+    "description": "Discord transport plus the official Discord chat, session, mission, status, admin, and lifecycle plugins.",
+    "version": "0.0.1",
+    "recommendedForSetup": true,
+    "tags": [
+      "official",
+      "discord",
+      "bundle",
+      "transport"
+    ],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/packages/releases/download/v0.0.1/moorline-bundle-discord-default-0.0.1.tar.gz",
+      "sha256": "07ca2d177bedec32050c2cae0d5f89a580541e854a3622d525e9d0d6764765a2"
+    },
+    "requires": [],
+    "members": [
+      {
+        "kind": "transport",
+        "surface": "transport",
+        "packageId": "official/discord",
+        "version": "~0.0.1",
+        "activation": "select"
+      },
+      {
+        "kind": "plugin",
+        "surface": "plugin",
+        "packageId": "official/admin-control",
+        "version": "~0.0.1",
+        "activation": "enable"
+      },
+      {
+        "kind": "plugin",
+        "surface": "plugin",
+        "packageId": "official/channel-lifecycle",
+        "version": "~0.0.1",
+        "activation": "enable"
+      },
+      {
+        "kind": "plugin",
+        "surface": "plugin",
+        "packageId": "official/main-chat",
+        "version": "~0.0.1",
+        "activation": "enable"
+      },
+      {
+        "kind": "plugin",
+        "surface": "plugin",
+        "packageId": "official/session-agent",
+        "version": "~0.0.1",
+        "activation": "enable"
+      },
+      {
+        "kind": "plugin",
+        "surface": "plugin",
+        "packageId": "official/session-commands",
+        "version": "~0.0.1",
+        "activation": "enable"
+      },
+      {
+        "kind": "plugin",
+        "surface": "plugin",
+        "packageId": "official/status",
+        "version": "~0.0.1",
+        "activation": "enable"
+      }
+    ]
+  },
+  {
+    "kind": "plugin",
+    "surface": "plugin",
+    "packageId": "official/admin-control",
+    "name": "Admin Control",
+    "description": "Runtime and provider lifecycle controls for Discord surfaces.",
+    "version": "0.0.1",
+    "recommendedForSetup": false,
+    "tags": [],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/packages/releases/download/v0.0.1/moorline-plugin-admin-control-0.0.1.tar.gz",
+      "sha256": "7e8b3b4d8ba48398df557060cda085b79863c9aba979fe31b68d469334a41a17"
+    },
+    "requires": [
+      "official/discord"
+    ]
+  },
+  {
+    "kind": "plugin",
+    "surface": "plugin",
+    "packageId": "official/channel-lifecycle",
+    "name": "Channel Lifecycle",
+    "description": "Archive and delete controls for Discord-managed channels.",
+    "version": "0.0.1",
+    "recommendedForSetup": false,
+    "tags": [],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/packages/releases/download/v0.0.1/moorline-plugin-channel-lifecycle-0.0.1.tar.gz",
+      "sha256": "572481186ba0211302f18f576172461553f430dd30fe8563be935557db8b58fe"
+    },
+    "requires": [
+      "official/discord"
+    ]
+  },
+  {
+    "kind": "plugin",
+    "surface": "plugin",
+    "packageId": "official/main-chat",
+    "name": "Main Chat",
+    "description": "Routes Moorline chat channel messages through the Discord transport.",
+    "version": "0.0.1",
+    "recommendedForSetup": false,
+    "tags": [],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/packages/releases/download/v0.0.1/moorline-plugin-main-chat-0.0.1.tar.gz",
+      "sha256": "5a5ceeb7fe51299909fa41bdd6ea7f77c475cb411ab36587436bb3339dd8d152"
+    },
+    "requires": [
+      "official/discord"
+    ]
+  },
+  {
+    "kind": "plugin",
+    "surface": "plugin",
+    "packageId": "official/memory",
+    "name": "Memory",
+    "description": "Layered memory retrieval and memory writing for Moorline sessions.",
+    "version": "0.0.1",
+    "recommendedForSetup": false,
+    "tags": [],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/packages/releases/download/v0.0.1/moorline-plugin-memory-0.0.1.tar.gz",
+      "sha256": "3ee043b0131b534061c0d3701f7e1c48ec81c68b8c3d27d4075c449bf0633904"
+    },
+    "requires": []
+  },
+  {
+    "kind": "plugin",
+    "surface": "plugin",
+    "packageId": "official/model-picker",
+    "name": "Model Picker",
+    "description": "Commands for listing and selecting the default Moorline model.",
+    "version": "0.0.1",
+    "recommendedForSetup": false,
+    "tags": [],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/packages/releases/download/v0.0.1/moorline-plugin-model-picker-0.0.1.tar.gz",
+      "sha256": "13bc34a06e73a61a71fca305059063a50a6b7f072a71de1dcea1d3413fa3395b"
+    },
+    "requires": []
+  },
+  {
+    "kind": "plugin",
+    "surface": "plugin",
+    "packageId": "official/persona",
+    "name": "Moorline Persona",
+    "description": "Default Moorline persona and system prompt contribution.",
+    "version": "0.0.1",
+    "recommendedForSetup": false,
+    "tags": [
+      "persona",
+      "prompt"
+    ],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/packages/releases/download/v0.0.1/moorline-plugin-persona-0.0.1.tar.gz",
+      "sha256": "75df3834452302523c1e09d37831f3a5a418e24924759cac73270561fa248643"
+    },
+    "requires": []
+  },
+  {
+    "kind": "plugin",
+    "surface": "plugin",
+    "packageId": "official/self-edit",
+    "name": "Self Edit",
+    "description": "Allows Moorline to generate and update visible runtime skills.",
+    "version": "0.0.1",
+    "recommendedForSetup": false,
+    "tags": [],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/packages/releases/download/v0.0.1/moorline-plugin-self-edit-0.0.1.tar.gz",
+      "sha256": "e45931fc21e26674dcd705152053ebf3d655d8a0345ca3ebe3ea083384ae4f16"
+    },
+    "requires": []
+  },
+  {
+    "kind": "plugin",
+    "surface": "plugin",
+    "packageId": "official/session-agent",
+    "name": "Session Agent",
+    "description": "Session routing for Discord channel surfaces.",
+    "version": "0.0.1",
+    "recommendedForSetup": false,
+    "tags": [],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/packages/releases/download/v0.0.1/moorline-plugin-session-agent-0.0.1.tar.gz",
+      "sha256": "139833fcc849f999d78119a99a7a6c087e9ddd2f95138df73b2075edb349b77e"
+    },
+    "requires": [
+      "official/discord"
+    ]
+  },
+  {
+    "kind": "plugin",
+    "surface": "plugin",
+    "packageId": "official/session-commands",
+    "name": "Session Commands",
+    "description": "Session lifecycle and scheduled-session commands for Discord.",
+    "version": "0.0.1",
+    "recommendedForSetup": false,
+    "tags": [],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/packages/releases/download/v0.0.1/moorline-plugin-session-commands-0.0.1.tar.gz",
+      "sha256": "7dc0fc6c2e63c820fa1ffd6f8387e948e2ee7bb1105b54caa1791d2be45d3a26"
+    },
+    "requires": [
+      "official/discord"
+    ]
+  },
+  {
+    "kind": "plugin",
+    "surface": "plugin",
+    "packageId": "official/session-orchestration",
+    "name": "Session Orchestration",
+    "description": "Agent-facing tools for managing bounded and scheduled worker sessions.",
+    "version": "0.0.1",
+    "recommendedForSetup": false,
+    "tags": [],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/packages/releases/download/v0.0.1/moorline-plugin-session-orchestration-0.0.1.tar.gz",
+      "sha256": "8dbfd19f171856a85e799357205848f6dd97ec07693e9aec966e38222f488ef5"
+    },
+    "requires": []
+  },
+  {
+    "kind": "plugin",
+    "surface": "plugin",
+    "packageId": "official/skills",
+    "name": "Skills",
+    "description": "Exposes the visible skill catalog and the load_skill tool.",
+    "version": "0.0.1",
+    "recommendedForSetup": false,
+    "tags": [],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/packages/releases/download/v0.0.1/moorline-plugin-skills-0.0.1.tar.gz",
+      "sha256": "c8219a761faa6bbe352fb49e6c976b25c1ed685198337daae1454e025cb62d4b"
+    },
+    "requires": []
+  },
+  {
+    "kind": "plugin",
+    "surface": "plugin",
+    "packageId": "official/status",
+    "name": "Status",
+    "description": "Status and request-control commands for Discord.",
+    "version": "0.0.1",
+    "recommendedForSetup": false,
+    "tags": [],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/packages/releases/download/v0.0.1/moorline-plugin-status-0.0.1.tar.gz",
+      "sha256": "a2508d602c4213683471bdd3e3bd7d9e87a73e2322fe4cfb8eeb1d38ece76d2f"
+    },
+    "requires": [
+      "official/discord"
+    ]
+  },
+  {
+    "kind": "provider",
+    "surface": "provider",
+    "packageId": "official/codex",
+    "name": "Codex Provider",
+    "description": "Official Codex provider package for Moorline.",
+    "version": "0.0.1",
+    "recommendedForSetup": false,
+    "tags": [
+      "official",
+      "codex",
+      "provider"
+    ],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/packages/releases/download/v0.0.1/moorline-provider-codex-0.0.1.tar.gz",
+      "sha256": "45630d8ea605d104c78bf5a8c5c6ad118dde09cbf1a4c15c5b6164c0db74b697"
+    },
+    "requires": []
+  },
+  {
+    "kind": "transport",
+    "surface": "transport",
+    "packageId": "official/discord",
+    "name": "Discord Transport",
+    "description": "Official Discord transport package for Moorline.",
+    "version": "0.0.1",
+    "recommendedForSetup": false,
+    "tags": [
+      "official",
+      "discord",
+      "transport"
+    ],
+    "source": {
+      "kind": "remote_archive",
+      "url": "https://github.com/Moorline/packages/releases/download/v0.0.1/moorline-transport-discord-0.0.1.tar.gz",
+      "sha256": "5a4dcf82413e6f76d64cca6a7a05c63a76d37d29a9b91686f0bfd0e82a91d92d"
+    },
+    "requires": [],
+    "suggestedAfterInstall": [
+      "official/admin-control",
+      "official/channel-lifecycle",
+      "official/main-chat",
+      "official/session-agent",
+      "official/session-commands",
+      "official/status"
+    ]
+  }
+]

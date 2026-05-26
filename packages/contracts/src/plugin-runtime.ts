@@ -1,0 +1,567 @@
+import type { Capability } from './capabilities.js';
+import type { PluginManifest, RuntimeManagementContribution } from './plugin.js';
+import type { RuntimeProviderTestResult } from './provider.js';
+import type {
+  RuntimeActionDefinition,
+  RuntimeActorIdentity,
+  RuntimeAttachmentPayload,
+  RuntimeMessagePayload,
+  RuntimeSurfaceState,
+  RuntimeTransportEvent
+} from './transport.js';
+import type {
+  PendingRuntimeRequestRecord,
+  ProviderRuntimeEvent,
+  ProviderSessionStatus,
+  ProviderThreadTokenUsage,
+  RuntimeModeName
+} from './runtime.js';
+
+export interface RuntimeDomainEvent {
+  eventId: string;
+  threadId: string;
+  spaceId?: string | null;
+  sessionId?: string | null;
+  missionId?: string | null;
+  sourceProviderEventId?: string | null;
+  createdAt: string;
+  type: string;
+  payload?: unknown;
+}
+
+export interface RuntimeActionDispatchResult {
+  handled: boolean;
+  reply?: RuntimeMessagePayload;
+  audit?: {
+    event: string;
+    payload?: Record<string, unknown>;
+  };
+  continueDispatch?: boolean;
+}
+
+export interface RuntimeToolResult {
+  content: string;
+}
+
+export interface SkillCatalogEntry {
+  name: string;
+  description?: string;
+  tags?: string[];
+}
+
+export interface LoadedSkill extends SkillCatalogEntry {
+  body?: string;
+}
+
+export interface WrittenSkillResult {
+  skillDir: string;
+  skillPath: string;
+  resourcePaths: string[];
+}
+
+export type RuntimeEntityRecord = {
+  id?: string;
+  sessionId?: string;
+  missionId?: string;
+  runId?: string;
+  threadId?: string;
+  spaceId?: string;
+  name?: string;
+  title?: string;
+  status?: string;
+  lifecycleStatus?: string;
+  runtimeMode?: RuntimeModeName;
+};
+
+export type SessionLifecycleStatus = 'hot' | 'cool' | 'archived';
+
+export type RuntimeSessionRow = RuntimeEntityRecord & {
+  sessionId: string;
+  scopeId: string;
+  threadId: string;
+  spaceId: string;
+  spaceName: string;
+  workspacePath: string;
+  summary: string | null;
+  provider: string;
+  providerThreadId: string | null;
+  resumeThreadId: string | null;
+  providerStatus: ProviderSessionStatus;
+  activeTurnId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastActivityAt: string;
+  archivedAt: string | null;
+  lastError: string | null;
+  lifecycleStatus: SessionLifecycleStatus;
+  runtimeMode: RuntimeModeName;
+};
+
+export type RuntimeMissionRow = RuntimeEntityRecord & {
+  missionId: string;
+  title: string;
+  spaceId: string;
+};
+
+export type RuntimeMissionRunRow = RuntimeEntityRecord & {
+  runId: string;
+  missionId: string;
+};
+
+export type RuntimeMissionHookBindingRow = RuntimeEntityRecord & {
+  bindingId: string;
+  missionId: string;
+  hookKey: string;
+};
+
+export interface RuntimeReceiptRecord {
+  threadId: string;
+  sessionId: string | null;
+  spaceId: string | null;
+  state: string;
+  updatedAt: string;
+}
+
+export interface RuntimeActivityRecord {
+  id?: string;
+  threadId?: string;
+  type?: string;
+  createdAt?: string;
+}
+
+export interface RuntimeProviderConnectionSnapshot {
+  threadId: string;
+  providerPackageId: string;
+  runtimeMode: RuntimeModeName;
+  workspacePath: string;
+  providerThreadId: string | null;
+  status: ProviderSessionStatus;
+  model: string | null;
+  accountLabel: string | null;
+  availableModels: string[];
+  updatedAt: string;
+  lastError: string | null;
+  tokenUsage?: ProviderThreadTokenUsage;
+  capabilityMetadata: Record<string, unknown>;
+}
+
+export interface RuntimeSessionSnapshot {
+  session: RuntimeSessionRow;
+  receipt: RuntimeReceiptRecord | null;
+  provider: RuntimeProviderConnectionSnapshot | null;
+  pendingRequests: PendingRuntimeRequestRecord[];
+  recentActivities: RuntimeActivityRecord[];
+}
+
+export interface RuntimeOverviewSnapshot {
+  sessions: RuntimeSessionSnapshot[];
+  receipts: RuntimeReceiptRecord[];
+  providers: RuntimeProviderConnectionSnapshot[];
+  projectionStates: Array<{
+    projector: string;
+    lastEventId: string | null;
+    lastAppliedAt: string;
+    failure: string | null;
+  }>;
+  openRequests: PendingRuntimeRequestRecord[];
+}
+
+export type RuntimeReloadMode = 'graceful' | 'force';
+
+export interface RuntimeControlStatus {
+  acceptingNewWork: boolean;
+  reloadInProgress?: boolean;
+  providerRunning?: boolean;
+}
+
+export interface RuntimeControlResult {
+  accepted: boolean;
+  detail?: string;
+}
+
+export interface ProviderControlResult {
+  ok: boolean;
+  action: 'start' | 'stop';
+  scope: 'all' | 'thread';
+  threadId: string | null;
+  requestedCount: number;
+  affectedCount: number;
+  skippedCount: number;
+  failures: Array<{ threadId: string; error: string }>;
+  message: string;
+  remediation?: string;
+}
+
+export type SessionInventoryScope = 'active' | 'archived' | 'all' | string;
+export type SidecarScopeKind = 'global' | 'session' | 'ephemeral';
+export type SidecarReadinessProbe =
+  | { kind: 'none' }
+  | {
+      kind: 'stdio';
+      pattern: string;
+      stream?: 'stdout' | 'stderr' | 'both';
+      timeoutMs?: number;
+    };
+
+export type ManagedSidecarScope =
+  | { kind: 'global' }
+  | { kind: 'session'; key: string }
+  | { kind: 'ephemeral'; key: string };
+
+export interface ManagedSidecarLaunchSpec {
+  command: string;
+  args?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+  restart?: {
+    policy?: 'never' | 'on-failure';
+    maxRestarts?: number;
+  };
+  readiness?: SidecarReadinessProbe;
+}
+
+export interface ManagedSidecarDefinition {
+  name: string;
+  scope: ManagedSidecarScope;
+  launch: ManagedSidecarLaunchSpec;
+}
+
+export interface ManagedSidecarRecord {
+  id?: string;
+  sidecarId?: string;
+  instanceId?: string;
+  pluginId?: string;
+  name: string;
+  scopeKind: SidecarScopeKind;
+  scopeKey: string;
+  status: string;
+}
+
+export type AgentSurface = 'main_chat' | 'session' | 'mission';
+
+export interface BeforeAgentPromptInput {
+  surface: AgentSurface;
+  spaceId: string;
+  actorId: string;
+  actorLabel: string;
+  text: string;
+  attachments?: RuntimeAttachmentPayload[];
+  session: RuntimeSessionRow | null;
+}
+
+export interface AfterAgentResponseInput extends BeforeAgentPromptInput {
+  replyMessage: string;
+}
+
+export interface CreatedSessionResult {
+  session: RuntimeSessionRow;
+  spaceId: string;
+}
+
+export type MissionHookCondition = Record<string, string | number | boolean | null>;
+
+export interface MissionHookDispatchResult {
+  hookKey: string;
+  source: string;
+  bindingCount: number;
+  matchedBindingCount: number;
+  triggeredMissionIds: string[];
+}
+
+export type ArchivedSpaceTarget =
+  | { kind: 'session'; session: RuntimeSessionRow }
+  | { kind: 'mission'; mission: RuntimeMissionRow };
+
+export type SessionOwnerKind = 'mission' | 'run' | 'parent_session' | 'orchestrator';
+
+export interface SessionOwnerLink {
+  kind: SessionOwnerKind;
+  id: string;
+  label?: string;
+}
+
+export interface SessionQueryFilter {
+  scope?: SessionInventoryScope;
+  lifecycleStatuses?: RuntimeSessionRow['lifecycleStatus'][];
+  runtimeModes?: RuntimeModeName[];
+  ownerKind?: SessionOwnerKind;
+  ownerId?: string;
+  tag?: string;
+  objectiveText?: string;
+  waitStates?: Array<'idle' | 'running' | 'waiting_for_approval' | 'waiting_for_input' | 'completed' | 'failed' | 'interrupted' | 'cancelled'>;
+  includeArchived?: boolean;
+  limit?: number;
+}
+
+export interface RetrievedMemorySnippet {
+  id: string;
+  content: string;
+  sourceRefs: string[];
+  strategy: 'symbolic' | 'semantic' | 'metadata';
+}
+
+export interface RuntimePluginAdminConfig {
+  accessGroupIds: string[];
+  userIds: string[];
+  allowTransportAdmin?: boolean;
+  managedAdminAccessGroup: {
+    enabled: boolean;
+    name: string;
+  };
+  managedMemberAccessGroup: {
+    enabled: boolean;
+    name: string;
+  };
+}
+
+export type RuntimePluginConfig = object;
+export type RuntimePluginNamespaceState = RuntimeSurfaceState;
+
+export interface RuntimeToolContext {
+  readonly actorId: string;
+  readonly config: RuntimePluginConfig;
+  getCurrentSpaceId(): string;
+  getCurrentThreadId(): string;
+  getCurrentWorkspacePath(): string;
+  getChatWorkspacePath(): string;
+  listSkills(): SkillCatalogEntry[];
+  loadSkill(name: string): Promise<LoadedSkill | null>;
+  writeSkill(input: {
+    name: string;
+    description?: string;
+    tags?: string[];
+    body: string;
+    directoryName?: string;
+    resourceFiles?: Array<{ path: string; content: string }>;
+  }): Promise<WrittenSkillResult>;
+  listSessions(): RuntimeSessionRow[];
+  getSessionBySpaceId(spaceId: string): RuntimeSessionRow | null;
+  getSessionById(sessionId: string): RuntimeSessionRow | null;
+  listMissions(): RuntimeMissionRow[];
+  getMissionBySpaceId(spaceId: string): RuntimeMissionRow | null;
+  getMissionById(missionId: string): RuntimeMissionRow | null;
+  listMissionRuns(missionId: string, limit?: number): RuntimeMissionRunRow[];
+  listMissionHookBindings(filter?: { missionId?: string; hookKey?: string }): RuntimeMissionHookBindingRow[];
+  bindMissionHook(input: { missionId: string; hookKey: string; condition?: MissionHookCondition }): Promise<RuntimeMissionHookBindingRow>;
+  unbindMissionHook(input: { bindingId: string }): Promise<RuntimeMissionHookBindingRow | null>;
+  emitMissionHook(input: { hookKey: string; payload?: Record<string, unknown>; source?: string }): Promise<MissionHookDispatchResult>;
+  querySessions(filter?: SessionQueryFilter): RuntimeSessionSnapshot[];
+  createSession(input: {
+    requestedName: string;
+    runtimeMode: RuntimeModeName;
+    initialInstruction?: string;
+    objective?: string;
+    owner?: SessionOwnerLink;
+    tags?: string[];
+  }): Promise<CreatedSessionResult>;
+  directSession(input: {
+    sessionId?: string;
+    spaceId?: string;
+    instruction: string;
+    reason?: string;
+  }): Promise<{
+    session: RuntimeSessionRow;
+    reply: RuntimeMessagePayload;
+  }>;
+  archiveSession(input: { spaceId: string; sessionId?: string }): Promise<RuntimeSessionRow | null>;
+  deleteArchivedSession(input: { spaceId: string; sessionId?: string }): Promise<RuntimeSessionRow | null>;
+  createMission(input: {
+    title: string;
+    goal: string;
+    schedule: string;
+    startTime?: string;
+    runtimeMode: RuntimeModeName;
+  }): Promise<{ mission: RuntimeMissionRow; spaceId: string }>;
+  pauseMission(input: { spaceId: string; missionId?: string }): Promise<RuntimeMissionRow | null>;
+  resumeMission(input: { spaceId: string; missionId?: string }): Promise<RuntimeMissionRow | null>;
+  stopMission(input: { spaceId: string; missionId?: string }): Promise<RuntimeMissionRow | null>;
+  runMissionNow(input: { spaceId: string; missionId?: string; requesterActorId?: string }): Promise<RuntimeMissionRow | null>;
+  sendMessage(spaceId: string, payload: RuntimeMessagePayload): Promise<void>;
+  sendStatusUpdate(payload: RuntimeMessagePayload): Promise<void>;
+  appendAuditEvent(event: string, payload: Record<string, unknown>): void;
+  nowIso(): string;
+}
+
+export interface RuntimePluginAdminCapability {
+  getAdminConfig(): RuntimePluginAdminConfig;
+  isAdminActor(input: RuntimeActorIdentity): boolean;
+  getNamespaceState(): RuntimePluginNamespaceState;
+}
+
+export interface RuntimePluginObservabilityCapability {
+  listPendingRequests(spaceId: string): PendingRuntimeRequestRecord[];
+  listRuntimeReceipts(): RuntimeReceiptRecord[];
+  listProviderConnections(): RuntimeProviderConnectionSnapshot[];
+  listRuntimeActivities(threadId?: string): RuntimeActivityRecord[];
+  getSessionSnapshotBySpaceId(spaceId: string): RuntimeSessionSnapshot | null;
+  getSessionSnapshotById(sessionId: string): RuntimeSessionSnapshot | null;
+  getRuntimeOverview(): RuntimeOverviewSnapshot;
+  listProjectionStates(): Array<{
+    projector: string;
+    lastEventId: string | null;
+    lastAppliedAt: string;
+    failure: string | null;
+  }>;
+  getProviderDiagnostics(): {
+    accountLabel: string | null;
+    availableModels: string[];
+    connectedSessions: number;
+    statusCounts: Record<string, number>;
+    capabilityMetadata: Record<string, unknown>;
+  };
+  getDefaultModel(): string;
+  setDefaultModel(model: string): Promise<void>;
+  getRuntimeStatus(): {
+    uptimeSeconds: number;
+    openSessions: number;
+    coolSessions: number;
+    archivedSessions: number;
+    waitingSessions: number;
+    runningSessions: number;
+  };
+  listRuntimeEvents(threadId: string): ProviderRuntimeEvent[];
+  listDomainEvents(threadId: string): RuntimeDomainEvent[];
+  updateSessionSummary(spaceId: string, summary: string, nowIso: string): Promise<void>;
+}
+
+export interface RuntimePluginMemoryCapability {
+  retrieveMemory(input: {
+    query: string;
+    scopeId: string;
+    spaceId?: string;
+    threadId?: string | null;
+    maxResults?: number;
+    enableRerank?: boolean;
+  }): Promise<RetrievedMemorySnippet[]>;
+  writeSessionMemory(input: {
+    scopeId: string;
+    spaceId: string;
+    threadId?: string | null;
+    kind: 'log' | 'summary' | 'facts' | 'tasks';
+    content: string;
+    sourceRefs: string[];
+  }): Promise<void>;
+  writeServerMemory(input: {
+    scopeId: string;
+    kind: 'facts' | 'tasks';
+    content: string;
+    sourceRefs: string[];
+  }): Promise<void>;
+  writeProjectMemory(input: {
+    projectKey?: string;
+    kind: 'facts' | 'tasks';
+    content: string;
+    sourceRefs: string[];
+  }): Promise<void>;
+}
+
+export interface RuntimePluginWorkManagementCapability {
+  archiveMission(input: { spaceId: string; missionId?: string }): Promise<RuntimeMissionRow | null>;
+  deleteArchivedMission(input: { spaceId: string; missionId?: string }): Promise<RuntimeMissionRow | null>;
+  archiveSpaceTarget(input: { spaceId: string }): Promise<ArchivedSpaceTarget | null>;
+  deleteArchivedSpaceTarget(input: { spaceId: string }): Promise<ArchivedSpaceTarget | null>;
+  respondToRuntimeRequest(input: {
+    threadId: string;
+    requestId: string;
+    decision: 'accept' | 'decline' | 'cancel';
+    requesterActor?: RuntimeActorIdentity;
+  }): Promise<void>;
+  respondToRuntimeUserInput(input: {
+    threadId: string;
+    requestId: string;
+    answers: Record<string, string | string[]>;
+    requesterActor?: RuntimeActorIdentity;
+  }): Promise<void>;
+  cancelRuntimeRequest(input: {
+    threadId: string;
+    requestId: string;
+    requestType: PendingRuntimeRequestRecord['requestType'];
+    requesterActor?: RuntimeActorIdentity;
+  }): Promise<void>;
+  interruptTurn(input: { threadId: string }): Promise<void>;
+}
+
+export interface RuntimePluginRuntimeControlCapability {
+  getRuntimeControlStatus(): RuntimeControlStatus;
+  requestRuntimeReload(input: { mode: RuntimeReloadMode; reason: string; requestedBy: RuntimeActorIdentity }): Promise<RuntimeControlResult>;
+  setRuntimeAcceptingNewWork(input: {
+    accepting: boolean;
+    reason: string;
+    requestedBy: RuntimeActorIdentity;
+  }): Promise<void>;
+  testProvider(input: { sendTurn?: boolean; prompt?: string; reason: string; requestedBy: RuntimeActorIdentity }): Promise<RuntimeProviderTestResult>;
+  stopProvider(input: { threadId?: string; reason: string; requestedBy: RuntimeActorIdentity }): Promise<ProviderControlResult>;
+  startProvider(input: { threadId?: string; reason: string; requestedBy: RuntimeActorIdentity }): Promise<ProviderControlResult>;
+}
+
+export interface RuntimePluginSidecarCapability {
+  ensureSidecar(input: Omit<ManagedSidecarDefinition, 'pluginId'>): Promise<ManagedSidecarRecord>;
+  stopSidecar(input: { name: string; scopeKind: SidecarScopeKind; scopeKey: string }): Promise<ManagedSidecarRecord | null>;
+  listSidecars(filter?: {
+    pluginId?: string;
+    scopeKind?: SidecarScopeKind;
+    scopeKey?: string;
+    status?: ManagedSidecarRecord['status'];
+  }): ManagedSidecarRecord[];
+}
+
+export interface RuntimePluginAgentCapability {
+  runAgent(input: {
+    surface: AgentSurface;
+    spaceId: string;
+    actorId: string;
+    actorLabel: string;
+    text: string;
+    attachments?: RuntimeAttachmentPayload[];
+    session: RuntimeSessionRow | null;
+    cwd: string;
+    runtimeMode: RuntimeModeName;
+    basePromptSections: string[];
+    promptSource?: string;
+  }): Promise<RuntimeMessagePayload>;
+  drainRuntimeWork(): Promise<void>;
+}
+
+export type RuntimePluginContext = RuntimeToolContext &
+  RuntimePluginAdminCapability &
+  RuntimePluginObservabilityCapability &
+  RuntimePluginMemoryCapability &
+  RuntimePluginWorkManagementCapability &
+  RuntimePluginRuntimeControlCapability &
+  RuntimePluginSidecarCapability &
+  RuntimePluginAgentCapability;
+
+export interface RuntimeToolDefinition {
+  pluginId?: string;
+  name: string;
+  description?: string;
+  inputSchema?: Record<string, unknown>;
+  requiredCapability?: Capability;
+  execute(input: Record<string, unknown>, context: RuntimeToolContext): Promise<RuntimeToolResult> | RuntimeToolResult;
+}
+
+export interface RuntimePlugin {
+  readonly id: string;
+  readonly manifest: PluginManifest;
+  actions?(context: RuntimePluginContext): RuntimeActionDefinition[];
+  managementContributions?(context: RuntimePluginContext): RuntimeManagementContribution[];
+  tools?(context: RuntimeToolContext): RuntimeToolDefinition[];
+  onRuntimeStarted?(context: RuntimePluginContext): Promise<void> | void;
+  onTransportEvent?(
+    event: RuntimeTransportEvent,
+    context: RuntimePluginContext
+  ): Promise<RuntimeActionDispatchResult | boolean | void> | RuntimeActionDispatchResult | boolean | void;
+  onAction?(
+    event: Extract<RuntimeTransportEvent, { type: 'action.invoked' }>,
+    context: RuntimePluginContext
+  ): Promise<RuntimeActionDispatchResult | boolean | void> | RuntimeActionDispatchResult | boolean | void;
+  onRuntimeEvent?(event: ProviderRuntimeEvent, context: RuntimePluginContext): Promise<void> | void;
+  beforeAgentPrompt?(input: BeforeAgentPromptInput, context: RuntimePluginContext): Promise<string[]> | string[];
+  afterAgentResponse?(input: AfterAgentResponseInput, context: RuntimePluginContext): Promise<void> | void;
+  onDomainEvent?(event: RuntimeDomainEvent, context: RuntimePluginContext): Promise<void> | void;
+  onRuntimeReceipt?(receipt: RuntimeReceiptRecord, context: RuntimePluginContext): Promise<void> | void;
+  onRuntimeActivity?(activity: RuntimeActivityRecord, context: RuntimePluginContext): Promise<void> | void;
+}
+
+export type RuntimeActionPlugin = RuntimePlugin;
+export type RuntimeToolPlugin = RuntimePlugin;

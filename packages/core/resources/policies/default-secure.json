@@ -1,0 +1,160 @@
+{
+  "profile": "default-secure@0.1",
+  "network": {
+    "mode": "allowlist",
+    "allowlist": [
+      "provider:*",
+      "http://localhost*",
+      "https://localhost*",
+      "http://127.0.0.1*",
+      "https://127.0.0.1*",
+      "http://[::1]*",
+      "https://[::1]*"
+    ]
+  },
+  "denyUnknownCapabilities": true,
+  "allowCapabilities": [
+    "command.exec",
+    "transport.message.send",
+    "transport.action.register",
+    "transport.space.create",
+    "transport.space.update",
+    "transport.space.delete",
+    "fs.read",
+    "fs.write",
+    "memory.read",
+    "memory.write",
+    "session.inspect",
+    "session.create",
+    "session.direct",
+    "session.archive",
+    "session.delete",
+    "mission.inspect",
+    "mission.create",
+    "mission.control",
+    "mission.archive",
+    "mission.delete",
+    "net.connect",
+    "runtime.control",
+    "sidecar.manage"
+  ],
+  "actorRules": [
+    {
+      "actorPrefix": "runtime:transport/",
+      "allowCapabilities": [
+        "transport.action.register",
+        "transport.message.send",
+        "transport.space.update",
+        "session.archive",
+        "mission.create",
+        "mission.archive"
+      ]
+    },
+    {
+      "actorPrefix": "runtime:namespace/",
+      "allowCapabilities": ["transport.space.create", "transport.space.update", "transport.space.delete"]
+    },
+    {
+      "actorPrefix": "runtime:status",
+      "allowCapabilities": ["transport.message.send"]
+    },
+    {
+      "actorPrefix": "runtime:command-runner",
+      "allowCapabilities": ["command.exec"]
+    },
+    {
+      "actorPrefix": "runtime:lifecycle/",
+      "allowCapabilities": ["memory.write", "session.archive", "transport.space.update"]
+    },
+    {
+      "actorPrefix": "runtime:mission/",
+      "allowCapabilities": ["transport.message.send", "net.connect"]
+    },
+    {
+      "actorPrefix": "runtime:pending-request-action",
+      "allowCapabilities": ["net.connect"]
+    },
+    {
+      "actorPrefix": "runtime:provider/",
+      "allowCapabilities": ["net.connect"]
+    },
+    {
+      "actorPrefix": "plugin:official/model-picker",
+      "allowCapabilities": ["fs.write"]
+    },
+    {
+      "actorPrefix": "plugin:official/main-chat",
+      "allowCapabilities": ["transport.message.send", "net.connect", "fs.read"]
+    },
+    {
+      "actorPrefix": "plugin:official/session-agent",
+      "allowCapabilities": ["transport.message.send", "net.connect", "fs.read"]
+    },
+    {
+      "actorPrefix": "plugin:official/session-commands",
+      "allowCapabilities": [
+        "transport.message.send",
+        "transport.space.create",
+        "transport.space.update",
+        "transport.space.delete",
+        "session.create",
+        "session.archive",
+        "session.delete",
+        "mission.create",
+        "mission.control",
+        "mission.inspect"
+      ]
+    },
+    {
+      "actorPrefix": "plugin:official/channel-lifecycle",
+      "allowCapabilities": [
+        "transport.message.send",
+        "transport.space.update",
+        "transport.space.delete",
+        "session.archive",
+        "session.delete",
+        "mission.archive",
+        "mission.delete"
+      ]
+    },
+    {
+      "actorPrefix": "plugin:official/session-orchestration",
+      "allowCapabilities": [
+        "transport.message.send",
+        "transport.space.create",
+        "transport.space.update",
+        "transport.space.delete",
+        "net.connect",
+        "session.inspect",
+        "session.create",
+        "session.direct",
+        "session.archive",
+        "session.delete",
+        "mission.inspect",
+        "mission.create",
+        "mission.control",
+        "sidecar.manage"
+      ]
+    },
+    {
+      "actorPrefix": "plugin:official/status",
+      "allowCapabilities": ["memory.read", "net.connect", "transport.message.send"]
+    },
+    {
+      "actorPrefix": "plugin:official/memory",
+      "allowCapabilities": ["memory.read", "memory.write", "fs.write"]
+    },
+    {
+      "actorPrefix": "plugin:official/skills",
+      "allowCapabilities": ["fs.read"]
+    },
+    {
+      "actorPrefix": "plugin:official/self-edit",
+      "allowCapabilities": ["fs.write", "fs.read"]
+    },
+    {
+      "actorPrefix": "plugin:official/admin-control",
+      "allowCapabilities": ["runtime.control", "transport.message.send"]
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@moorline/cli",
+  "version": "0.0.1",
+  "description": "Moorline command line interface",
+  "type": "module",
+  "private": false,
+  "bin": {
+    "moorline": "./dist/main.js"
+  },
+  "main": "./dist/main.js",
+  "types": "./dist/app/cli/cli.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/clean-package-dist.mjs cli && tsc -p tsconfig.json && node ../../scripts/flatten-package-dist.mjs cli && node ../../scripts/make-executable.mjs dist/main.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@moorline/core": "0.0.1",
+    "@moorline/control-api": "0.0.1",
+    "@moorline/http": "0.0.1"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/Moorline/moorline.git",
+    "directory": "packages/cli"
+  }
+}

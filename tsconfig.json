@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "types": ["node", "vitest/globals"],
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@moorline/contracts": ["packages/contracts/src/index.ts"],
+      "@moorline/contracts/*": ["packages/contracts/src/*"],
+      "@moorline/core": ["packages/core/src/index.ts"],
+      "@moorline/core/*.js": ["packages/core/src/*.ts"],
+      "@moorline/core/*": ["packages/core/src/*"],
+      "@moorline/control-api": ["packages/control-api/src/index.ts"],
+      "@moorline/control-api/*.js": ["packages/control-api/src/*.ts"],
+      "@moorline/control-api/*": ["packages/control-api/src/*"],
+      "@moorline/http": ["packages/http/src/index.ts"],
+      "@moorline/http/*.js": ["packages/http/src/*.ts"],
+      "@moorline/http/*": ["packages/http/src/*"]
+    },
+    "outDir": "dist",
+    "rootDir": "."
+  },
+  "include": ["packages/**/*.ts", "packages/**/*.d.ts", "vitest.config.ts", "tests/**/*.ts"]
+}

@@ -1,0 +1,271 @@
+# Moorline
+
+Moorline 0.1 is a local-first coding operator with a small core plus package-managed transports, providers, plugins, skills, and bundles.
+
+The shipped operator surfaces are:
+- `moorline` for setup, package management, runtime control, local history, and Control API access
+- `official/http`, the default HTTP API adapter used by local and remote CLI clients
+
+Moorline does not require a hosted relay. Execution, state, secrets, and workspaces stay on the operator machine.
+
+## Repo Layout
+
+Source is split by platform boundary:
+- `packages/contracts/`: shared runtime, package, provider, transport, plugin, skill, and API-adapter contracts
+- `packages/core/`: Moorline engine code only, grouped into `runtime/`, `domain/`, `system/`, `extension/`, and `shared/`
+- `packages/control-api/`: typed route table, request validation, client, and local connection discovery
+- `packages/http/`: official HTTP API adapter
+- `packages/cli/`: the `moorline` command
+
+Official provider, transport, plugin, skill, and bundle packages live in `Moorline/packages`. Package authoring tooling lives in `Moorline/kit`.
+
+## Quickstart
+
+### Prerequisites
+- Bun 1.3.11+
+- Node.js 22+
+- `codex` installed on `PATH`
+- successful `codex login status`
+- a Discord application with a bot token
+- a Discord server you want Moorline to manage inside its own namespace
+
+### Install
+```bash
+git clone git@github.com:Moorline/moorline.git
+cd moorline
+bun install
+bun run build
+```
+
+### First-run setup
+```bash
+bun run moorline run
+```
+
+`bun run moorline` uses the Node-backed CLI entrypoint (`packages/cli/dist/main.js`) so runtime commands execute with Node.js `node:sqlite` support.
+
+`bun run moorline run` starts the Control API and prints:
+- control API URL
+- bearer token for headless/API clients
+
+Use Control API-backed CLI commands to complete package setup. Local commands can auto-discover the local connection record, and remote commands can use `--url`, `--token`, `MOORLINE_API_URL`, and `MOORLINE_API_TOKEN`.
+
+If setup is incomplete, the Control API stays in management-only mode so you can install, select, configure, and apply one API adapter, one transport, and one provider.
+
+Official first-run setup recommends a small set of bundles: `official/discord-default`, `official/codex-default`, and `official/basic-essentials`. Bundles install and activate their member packages while keeping every underlying API adapter, provider, transport, plugin, and skill independently inspectable. Those recommendations are optional; setup readiness depends on one active API adapter, one active transport, and one active provider.
+
+Package trust note:
+- API adapter, provider, transport, and plugin packages are trusted local code once enabled
+- bundle packages are metadata-only package groups; their members carry the runtime behavior
+- package validation checks structure, metadata, and install safety; it is not a JavaScript sandbox
+- install third-party runtime packages only from sources you are willing to execute on the operator machine
+
+Source-checkout note for unreleased branches:
+- recommended package installs may point at release-hosted archives that are not published yet
+- if that happens, build `Moorline/packages` locally and install from its `dist/installable-archives/` output via:
+  - `bun run moorline configure package install --kind bundle --source <path-to-bundle-archive>`
+  - `bun run moorline configure package install --kind transport --source <path-to-transport-archive>`
+  - `bun run moorline configure package install --kind provider --source <path-to-provider-archive>`
+
+### Run
+```bash
+bun run moorline run
+```
+
+Core API-backed commands:
+
+```bash
+bun run moorline api start
+bun run moorline api status
+bun run moorline main start --token <api-token>
+bun run moorline ops state --token <api-token>
+bun run moorline ops accepting on --token <api-token>
+bun run moorline configure state --token <api-token>
+bun run moorline requests list --token <api-token>
+```
+
+The Control API exposes canonical JSON routes under `/api/*`.
+
+### Diagnose and restore
+```bash
+bun run moorline api diagnostics-export --token <api-token>
+bun run moorline history status
+bun run moorline history list
+```
+
+### Backup and import
+Backup runtime state (excludes workspaces by default):
+
+```bash
+bun run moorline configure backup --token <api-token> --out ~/moorline-backup.tgz
+```
+
+Include mission/session workspaces in the archive:
+
+```bash
+bun run moorline configure backup --token <api-token> --out ~/moorline-backup-full.tgz --include-workspaces
+```
+
+Import a backup into an empty target runtime:
+
+```bash
+bun run moorline configure import ~/moorline-backup.tgz --token <api-token>
+```
+
+If runtime state already exists, import fails unless `--force` is provided:
+
+```bash
+bun run moorline configure import ~/moorline-backup.tgz --force --token <api-token>
+```
+
+`--force` wipes current local runtime state before restoring from the archive.
+
+Catalog integrity note:
+- clean source checkouts can run `help/run` even when `dist/installable-archives` is missing.
+- diagnostics export reports checksum state in `catalog.integrity`.
+- catalog installs (`moorline configure package install --kind <kind> --package <catalog-id>`) still enforce recommended checksum presence.
+- build official package archives in `Moorline/packages` before release-level catalog validation:
+```bash
+cd ../packages
+bun run build
+```
+
+## Managed Discord Namespace
+
+Moorline only creates and repairs its own managed surfaces:
+- `Moorline`
+- `#moorline-chat`
+- `#moorline-status`
+- `Moorline Sessions`
+- `Moorline Missions`
+- `Moorline Archive`
+- `Moorline Admin`
+- `Moorline User`
+
+The runtime does not reorganize unrelated parts of the server.
+
+Managed role onboarding and recovery:
+- keep `admin.managedRole.enabled` and `admin.managedUserRole.enabled` enabled unless you intentionally run fully explicit role assignment
+- verify the managed roles exist and are assigned to expected operators/users after first `moorline run`
+- if roles/channels are renamed, run `moorline run` (or `/admin reload mode:graceful`) to reconcile tracked managed resources back to the configured names
+- if role assignment drift blocks user interaction, reassign `Moorline User` to expected users and re-run runtime reconciliation
+
+## Runtime Behavior
+
+Moorline uses the provider's latest default model by default unless you change it with `/model select`.
+
+### Admin control
+
+Moorline supports admin-gated runtime control through the official Discord admin package.
+
+Configure admin authority in `~/.moorline/config.json`:
+
+```json
+{
+  "admin": {
+    "roleIds": ["discord-role-id"],
+    "userIds": ["discord-user-id"],
+    "allowTransportAdmin": false,
+    "managedRole": {
+      "enabled": true,
+      "name": "Moorline Admin"
+    }
+  }
+}
+```
+
+Admin authority is explicit by default, with a managed Moorline-scoped role bootstrapped automatically unless you disable it:
+- `roleIds` and `userIds` remain explicit operator-controlled admin identities
+- `managedRole.enabled` controls whether Moorline creates and uses its dedicated admin role
+- `managedRole.name` lets you rename that dedicated Moorline-only role
+- `allowTransportAdmin` can optionally allow transport-native elevated permissions to count as admin authority
+
+Available admin commands:
+- `/admin status`
+- `/admin reload mode:graceful|force`
+- `/admin provider-stop scope:all|current`
+- `/admin provider-start scope:all|current`
+- `/admin accepting value:true|false`
+
+### Main chat
+- bound to `#moorline-chat`
+- Codex-backed
+- uses the configured default runtime mode
+- intended for coordination, status, and lightweight help
+- shares the managed chat workspace under the runtime root
+
+### Session channels
+- created with `/session create`
+- each session gets its own local workspace under the runtime root
+- each session is mapped to a Discord text channel in `Moorline Sessions`
+- session messages run through Codex in the session workspace
+- `/session archive` moves the session channel into `Moorline Archive`
+- `/session delete confirm:delete` deletes an archived session channel and removes its local workspace
+
+### Model selection
+- `/model list` shows the configured default model and the latest provider model list Moorline has observed
+- `/model select name:<model>` pins a specific default model for future turns
+- `/model select name:latest` returns Moorline to the provider default model
+
+### Runtime Modes
+
+Moorline 0.1 operator-facing session modes:
+- `full-access`: Codex runs with full local access and no approval gate.
+- `approval-required`: Codex runs in untrusted approval mode so protected actions request approval before they continue.
+
+Both modes run locally on the operator machine. `approval-required` adds operator review, not host isolation.
+
+Moorline 0.1 ships a Discord-first product surface, but the runtime host is no longer hard-wired to Discord as a permanent architectural dependency.
+
+### Mission schedules and hooks
+Mission schedules support:
+- interval schedules (`every 2 hours`, `hourly`, `daily`)
+- cron (`cron */15 9-17 * * mon-fri` or bare 5-field cron expressions)
+- one-shot absolute timestamps (`once 2026-05-20T09:30:00Z`)
+- repeat-cycle alias (`repeat every 2 hours`)
+
+Mission hook triggers are generic string keys. Plugins and runtime tools can bind hooks to missions and emit hook events to trigger mission runs without requiring a built-in trigger catalog in core.
+
+## Local State And Local History
+
+Moorline stores operator-owned state under `~/.moorline/`.
+
+Tracked local history lives at:
+- `~/.moorline/.git/`
+
+Tracked history covers:
+- `config.json`
+- `runtime/packages/`
+- `runtime/policies/`
+
+Ignored runtime-working data includes:
+- `chat/`
+- `memory/`
+- `logs/`
+- `state/`
+- `state.db`
+- `workspaces/`
+
+Use local history to inspect, snapshot, restore, and discard tracked changes:
+
+```bash
+bun run moorline history status
+bun run moorline history snapshot "before provider edit"
+bun run moorline history restore <commit-ish>
+bun run moorline history discard --path runtime/packages/plugins/official/persona/SOUL.md
+```
+
+Config is separate by default:
+- `~/.moorline/config.json`
+
+## Notes
+
+- `approval-required` adds operator approval, not machine isolation.
+- plugin, skill, provider, and transport package edits under the runtime root are operator-owned surfaces; Moorline does not require a source checkout to run.
+- if you modify visible runtime packages or upgrade the installed package, use `/admin reload mode:graceful` when admin control is configured, or restart `moorline run` to reload and reconcile the visible runtime surfaces.
+
+## Development
+
+If you are developing Moorline itself rather than operating it, use:
+- `docs/DEVELOPMENT.md`
+- `docs/RUNBOOK.md`

@@ -1,0 +1,63 @@
+{
+  "name": "@moorline/control-api",
+  "version": "0.0.1",
+  "description": "Typed Moorline control API contract and client",
+  "type": "module",
+  "private": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./contracts/*.js": {
+      "types": "./dist/contracts/*.d.ts",
+      "default": "./dist/contracts/*.js"
+    },
+    "./contracts/*": {
+      "types": "./dist/contracts/*.d.ts",
+      "default": "./dist/contracts/*.js"
+    },
+    "./client.js": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    },
+    "./bootstrap.js": {
+      "types": "./dist/bootstrap.d.ts",
+      "default": "./dist/bootstrap.js"
+    },
+    "./bootstrap": {
+      "types": "./dist/bootstrap.d.ts",
+      "default": "./dist/bootstrap.js"
+    },
+    "./errors.js": {
+      "types": "./dist/errors.d.ts",
+      "default": "./dist/errors.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "default": "./dist/errors.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/clean-package-dist.mjs control-api && tsc -p tsconfig.json && node ../../scripts/flatten-package-dist.mjs control-api",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.type-tests.json"
+  },
+  "dependencies": {
+    "@moorline/contracts": "0.0.1"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/Moorline/moorline.git",
+    "directory": "packages/control-api"
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "name": "@moorline/http",
+  "version": "0.0.1",
+  "description": "Official Moorline HTTP API adapter",
+  "type": "module",
+  "private": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./server.js": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    }
+  },
+  "files": [
+    "dist",
+    "manifest.json",
+    "moorline.dist.json"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/clean-package-dist.mjs http && tsc -p tsconfig.json && node ../../scripts/flatten-package-dist.mjs http",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@moorline/contracts": "0.0.1",
+    "@moorline/core": "0.0.1",
+    "@moorline/control-api": "0.0.1"
+  },
+  "moorline": {
+    "schemaVersion": 1,
+    "packageId": "official/http",
+    "kind": "api-adapter",
+    "manifestPath": "manifest.json",
+    "distroPath": "moorline.dist.json"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/Moorline/moorline.git",
+    "directory": "packages/http"
+  }
+}
