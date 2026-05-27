@@ -71,6 +71,9 @@ describe('host repository split contract', () => {
     const manifest = JSON.parse(readFileSync(join(root, 'packages', 'http', 'manifest.json'), 'utf8')) as Record<string, unknown>;
     expect(manifest.id).toBe('official/http');
     expect(manifest.type).toBe('api-adapter');
+    expect(manifest.entrypoint).toBe('index.mjs');
+    expect(existsSync(join(root, 'packages', 'http', 'index.mjs'))).toBe(true);
+    expect(packageJson('http').files).toEqual(expect.arrayContaining(['index.mjs']));
     expect(packageJson('http').moorline).toMatchObject({
       packageId: 'official/http',
       kind: 'api-adapter'
