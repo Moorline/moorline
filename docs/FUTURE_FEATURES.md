@@ -11,14 +11,14 @@ Desired behavior:
 - import a setup bundle from a GitHub URL
 - optionally scaffold a repo for local-only packages or policies
 
-Not included in `0.1.x`:
+Not included in `0.0.x`:
 - repo creation UX
 - gist publishing UX
 - remote setup import UX
 
 ## Moorline Package Registry
 
-Status: deferred after `0.1.x`
+Status: deferred after `0.0.x`
 
 Desired behavior:
 - first-party hosted registry for Moorline installables and add-ons
@@ -26,7 +26,7 @@ Desired behavior:
 - publisher flow for third-party authors
 - central checksum and version metadata
 
-Not included in `0.1.x`:
+Not included in `0.0.x`:
 - registry server
 - publish workflow
 - namespace or account management

@@ -1,6 +1,6 @@
 # Dev Environment Setup
 
-This is the fastest way to run Moorline 0.1 locally.
+This is the fastest way to run Moorline 0.0.x locally.
 
 ## Prerequisites
 
@@ -10,13 +10,13 @@ This is the fastest way to run Moorline 0.1 locally.
 - `codex` installed on `PATH`
 - successful `codex login status`
 
-Docker is no longer the primary install path for Moorline 0.1.
+Docker is no longer the primary install path for Moorline 0.0.x.
 
 ## Clone and build
 
 ```bash
-git clone <your-repo-url>
-cd Moorline
+git clone git@github.com:Moorline/moorline.git
+cd moorline
 bun install
 bun run build
 ```
@@ -101,7 +101,7 @@ timeout 15s bun run moorline run || test $? -eq 124
 
 Notes:
 - with dummy Discord values, `moorline configure apply` may log token/auth failures while deriving bot metadata; use real Discord credentials when smoke-testing the full apply path
-- release-hosted recommended archive URLs can 404 during pre-release branch work, so local archives from `Moorline/packages` are the stable dev path
+- published releases install official bundles from public package artifacts; local archives from `Moorline/packages` remain the stable path for unreleased branch work
 
 Clean up temp runtime state when done:
 

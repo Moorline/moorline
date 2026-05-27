@@ -327,7 +327,7 @@ moorline run
 
 ## Runtime Support Note
 
-Moorline `0.1.x` currently depends on `node:sqlite`.
+Moorline `0.0.x` currently depends on `node:sqlite`.
 This is an accepted risk for this release line.
 The shipped CLI archive runs on the bundled Node runtime.
 Repo development remains Bun-first.
@@ -347,7 +347,13 @@ If startup reports missing `node:sqlite` support, fix the runtime before opening
 
 ## Official npm Package Artifacts
 
-Official package npm-compatible artifacts now live in `Moorline/packages`.
+Official package npm-compatible artifacts live in `Moorline/packages`.
+
+The initial public npm artifacts are:
+
+- `@moorline/basic-essentials@0.0.1`
+- `@moorline/codex-default@0.0.1`
+- `@moorline/discord-default@0.0.1`
 
 Build official npm-compatible package directories and tarballs:
 

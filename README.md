@@ -1,6 +1,6 @@
 # Moorline
 
-Moorline 0.1 is a local-first coding operator with a small core plus package-managed transports, providers, plugins, skills, and bundles.
+Moorline 0.0.x is a local-first coding operator with a small core plus package-managed transports, providers, plugins, skills, and bundles.
 
 The shipped operator surfaces are:
 - `moorline` for setup, package management, runtime control, local history, and Control API access
@@ -30,6 +30,16 @@ Official provider, transport, plugin, skill, and bundle packages live in `Moorli
 - a Discord server you want Moorline to manage inside its own namespace
 
 ### Install
+
+Published CLI install:
+
+```bash
+npm install -g moorline
+moorline run
+```
+
+Source checkout install:
+
 ```bash
 git clone git@github.com:Moorline/moorline.git
 cd moorline
@@ -61,8 +71,8 @@ Package trust note:
 - install third-party runtime packages only from sources you are willing to execute on the operator machine
 
 Source-checkout note for unreleased branches:
-- recommended package installs may point at release-hosted archives that are not published yet
-- if that happens, build `Moorline/packages` locally and install from its `dist/installable-archives/` output via:
+- published releases install official bundles from the public package artifacts
+- unreleased branch work can still build `Moorline/packages` locally and install from its `dist/installable-archives/` output via:
   - `bun run moorline configure package install --kind bundle --source <path-to-bundle-archive>`
   - `bun run moorline configure package install --kind transport --source <path-to-transport-archive>`
   - `bun run moorline configure package install --kind provider --source <path-to-provider-archive>`
@@ -209,13 +219,13 @@ Available admin commands:
 
 ### Runtime Modes
 
-Moorline 0.1 operator-facing session modes:
+Moorline 0.0.x operator-facing session modes:
 - `full-access`: Codex runs with full local access and no approval gate.
 - `approval-required`: Codex runs in untrusted approval mode so protected actions request approval before they continue.
 
 Both modes run locally on the operator machine. `approval-required` adds operator review, not host isolation.
 
-Moorline 0.1 ships a Discord-first product surface, but the runtime host is no longer hard-wired to Discord as a permanent architectural dependency.
+Moorline 0.0.x ships a Discord-first product surface, but the runtime host is no longer hard-wired to Discord as a permanent architectural dependency.
 
 ### Mission schedules and hooks
 Mission schedules support:
