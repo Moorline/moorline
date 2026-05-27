@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, readFileSync, rmSync, writeFileSync } from 'n
 import { join } from 'node:path';
 import { defaultHttpApiAdapterConfig, homeRootForRuntime, type MoorlineConfig } from '../../types/config.js';
 import type { MoorlineShareBundle } from '../../types/config.js';
-import type { JsonSchemaLike, PackageApplyPlan, PackageKind, PackageSourceDescriptor, PackageSurface } from '../../types/package.js';
+import type { JsonSchemaLike, PackageApplyPlan, PackageCatalogEntry, PackageKind, PackageSourceDescriptor, PackageSurface } from '../../types/package.js';
 import { createPackageApplyPlan } from '../../core/extension/packages/packageApplyPlanner.js';
 import { findDependentRecords, findDependents } from '../../core/extension/packages/packageDependencyResolver.js';
 import { resolvePackageConfigSchema } from '../../core/extension/packages/packageConfigSchema.js';
@@ -26,12 +26,21 @@ import {
 import { packageVersionSatisfiesRange, resolveBundleMembers } from '../../core/extension/packages/packageVersionResolver.js';
 import { PackageRegistryService } from '../../core/extension/packages/packageRegistryService.js';
 import type { PackageRegistryEntry, PackageSearchInput } from '../../core/extension/packages/packageRegistryTypes.js';
+import { loadInstallablePackageManifest } from '../../core/extension/packages/packageManifest.js';
 
 type PackageConfigValues = Record<string, string>;
 type PackageConfigReplacement = {
   key: string;
   value: string;
 };
+
+function packageInstallDirName(surface: PackageKind): string {
+  return surface === 'api-adapter'
+    ? 'api-adapters'
+    : surface === 'bundle'
+      ? 'bundles'
+      : `${surface}s`;
+}
 
 function packageConfigRoot(
   config: MoorlineConfig,
@@ -370,6 +379,36 @@ export class OperatorPackageService {
     };
   }
 
+  private embeddedBundleMemberEntries(input: {
+    bundleInstallPath: string;
+    members: NonNullable<PackageCatalogEntry['members']>;
+  }): PackageCatalogEntry[] {
+    const entries: PackageCatalogEntry[] = [];
+    for (const member of input.members) {
+      const packageDir = join(input.bundleInstallPath, 'packages', packageInstallDirName(member.kind), ...member.packageId.split('/'));
+      if (!existsSync(join(packageDir, 'manifest.json'))) {
+        continue;
+      }
+      const loaded = loadInstallablePackageManifest(member.kind, packageDir);
+      entries.push({
+        kind: member.kind,
+        surface: member.kind,
+        packageId: loaded.manifest.id,
+        name: loaded.manifest.name,
+        description: loaded.manifest.description ?? loaded.manifest.id,
+        version: loaded.manifest.version,
+        recommendedForSetup: false,
+        tags: ['embedded'],
+        source: {
+          kind: 'local_dir',
+          path: packageDir
+        },
+        requires: ('dependencies' in loaded.manifest ? loaded.manifest.dependencies ?? [] : []).map((dependency) => dependency.packageId)
+      });
+    }
+    return entries;
+  }
+
   async installPackage(input: {
     surface?: PackageKind;
     kind?: PackageKind;
@@ -510,11 +549,19 @@ export class OperatorPackageService {
     };
     let members: ReturnType<typeof resolveBundleMembers>;
     try {
-      const memberEntries = await this.packageRegistry.resolveBundleMemberEntries({
-        members: record.members ?? bundle.members ?? []
+      const requestedMembers = record.members ?? bundle.members ?? [];
+      const embeddedMemberEntries = this.embeddedBundleMemberEntries({
+        bundleInstallPath: record.installPath,
+        members: requestedMembers
       });
+      const embeddedKeys = new Set(embeddedMemberEntries.map((entry) => `${entry.kind}:${entry.packageId}`));
+      const externalMembers = requestedMembers.filter((member) => !embeddedKeys.has(`${member.kind}:${member.packageId}`));
+      const memberEntries = externalMembers.length > 0
+        ? await this.packageRegistry.resolveBundleMemberEntries({ members: externalMembers })
+        : [];
       members = resolveBundleMembers({
         catalog: [
+          ...embeddedMemberEntries,
           ...getOfficialCatalog(),
           ...memberEntries
         ],

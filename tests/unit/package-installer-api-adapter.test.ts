@@ -149,6 +149,83 @@ function writeRequiredApiAdapterPackage(root: string): void {
   );
 }
 
+function writePluginPackage(root: string, input: { packageId: string; version?: string }): void {
+  mkdirSync(root, { recursive: true });
+  const manifest = {
+    id: input.packageId,
+    name: input.packageId,
+    version: input.version ?? '1.0.0',
+    type: 'plugin',
+    entrypoint: 'index.mjs',
+    capabilities: ['fs.read'],
+    hooks: []
+  };
+  writeFileSync(join(root, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  writeFileSync(
+    join(root, 'moorline.dist.json'),
+    JSON.stringify(
+      {
+        schemaVersion: 1,
+        display: {
+          name: input.packageId,
+          description: 'Fake plugin package.',
+          version: input.version ?? '1.0.0',
+          tags: ['plugin']
+        }
+      },
+      null,
+      2
+    ),
+    'utf8'
+  );
+  writeFileSync(join(root, 'index.mjs'), `export default { id: '${input.packageId}', manifest: ${JSON.stringify(manifest)} };\n`, 'utf8');
+}
+
+function writeBundlePackage(root: string): void {
+  mkdirSync(root, { recursive: true });
+  writeFileSync(
+    join(root, 'manifest.json'),
+    JSON.stringify(
+      {
+        id: 'official/basic-essentials',
+        name: 'official/basic-essentials',
+        version: '1.0.0',
+        type: 'bundle',
+        description: 'Basic essentials.',
+        members: [{
+          kind: 'plugin',
+          packageId: 'official/status',
+          version: '~1.0.0',
+          activation: 'enable'
+        }]
+      },
+      null,
+      2
+    ),
+    'utf8'
+  );
+  writeFileSync(
+    join(root, 'moorline.dist.json'),
+    JSON.stringify(
+      {
+        schemaVersion: 1,
+        display: {
+          name: 'Basic Essentials',
+          description: 'Basic essentials.',
+          version: '1.0.0',
+          tags: ['bundle']
+        }
+      },
+      null,
+      2
+    ),
+    'utf8'
+  );
+  writePluginPackage(join(root, 'packages', 'plugins', 'official', 'status'), {
+    packageId: 'official/status'
+  });
+}
+
 describe('api-adapter package installation', () => {
   it('installs api-adapters under runtime/packages/api-adapters', async () => {
     const root = createTempRoot('moorline-api-adapter-install-');
@@ -172,6 +249,83 @@ describe('api-adapter package installation', () => {
       version: '1.2.3',
       installPath: join(runtimeRoot, 'packages', 'api-adapters', 'acme', 'http-alt')
     });
+  });
+
+  it('installs bundle members from embedded package directories', async () => {
+    const root = createTempRoot('moorline-embedded-bundle-install-');
+    const runtimeRoot = join(root, 'runtime');
+    const sourceDir = join(root, 'bundle-source');
+    writeBundlePackage(sourceDir);
+    const namespace = defaultNamespaceNames();
+    const config: MoorlineConfig = {
+      version: 4,
+      runtimeRoot,
+      admin: defaultAdminConfig(),
+      main: defaultMainProcessConfig(),
+      defaults: {
+        runtimeMode: 'full-access',
+        model: 'latest'
+      },
+      surface: namespace,
+      setup: {
+        completed: false
+      },
+      surfaces: {
+        apiAdapter: {
+          activePackageId: 'official/http',
+          config: defaultHttpApiAdapterConfig(),
+          configByPackageId: {}
+        },
+        transport: {
+          activePackageId: null,
+          config: {},
+          configByPackageId: {}
+        },
+        provider: {
+          activePackageId: null,
+          config: {},
+          configByPackageId: {}
+        },
+        plugins: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        },
+        skills: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        }
+      }
+    };
+    const configPath = join(root, 'config.json');
+    saveMoorlineConfig(config, configPath);
+
+    const service = new OperatorPackageService(config, configPath, () => '2026-05-20T00:00:00.000Z', root);
+    const record = await service.installPackage({
+      kind: 'bundle',
+      source: {
+        kind: 'local_dir',
+        path: sourceDir
+      }
+    });
+
+    expect(record.packageId).toBe('official/basic-essentials');
+    const state = new PackageInventoryStore(runtimeRoot).load();
+    expect(state.installed).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'bundle',
+        packageId: 'official/basic-essentials'
+      }),
+      expect.objectContaining({
+        kind: 'plugin',
+        packageId: 'official/status',
+        installedByPackageIds: ['official/basic-essentials'],
+        source: {
+          kind: 'local_dir',
+          path: join(runtimeRoot, 'packages', 'bundles', 'official', 'basic-essentials', 'packages', 'plugins', 'official', 'status')
+        }
+      })
+    ]));
+    expect(config.surfaces.plugins.enabledPackageIds).toContain('official/status');
   });
 
   it('keeps api-adapter inventory records when reloaded', () => {
