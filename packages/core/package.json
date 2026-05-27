@@ -40,6 +40,9 @@
     "dist",
     "resources"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "node ../../scripts/clean-package-dist.mjs core && tsc -p tsconfig.json && node ../../scripts/flatten-package-dist.mjs core",
     "typecheck": "tsc --noEmit -p tsconfig.json"

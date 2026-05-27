@@ -25,6 +25,9 @@
     "manifest.json",
     "moorline.dist.json"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "node ../../scripts/clean-package-dist.mjs http && tsc -p tsconfig.json && node ../../scripts/flatten-package-dist.mjs http",
     "typecheck": "tsc --noEmit -p tsconfig.json"

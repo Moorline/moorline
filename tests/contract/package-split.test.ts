@@ -40,7 +40,7 @@ describe('host repository split contract', () => {
     expect(packageJson('control-api').name).toBe('@moorline/control-api');
     expect(packageJson('cli').name).toBe('moorline');
     expect(packageJson('http').name).toBe('@moorline/http');
-    expect((packageJson('cli').bin as Record<string, string>).moorline).toBe('./dist/main.js');
+    expect((packageJson('cli').bin as Record<string, string>).moorline).toBe('dist/main.js');
   });
 
   it('declares package entrypoints that match flattened build output', () => {
