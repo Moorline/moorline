@@ -1,6 +1,7 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { PackageInventoryStore } from '../../packages/core/src/core/extension/packages/packageInventoryStore.js';
 import { ManagementReadModelService } from '../../packages/core/src/core/system/projection/managementReadModelService.js';
 import {
   defaultAdminConfig,
@@ -67,7 +68,49 @@ describe('management read model api-adapter config', () => {
   it('projects fresh-init official/http config for configure state', () => {
     const root = createTempRoot('moorline-read-model-http-config-');
     const runtimeRoot = join(root, 'runtime');
-    mkdirSync(runtimeRoot, { recursive: true });
+    const httpInstallPath = join(runtimeRoot, 'packages', 'api-adapters', 'official', 'http');
+    mkdirSync(httpInstallPath, { recursive: true });
+    writeFileSync(
+      join(httpInstallPath, 'manifest.json'),
+      JSON.stringify(
+        {
+          id: 'official/http',
+          name: 'official/http',
+          version: '0.0.1',
+          type: 'api-adapter',
+          entrypoint: 'index.mjs',
+          configSchema: {
+            type: 'object',
+            properties: {
+              host: { type: 'string' },
+              port: { type: 'number' },
+              exposure: { type: 'string', enum: ['loopback', 'remote'] }
+            }
+          }
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    new PackageInventoryStore(runtimeRoot).save({
+      version: 1,
+      installed: [{
+        family: 'api-adapters',
+        kind: 'api-adapter',
+        surface: 'api-adapter',
+        packageId: 'official/http',
+        name: 'official/http',
+        version: '0.0.1',
+        installedAt: '2026-05-20T00:00:00.000Z',
+        installPath: httpInstallPath,
+        source: { kind: 'local_dir', path: httpInstallPath },
+        manifestPath: join(httpInstallPath, 'manifest.json'),
+        manifestHash: 'official-http-hash',
+        dependencies: []
+      }],
+      applied: { activated: [] }
+    });
     const config = freshInitConfig(runtimeRoot);
     const readModel = new ManagementReadModelService({
       homeRoot: root,
