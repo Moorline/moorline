@@ -35,14 +35,6 @@ export function parseConfigureCommand(rest: string[], configPath: string | undef
     return apiPost('/api/packages/apply', {}, configPath, parsed.options, parsed.json);
   }
 
-  if (rest[1] === 'packages' && rest[2] === 'catalog') {
-    const parsed = parseConnectionOptions(rest.slice(3));
-    if (parsed.rest.length > 0) {
-      throw new Error('Usage: moorline configure packages catalog [--url <url>] [--token <token>] [--json] [--config <path>]');
-    }
-    return apiGet('/api/packages/catalog', configPath, parsed.options, parsed.json);
-  }
-
   if (rest[1] === 'packages' && rest[2] === 'installed') {
     const parsed = parseConnectionOptions(rest.slice(3));
     if (parsed.rest.length > 0) {

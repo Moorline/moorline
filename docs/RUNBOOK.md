@@ -29,7 +29,7 @@ moorline init
 - `~/.moorline/.git`
 - empty managed install roots for API adapters, providers, transports, plugins, and skills
 
-It selects the built-in `official/http` API adapter by default so local and remote CLI clients have a control endpoint. It does not install or select provider, transport, plugin, or skill packages.
+It installs and selects the bundled `official/http` API adapter by default so local and remote CLI clients have a control endpoint. It does not install or select provider, transport, plugin, or skill packages.
 
 ## Complete Setup
 
@@ -47,7 +47,7 @@ A complete setup requires:
 - valid package config
 - an explicit apply
 
-Fresh `moorline init` selects the built-in `official/http` API adapter. Official setup recommends the `official/discord-default`, `official/codex-default`, and `official/basic-essentials` bundles. Every recommendation is optional; skipping plugins does not block setup readiness.
+Fresh `moorline init` installs and selects the bundled `official/http` API adapter. Install the transport, provider, plugin, skill, or bundle packages your runtime needs. Optional bundles do not block setup readiness.
 
 Package families:
 - installables: API adapters, providers, transports, plugins
@@ -59,27 +59,13 @@ Operator-supported session modes:
 - `full-access`: no approval gate.
 - `approval-required`: protected actions require approval.
 
-## Managed Namespace Role Setup And Recovery
+## Managed Space Setup And Recovery
 
-Managed namespace defaults include:
-- `Moorline` (main managed category)
-- `#moorline-chat` (managed chat channel)
-- `#moorline-status` (managed status channel)
-- `Moorline Sessions` (managed sessions category)
-- `Moorline Missions` (managed missions category)
-- `Moorline Archive` (managed archive category)
-- `Moorline Admin` (operator control role)
-- `Moorline User` (managed runtime interaction role)
+Transport packages may create managed spaces, roles, or other native resources. Check the active transport package documentation for package-specific setup and recovery steps.
 
-Setup checklist:
-- keep `admin.managedRole.enabled: true` and `admin.managedUserRole.enabled: true` unless you intentionally run explicit manual role mapping
-- assign `Moorline Admin` to operators who should run `/admin` controls
-- assign `Moorline User` to members who should use managed interaction paths
-- verify `#moorline-chat`, `#moorline-status`, `Moorline Sessions`, `Moorline Missions`, and `Moorline Archive` exist
-
-Recovery checklist:
-- if managed roles or channels are renamed/moved, restart `moorline run` or run `/admin reload mode:graceful` to reconcile tracked resources
-- if users are blocked, reassign `Moorline User` and confirm channel permission overwrites include that role
+Generic recovery checklist:
+- rerun `moorline configure apply` after package config changes
+- restart `moorline run` after transport-side resource repairs
 - run `moorline api status`, `moorline main status`, and `moorline configure state` to verify control-plane, runtime, and setup health after recovery
 
 ## Shareable Config And Secrets
@@ -139,7 +125,7 @@ Use these checks to verify:
 - runtime storage support
 - packaged release vs source checkout mode
 - release manifest and asset root
-- official catalog checksum integrity
+- package registry/cache state
 - provider installation/auth
 - applied transport config
 - namespace state
@@ -148,9 +134,8 @@ Use these checks to verify:
 
 Source-checkout note:
 - missing official package archives no longer blocks basic commands.
-- catalog integrity checks may report missing generated archive metadata in that state.
-- catalog package installs (`moorline configure package install --kind <kind> --package <id>`) still enforce recommended checksums.
-- build official package archives in `Moorline/packages` before release validation:
+- package installs by id resolve through npm metadata.
+- build official package archives in `Moorline/packages` before archive-based release validation:
 ```bash
 cd ../packages
 bun run build
@@ -198,12 +183,10 @@ node packages/cli/dist/main.js run --config "$MOORLINE_CONFIG"
 ```
 
 Using CLI package commands against the printed API endpoint or local connection record, verify:
-- `Recommended Setup` is visible
-- `official/discord-default`, `official/codex-default`, and `official/basic-essentials` are listed
-- each bundle can be inspected for included packages
-- `Install` works for a recommended bundle
+- package search returns npm-backed package metadata
+- package info can inspect a known bundle
 - bundle installation selects or enables member packages according to the bundle manifest
-- leaving a recommendation uninstalled is allowed
+- leaving optional bundles uninstalled is allowed
 
 Use `moorline configure setup-export` and verify:
 - it writes `moorline-setup.share.json`
@@ -219,17 +202,16 @@ rm -rf "$MOORLINE_HOME"
 
 Install and inspect packages:
 ```bash
-moorline configure packages catalog
 moorline configure packages installed
-moorline configure package install --kind bundle --package official/discord-default
-moorline configure package install --kind bundle --package official/codex-default
+moorline package search <query>
+moorline package info <package-id> --kind bundle
+moorline configure package install --kind bundle --package <package-id>
 moorline configure package install --kind plugin --source ./my-plugin-bundle
 moorline configure package install --kind plugin --source ./my-plugin-bundle.tar.gz
-moorline configure package select --surface transport --package official/discord
-moorline configure package select --surface provider --package official/codex
-moorline configure package config --surface transport --package official/discord --key authToken --value <token>
-moorline configure package config --surface transport --package official/discord --key scopeId --value <scope-id>
-moorline configure package config --surface provider --package official/codex --key command --value codex
+moorline configure package select --surface transport --package <transport-package-id>
+moorline configure package select --surface provider --package <provider-package-id>
+moorline configure package config --surface transport --package <transport-package-id> --key <key> --value <value>
+moorline configure package config --surface provider --package <provider-package-id> --key <key> --value <value>
 moorline configure apply
 ```
 
@@ -302,18 +284,6 @@ Leave `--force` off to run a safety-check import that fails when local state alr
 
 For sharing with another operator, use `moorline configure setup-export` instead of copying `config.secrets.json`.
 
-## Memory Ops
-
-Check memory/index status:
-```bash
-moorline memory status
-```
-
-Search memory with provenance references:
-```bash
-moorline memory search "query text"
-```
-
 ## Secret Rotation
 
 Rotate secrets by updating package config through the CLI.
@@ -379,7 +349,7 @@ npm publish dist/npm-packages/@moorline/discord-default --access public
 Do not ask users to run `npm install` for Moorline packages. Users should install through:
 
 ```bash
-moorline package search discord
-moorline package info official/discord-default --kind bundle
-moorline package install official/discord-default --kind bundle
+moorline package search <query>
+moorline package info <package-id> --kind bundle
+moorline package install <package-id> --kind bundle
 ```

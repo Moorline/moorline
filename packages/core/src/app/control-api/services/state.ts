@@ -12,7 +12,6 @@ import type { RuntimeProvider, RuntimeProviderDiagnostics } from '../../../types
 import type { ProviderInputImage, ProviderRuntimeEvent, ProviderSessionRecord } from '../../../types/runtime.js';
 import type { ManagementReadModel, ManagementReadModelPresentation } from '../../../types/app.js';
 import { homeRootForRuntime, type MoorlineConfig } from '../../../types/config.js';
-import { OFFICIAL_CATALOG } from '../../bootstrap/officialCatalog.js';
 import { ProviderSessionDirectory } from '../../../core/runtime/execution/providerSessionDirectory.js';
 import type { RuntimeSessionRow } from '../../../core/system/state/sqlite/types.js';
 
@@ -193,7 +192,6 @@ export class ControlApiStateService {
           }),
         getNamespaceState: () => namespaceState,
         getManagementSurface: () => this.input.getManagementSurface(),
-        packageCatalog: OFFICIAL_CATALOG,
         presentation: controlApiPresentation()
       });
       return service.build();

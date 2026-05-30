@@ -11,7 +11,7 @@ import type { SessionRegistry } from '../../domain/sessions/sessionState.js';
 import type { RuntimeWorkManagementService } from '../../domain/sessions/runtimeWorkManagementService.js';
 import { buildDraftMissionSetupPrompt } from '../../domain/missions/missionDraftSetup.js';
 
-interface ManagedChannelLifecycleServiceDeps {
+interface ManagedSpaceLifecycleServiceDeps {
   config: AppliedMoorlineConfig;
   getNamespaceState(): RuntimeSurfaceState | null;
   sessionRegistry: SessionRegistry;
@@ -35,8 +35,8 @@ function sameName(left: string, right: string): boolean {
 
 type ResourceLifecycleEvent = Extract<RuntimeTransportEvent, { type: 'resource.lifecycle' }>;
 
-export class ManagedChannelLifecycleService {
-  constructor(private readonly deps: ManagedChannelLifecycleServiceDeps) {}
+export class ManagedSpaceLifecycleService {
+  constructor(private readonly deps: ManagedSpaceLifecycleServiceDeps) {}
 
   async handleEvent(event: RuntimeTransportEvent): Promise<void> {
     if (event.type !== 'resource.lifecycle') {
@@ -74,7 +74,7 @@ export class ManagedChannelLifecycleService {
       }
 
       if ((event.action === 'created' || event.action === 'updated') && event.resource.parentId === namespace.sessionsCategoryId) {
-        await this.adoptSessionChannel(event.resource.id, event.resource.name);
+        await this.adoptSessionSpace(event.resource.id, event.resource.name);
         return;
       }
 
@@ -148,7 +148,7 @@ export class ManagedChannelLifecycleService {
         spaceId: session.spaceId,
         kind: 'transport.session_space.archived',
         title: 'Session archived from transport move',
-        detail: `${session.spaceName} moved into the managed Archive category.`
+        detail: `${session.spaceName} moved into the managed archive group.`
       });
     }
   }
@@ -226,12 +226,12 @@ export class ManagedChannelLifecycleService {
         spaceId: mission.spaceId,
         kind: 'transport.mission_space.archived',
         title: 'Mission archived from transport move',
-        detail: `${mission.spaceName} moved into the managed Archive category.`
+        detail: `${mission.spaceName} moved into the managed archive group.`
       });
     }
   }
 
-  private async adoptSessionChannel(spaceId: string, spaceName: string): Promise<void> {
+  private async adoptSessionSpace(spaceId: string, spaceName: string): Promise<void> {
     if (this.deps.sessionRegistry.getBySpaceId(spaceId) || this.deps.missionRegistry.getBySpaceId(spaceId)) {
       return;
     }

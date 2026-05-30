@@ -21,7 +21,6 @@ function npmEntry(input: {
     name: input.packageId,
     description: input.packageId,
     version: '1.0.0',
-    recommendedForSetup: false,
     tags: [],
     source: {
       kind: 'remote_archive',

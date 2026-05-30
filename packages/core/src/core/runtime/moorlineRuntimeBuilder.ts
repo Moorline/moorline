@@ -13,7 +13,6 @@ import { ensureRuntimePaths } from '../system/config/configStore.js';
 import { PluginHost } from '../extension/plugins/pluginHost.js';
 import { PackageInventoryStore } from '../extension/packages/packageInventoryStore.js';
 import { appliedPackageRefs } from '../extension/packages/packageActivation.js';
-import { OFFICIAL_CATALOG } from '../extension/packages/officialCatalog.js';
 import type { RuntimePluginContext } from '../../types/plugin.js';
 import type { RuntimeActionGuard } from '../system/policy/runtimeActionGuard.js';
 import { SessionLifecycleService } from '../domain/sessions/sessionLifecycleService.js';
@@ -59,7 +58,7 @@ import {
   type RuntimeManagementSurfaceHandle
 } from './hosting/runtimeManagementPort.js';
 import { RuntimeWorkManagementService } from '../domain/sessions/runtimeWorkManagementService.js';
-import { ManagedChannelLifecycleService } from './lifecycle/managedChannelLifecycleService.js';
+import { ManagedSpaceLifecycleService } from './lifecycle/managedSpaceLifecycleService.js';
 import { RuntimeInteractionService } from './execution/runtimeInteractionService.js';
 import { RuntimeTransportSurfaceService } from './hosting/runtimeTransportSurfaceService.js';
 import { ProviderRequestAttributionService } from './execution/providerCoordination/providerRequestAttributionService.js';
@@ -209,7 +208,7 @@ export interface RuntimeExtensionGraph {
 }
 
 export interface RuntimeTransportGraph {
-  managedChannelLifecycle: ManagedChannelLifecycleService;
+  managedSpaceLifecycle: ManagedSpaceLifecycleService;
   interactions: RuntimeInteractionService;
   transportSurface: RuntimeTransportSurfaceService;
   hostingService: RuntimeHostingService;
@@ -388,7 +387,7 @@ export function buildMoorlineRuntimeServiceGraph(
     rejectTurnWaitersForThread: callbacks.rejectTurnWaitersForThread,
     cleanupScopedSidecars: callbacks.cleanupScopedSidecars
   });
-  const managedChannelLifecycle = new ManagedChannelLifecycleService({
+  const managedSpaceLifecycle = new ManagedSpaceLifecycleService({
     config: normalizedConfig,
     getNamespaceState: callbacks.getNamespaceState,
     sessionRegistry,
@@ -798,7 +797,6 @@ export function buildMoorlineRuntimeServiceGraph(
     getPluginHost: () => pluginHostRef.current,
     createPluginContext: callbacks.createPluginContext,
     getRuntimeWorkerQueues: () => [providerQueue.getStats(), commandQueue.getStats(), projectionQueue.getStats(), transportQueue.getStats()],
-    packageCatalog: OFFICIAL_CATALOG,
     ...(normalizedDeps.managementPresentation ? { presentation: normalizedDeps.managementPresentation } : {})
   });
   managementSurface = normalizedDeps.managementSurfaceFactory?.create({
@@ -861,7 +859,7 @@ export function buildMoorlineRuntimeServiceGraph(
     managementReadModel,
     runtimeControl,
     workManagement,
-    managedChannelLifecycle,
+    managedSpaceLifecycle,
     interactions,
     transportSurface,
     providerOrchestrator,

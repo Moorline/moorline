@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS runtime_activities (
   activity_id TEXT PRIMARY KEY,
   thread_id TEXT NOT NULL,
   session_id TEXT,
-  channel_id TEXT,
+  space_id TEXT,
   source_event_id TEXT NOT NULL,
   kind TEXT NOT NULL,
   severity TEXT NOT NULL,

@@ -10,9 +10,9 @@ export interface RuntimeSurfaceNames {
   mainCategoryName: string;
   chatChannelName: string;
   statusChannelName: string;
-  sessionsCategoryName: string;
-  missionsCategoryName: string;
-  archiveCategoryName: string;
+  sessionsGroupName: string;
+  missionsGroupName: string;
+  archiveGroupName: string;
 }
 
 export interface ManagedAdminAccessGroupConfig {

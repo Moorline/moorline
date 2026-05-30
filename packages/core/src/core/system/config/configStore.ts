@@ -110,14 +110,6 @@ function cloneConfig(config: MoorlineConfig): MoorlineConfig {
   return JSON.parse(JSON.stringify(config)) as MoorlineConfig;
 }
 
-function requiredString(config: Record<string, unknown>, key: string, label: string): string {
-  const value = config[key];
-  if (typeof value !== 'string' || value.trim() === '') {
-    throw new Error(`${label} is required`);
-  }
-  return value;
-}
-
 function buildAppliedTransport(config: MoorlineConfig): TransportConfig | undefined {
   const activePackageId = config.surfaces.transport.activePackageId;
   if (!activePackageId) {
@@ -130,11 +122,8 @@ function buildAppliedTransport(config: MoorlineConfig): TransportConfig | undefi
   return {
     kind: activePackageId.split('/').at(-1) ?? activePackageId,
     packageId: activePackageId,
-    authToken: requiredString(source, 'authToken', 'transport.authToken'),
-    scopeId: requiredString(source, 'scopeId', 'transport.scopeId'),
-    applicationId: requiredString(source, 'applicationId', 'transport.applicationId'),
-    actorId: requiredString(source, 'actorId', 'transport.actorId'),
-    invitePermissions: requiredString(source, 'invitePermissions', 'transport.invitePermissions')
+    config: source,
+    scopeId: typeof source.scopeId === 'string' ? source.scopeId : ''
   };
 }
 
@@ -145,7 +134,11 @@ function buildAppliedProvider(config: MoorlineConfig): ProviderConfig | undefine
   }
   return {
     kind: activePackageId.split('/').at(-1) ?? activePackageId,
-    packageId: activePackageId
+    packageId: activePackageId,
+    config: {
+      ...config.surfaces.provider.config,
+      ...(config.surfaces.provider.configByPackageId?.[activePackageId] ?? {})
+    }
   };
 }
 
@@ -646,8 +639,7 @@ function persistedConfigContainsSecrets(config: MoorlineConfig): boolean {
       config: working,
       secrets,
       surface: 'skill'
-    }) ||
-    Boolean(working.transport?.authToken)
+    })
   );
 }
 

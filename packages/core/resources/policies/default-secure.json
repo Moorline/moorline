@@ -106,18 +106,6 @@
       ]
     },
     {
-      "actorPrefix": "plugin:official/channel-lifecycle",
-      "allowCapabilities": [
-        "transport.message.send",
-        "transport.space.update",
-        "transport.space.delete",
-        "session.archive",
-        "session.delete",
-        "mission.archive",
-        "mission.delete"
-      ]
-    },
-    {
       "actorPrefix": "plugin:official/session-orchestration",
       "allowCapabilities": [
         "transport.message.send",

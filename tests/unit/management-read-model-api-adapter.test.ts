@@ -114,8 +114,7 @@ describe('management read model api-adapter config', () => {
         host: '127.0.0.1',
         port: 45173,
         url: null
-      }),
-      packageCatalog: []
+      })
     }).build();
 
     const record = readModel.packages.config.find((entry) => entry.surface === 'api-adapter' && entry.packageId === 'official/http');

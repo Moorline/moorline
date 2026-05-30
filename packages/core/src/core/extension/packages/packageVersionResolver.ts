@@ -1,9 +1,9 @@
 import semver from 'semver';
-import type { PackageBundleMember, PackageCatalogEntry, PackageKind } from '../../../types/package.js';
+import type { PackageBundleMember, PackageMetadataEntry, PackageKind } from '../../../types/package.js';
 
 export interface ResolvedBundleMember {
   member: PackageBundleMember;
-  catalogEntry: PackageCatalogEntry;
+  packageEntry: PackageMetadataEntry;
 }
 
 export function assertValidPackageVersion(input: { packageId: string; version: string | undefined }): void {
@@ -21,7 +21,7 @@ export function assertValidPackageRange(input: { packageId: string; range: strin
   }
 }
 
-function matchesRange(entry: PackageCatalogEntry, range: string): boolean {
+function matchesRange(entry: PackageMetadataEntry, range: string): boolean {
   if (!entry.version) {
     return false;
   }
@@ -49,15 +49,15 @@ export function packageVersionSatisfiesRange(input: {
   return semver.satisfies(version, input.range);
 }
 
-export function resolveCatalogPackage(input: {
-  catalog: PackageCatalogEntry[];
+export function resolvePackageMetadata(input: {
+  entries: PackageMetadataEntry[];
   kind: PackageKind;
   packageId: string;
   versionRange?: string;
-}): PackageCatalogEntry {
+}): PackageMetadataEntry {
   const range = input.versionRange ?? '*';
   assertValidPackageRange({ packageId: input.packageId, range });
-  const candidates = input.catalog
+  const candidates = input.entries
     .filter((entry) => entry.kind === input.kind && entry.packageId === input.packageId && matchesRange(entry, range))
     .sort((left, right) => {
       if (!left.version && !right.version) {
@@ -73,14 +73,14 @@ export function resolveCatalogPackage(input: {
     });
   const resolved = candidates[0];
   if (!resolved) {
-    throw new Error(`No catalog entry satisfies ${input.kind} package ${input.packageId}@${range}.`);
+    throw new Error(`No package metadata entry satisfies ${input.kind} package ${input.packageId}@${range}.`);
   }
   return resolved;
 }
 
 export function resolveBundleMembers(input: {
-  catalog: PackageCatalogEntry[];
-  bundle: PackageCatalogEntry;
+  entries: PackageMetadataEntry[];
+  bundle: PackageMetadataEntry;
 }): ResolvedBundleMember[] {
   if (input.bundle.kind !== 'bundle') {
     throw new Error(`Package ${input.bundle.packageId} is not a bundle.`);
@@ -91,8 +91,8 @@ export function resolveBundleMembers(input: {
   }
   return members.map((member) => ({
     member,
-    catalogEntry: resolveCatalogPackage({
-      catalog: input.catalog,
+    packageEntry: resolvePackageMetadata({
+      entries: input.entries,
       kind: member.kind,
       packageId: member.packageId,
       versionRange: member.version

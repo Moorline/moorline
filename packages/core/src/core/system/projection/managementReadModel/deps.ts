@@ -9,7 +9,6 @@ import type { PluginHost } from '../../../extension/plugins/pluginHost.js';
 import type { RuntimePluginContext } from '../../../../types/plugin.js';
 import type {
   ManagementRuntimeWorkerQueueHealthRecord,
-  ManagementPackageCatalogEntry,
   ManagementReadModelPresentation,
   ManagementRuntimeStatusProvider
 } from '../../../../types/app.js';
@@ -36,6 +35,5 @@ export interface ManagementReadModelServiceDeps {
   getPluginHost?: () => PluginHost;
   createPluginContext?: (actorId: string) => RuntimePluginContext;
   getRuntimeWorkerQueues?: () => ManagementRuntimeWorkerQueueHealthRecord[];
-  packageCatalog: ManagementPackageCatalogEntry[];
   presentation?: ManagementReadModelPresentation;
 }

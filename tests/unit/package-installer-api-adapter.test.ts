@@ -16,14 +16,14 @@ import {
 } from '../../packages/core/src/types/config.js';
 import { createTempRoot } from '../helpers/temp.js';
 
-function writeApiAdapterPackage(root: string): void {
+function writeApiAdapterPackage(root: string, id = 'acme/http-alt'): void {
   mkdirSync(root, { recursive: true });
   writeFileSync(
     join(root, 'manifest.json'),
     JSON.stringify(
       {
-        id: 'acme/http-alt',
-        name: 'acme/http-alt',
+        id,
+        name: id,
         version: '1.2.3',
         type: 'api-adapter',
         description: 'Alternate HTTP adapter.',
@@ -70,6 +70,23 @@ function writeApiAdapterPackage(root: string): void {
     ].join('\n'),
     'utf8'
   );
+}
+
+function installedApiAdapterRecord(input: { runtimeRoot: string; packageId: string; sourceDir: string }) {
+  return {
+    family: 'installable' as const,
+    kind: 'api-adapter' as const,
+    surface: 'api-adapter' as const,
+    packageId: input.packageId,
+    name: input.packageId,
+    version: '1.2.3',
+    installPath: join(input.runtimeRoot, 'packages', 'api-adapters', ...input.packageId.split('/')),
+    source: { kind: 'local_dir' as const, path: input.sourceDir },
+    installedAt: '2026-05-20T00:00:00.000Z',
+    manifestPath: join(input.sourceDir, 'manifest.json'),
+    manifestHash: `${input.packageId}-hash`,
+    dependencies: []
+  };
 }
 
 function writeTransportPackage(root: string): void {
@@ -365,8 +382,8 @@ describe('api-adapter package installation', () => {
     });
   });
 
-  it('allows built-in official/http configuration and selection before inventory installation', () => {
-    const root = createTempRoot('moorline-builtin-http-config-');
+  it('rejects official/http configuration before inventory installation', () => {
+    const root = createTempRoot('moorline-http-package-config-');
     const runtimeRoot = join(root, 'runtime');
     mkdirSync(runtimeRoot, { recursive: true });
     const namespace = defaultNamespaceNames();
@@ -421,20 +438,16 @@ describe('api-adapter package installation', () => {
         port: '45678',
         exposure: 'remote'
       }
-    })).not.toThrow();
-
-    expect(configuredApiAdapterConfig(config)).toMatchObject({
-      port: 45678,
-      exposure: 'remote'
-    });
-    expect(config.surfaces.apiAdapter.config).not.toHaveProperty('official/http');
+    })).toThrow(/not installed/i);
   });
 
   it('does not copy custom api-adapter config back into official/http when reselected', () => {
     const root = createTempRoot('moorline-api-adapter-reselect-http-');
     const runtimeRoot = join(root, 'runtime');
     const sourceDir = join(root, 'source');
+    const httpSourceDir = join(root, 'http-source');
     writeApiAdapterPackage(sourceDir);
+    writeApiAdapterPackage(httpSourceDir, 'official/http');
     const namespace = defaultNamespaceNames();
     const config: MoorlineConfig = {
       version: 4,
@@ -492,20 +505,10 @@ describe('api-adapter package installation', () => {
     const store = new PackageInventoryStore(runtimeRoot);
     store.save({
       version: 1,
-      installed: [{
-        family: 'installable',
-        kind: 'api-adapter',
-        surface: 'api-adapter',
-        packageId: 'acme/http-alt',
-        name: 'Acme HTTP Adapter',
-        version: '1.2.3',
-        installPath: join(runtimeRoot, 'packages', 'api-adapters', 'acme', 'http-alt'),
-        source: { kind: 'local_dir', path: sourceDir },
-        installedAt: '2026-05-20T00:00:00.000Z',
-        manifestPath: join(sourceDir, 'manifest.json'),
-        manifestHash: 'api-adapter-hash',
-        dependencies: []
-      }],
+      installed: [
+        installedApiAdapterRecord({ runtimeRoot, packageId: 'acme/http-alt', sourceDir }),
+        installedApiAdapterRecord({ runtimeRoot, packageId: 'official/http', sourceDir: httpSourceDir })
+      ],
       applied: {
         activated: []
       }
@@ -515,7 +518,7 @@ describe('api-adapter package installation', () => {
     service.setSelectedPackage('api-adapter', 'official/http');
 
     expect(config.surfaces.apiAdapter.activePackageId).toBe('official/http');
-    expect(config.surfaces.apiAdapter.config).toMatchObject(defaultHttpApiAdapterConfig());
+    expect(config.surfaces.apiAdapter.config).toEqual({});
     expect(config.surfaces.apiAdapter.config).not.toMatchObject({
       host: '0.0.0.0',
       port: 49999,
@@ -524,11 +527,13 @@ describe('api-adapter package installation', () => {
     });
   });
 
-  it('preserves saved built-in official/http config while a custom api-adapter is selected', async () => {
+  it('preserves saved official/http package config while a custom api-adapter is selected', async () => {
     const root = createTempRoot('moorline-api-adapter-preserve-http-config-');
     const runtimeRoot = join(root, 'runtime');
     const sourceDir = join(root, 'source');
+    const httpSourceDir = join(root, 'http-source');
     writeApiAdapterPackage(sourceDir);
+    writeApiAdapterPackage(httpSourceDir, 'official/http');
     const namespace = defaultNamespaceNames();
     const config: MoorlineConfig = {
       version: 4,
@@ -593,27 +598,16 @@ describe('api-adapter package installation', () => {
     const store = new PackageInventoryStore(runtimeRoot);
     store.save({
       version: 1,
-      installed: [{
-        family: 'installable',
-        kind: 'api-adapter',
-        surface: 'api-adapter',
-        packageId: 'acme/http-alt',
-        name: 'Acme HTTP Adapter',
-        version: '1.2.3',
-        installPath: join(runtimeRoot, 'packages', 'api-adapters', 'acme', 'http-alt'),
-        source: { kind: 'local_dir', path: sourceDir },
-        installedAt: '2026-05-20T00:00:00.000Z',
-        manifestPath: join(sourceDir, 'manifest.json'),
-        manifestHash: 'api-adapter-hash',
-        dependencies: []
-      }],
+      installed: [
+        installedApiAdapterRecord({ runtimeRoot, packageId: 'acme/http-alt', sourceDir }),
+        installedApiAdapterRecord({ runtimeRoot, packageId: 'official/http', sourceDir: httpSourceDir })
+      ],
       applied: {
         activated: []
       }
     });
 
     const service = new OperatorPackageService(config, configPath, () => '2026-05-20T00:00:00.000Z', root);
-    await expect(service.apply()).rejects.toThrow();
     service.setSelectedPackage('api-adapter', 'official/http');
 
     expect(config.surfaces.apiAdapter.configByPackageId['official/http']).toMatchObject({
@@ -673,8 +667,8 @@ describe('api-adapter package installation', () => {
     });
   });
 
-  it('applies a fresh setup with the built-in official/http adapter absent from inventory', async () => {
-    const root = createTempRoot('moorline-builtin-http-apply-');
+  it('rejects a fresh setup with official/http absent from inventory', async () => {
+    const root = createTempRoot('moorline-http-package-apply-');
     const runtimeRoot = join(root, 'runtime');
     const transportPath = join(runtimeRoot, 'packages', 'transports', 'official', 'discord');
     writeTransportPackage(transportPath);
@@ -701,11 +695,11 @@ describe('api-adapter package installation', () => {
         transport: {
           activePackageId: 'official/discord',
           config: {
-            authToken: 'token',
+            accessToken: 'token',
             scopeId: 'scope',
-            applicationId: 'app',
+            transportClientId: 'app',
             actorId: 'actor',
-            invitePermissions: '0'
+            accessPermissions: '0'
           },
           configByPackageId: {}
         },
@@ -783,14 +777,7 @@ describe('api-adapter package installation', () => {
     });
 
     const service = new OperatorPackageService(config, configPath, () => '2026-05-20T00:00:00.000Z', root);
-    await expect(service.apply()).resolves.toMatchObject({
-      errors: []
-    });
-
-    expect(store.load().applied.activated).toContainEqual({
-      surface: 'api-adapter',
-      packageId: 'official/http'
-    });
+    await expect(service.apply()).rejects.toThrow(/No API adapter package is activated|not installed|not declared/i);
   });
 
   it('rejects selected api-adapters with missing required config before apply completes', async () => {
@@ -830,11 +817,11 @@ describe('api-adapter package installation', () => {
         transport: {
           activePackageId: 'official/discord',
           config: {
-            authToken: 'token',
+            accessToken: 'token',
             scopeId: 'scope',
-            applicationId: 'app',
+            transportClientId: 'app',
             actorId: 'actor',
-            invitePermissions: '0'
+            accessPermissions: '0'
           },
           configByPackageId: {}
         },
@@ -979,9 +966,34 @@ describe('api-adapter package installation', () => {
     expect(result.issues).toContain('No API adapter package is activated.');
   });
 
-  it('rejects invalid official/http adapter config during startability checks', () => {
+  it('rejects schema-invalid official/http adapter config during startability checks', () => {
     const root = createTempRoot('moorline-http-startability-config-');
     const runtimeRoot = join(root, 'runtime');
+    const httpInstallPath = join(runtimeRoot, 'packages', 'api-adapters', 'official', 'http');
+    mkdirSync(httpInstallPath, { recursive: true });
+    writeFileSync(
+      join(httpInstallPath, 'manifest.json'),
+      JSON.stringify(
+        {
+          id: 'official/http',
+          name: 'official/http',
+          version: '1.2.3',
+          type: 'api-adapter',
+          entrypoint: 'index.mjs',
+          configSchema: {
+            type: 'object',
+            properties: {
+              host: { type: 'string' },
+              port: { type: 'number' },
+              exposure: { type: 'string', enum: ['loopback', 'remote'] }
+            }
+          }
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
     const namespace = defaultNamespaceNames();
     const config: MoorlineConfig = {
       version: 4,
@@ -1000,9 +1012,9 @@ describe('api-adapter package installation', () => {
         apiAdapter: {
           activePackageId: 'official/http',
           config: {
-            host: '0.0.0.0',
-            port: 45173,
-            exposure: 'loopback'
+            host: '127.0.0.1',
+            port: '45173',
+            exposure: 'private'
           },
           configByPackageId: {}
         },
@@ -1030,6 +1042,7 @@ describe('api-adapter package installation', () => {
     const result = evaluateRuntimeStartability(config, {
       version: 1,
       installed: [
+        installedApiAdapterRecord({ runtimeRoot, packageId: 'official/http', sourceDir: join(root, 'http') }),
         {
           family: 'installable',
           kind: 'transport',
@@ -1065,7 +1078,7 @@ describe('api-adapter package installation', () => {
     });
 
     expect(result.startable).toBe(false);
-    expect(result.issues.join('\n')).toMatch(/loopback IP address/i);
+    expect(result.issues.join('\n')).toMatch(/port must be a number|exposure must be one of/i);
   });
 
   it('does not carry stale official/http config when selecting and configuring a custom api-adapter from fresh defaults', async () => {
@@ -1105,11 +1118,11 @@ describe('api-adapter package installation', () => {
         transport: {
           activePackageId: 'official/discord',
           config: {
-            authToken: 'token',
+            accessToken: 'token',
             scopeId: 'scope',
-            applicationId: 'app',
+            transportClientId: 'app',
             actorId: 'actor',
-            invitePermissions: '0'
+            accessPermissions: '0'
           },
           configByPackageId: {}
         },

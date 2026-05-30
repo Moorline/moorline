@@ -1,16 +1,26 @@
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import semver from 'semver';
-import type { PackageBundleMember, PackageCatalogEntry, PackageKind } from '../../../types/package.js';
-import { getOfficialCatalog } from './officialCatalog.js';
+import type { PackageBundleMember, PackageKind } from '../../../types/package.js';
+import { writeFileAtomicSync } from '../../shared/fs/atomicWrite.js';
 import { NpmRegistryClient, npmNameForOfficialPackageId } from './npmRegistryClient.js';
 import type { PackageRegistryEntry, PackageSearchInput } from './packageRegistryTypes.js';
 
-function officialRegistryEntry(entry: PackageCatalogEntry): PackageRegistryEntry {
+interface PackageRegistryCacheFile {
+  version: 1;
+  registryUrl: string;
+  refreshedAt: string;
+  entries: PackageRegistryEntry[];
+}
+
+function cachePath(runtimeRoot: string): string {
+  return join(runtimeRoot, 'state', 'package-registry-cache.json');
+}
+
+function cloneEntryForCache(entry: PackageRegistryEntry): PackageRegistryEntry {
   return {
     ...entry,
-    schemaVersion: 1,
-    trustLevel: 'official',
-    registrySource: 'official_catalog',
-    publisher: 'Moorline'
+    registrySource: 'local_cache'
   };
 }
 
@@ -23,14 +33,18 @@ function dedupeEntries(entries: PackageRegistryEntry[]): PackageRegistryEntry[] 
       byKey.set(key, entry);
       continue;
     }
-    if (existing.registrySource === 'official_catalog') {
-      continue;
-    }
-    if (entry.registrySource === 'official_catalog') {
+    if (entry.registrySource === 'npm' && existing.registrySource !== 'npm') {
       byKey.set(key, entry);
       continue;
     }
-    if ((entry.version && existing.version && semver.gt(entry.version, existing.version)) || !existing.version) {
+    if (
+      entry.registrySource === existing.registrySource &&
+      entry.version &&
+      existing.version &&
+      semver.valid(entry.version) &&
+      semver.valid(existing.version) &&
+      semver.gt(entry.version, existing.version)
+    ) {
       byKey.set(key, entry);
     }
   }
@@ -52,54 +66,102 @@ function matchesQuery(entry: PackageRegistryEntry, query: string | undefined): b
   ].some((value) => value.toLowerCase().includes(normalized));
 }
 
+function loadCache(path: string, registryUrl: string): PackageRegistryEntry[] {
+  if (!existsSync(path)) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<PackageRegistryCacheFile>;
+    if (parsed.version !== 1 || parsed.registryUrl !== registryUrl || !Array.isArray(parsed.entries)) {
+      return [];
+    }
+    return parsed.entries.map(cloneEntryForCache);
+  } catch {
+    return [];
+  }
+}
+
+function saveCache(path: string, registryUrl: string, entries: PackageRegistryEntry[]): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const payload: PackageRegistryCacheFile = {
+    version: 1,
+    registryUrl,
+    refreshedAt: new Date().toISOString(),
+    entries: dedupeEntries(entries).map(cloneEntryForCache)
+  };
+  writeFileAtomicSync(path, `${JSON.stringify(payload, null, 2)}\n`);
+}
+
+function requireInstallableCachedEntry(entry: PackageRegistryEntry): PackageRegistryEntry {
+  if (entry.source.kind !== 'remote_archive' || entry.source.provenance?.type !== 'npm' || !entry.source.integrity) {
+    throw new Error(`Cached package ${entry.packageId} is not installable without refreshing npm metadata.`);
+  }
+  return entry;
+}
+
 export class PackageRegistryService {
   private readonly npmClient: NpmRegistryClient;
-  private npmCache: PackageRegistryEntry[] = [];
+  private readonly cacheFilePath: string | null;
+  private memoryCache: PackageRegistryEntry[];
 
-  constructor(npmClient = new NpmRegistryClient()) {
-    this.npmClient = npmClient;
+  constructor(input?: { runtimeRoot?: string; npmClient?: NpmRegistryClient } | NpmRegistryClient) {
+    const options = input && 'findByPackageId' in input ? { npmClient: input as NpmRegistryClient } : input;
+    this.npmClient = options?.npmClient ?? new NpmRegistryClient();
+    this.cacheFilePath = options?.runtimeRoot ? cachePath(options.runtimeRoot) : null;
+    this.memoryCache = this.cacheFilePath ? loadCache(this.cacheFilePath, this.npmClient.registryUrl) : [];
   }
 
-  listCachedCatalog(): PackageRegistryEntry[] {
-    return dedupeEntries([
-      ...getOfficialCatalog().map(officialRegistryEntry),
-      ...this.npmCache
-    ]);
+  listCachedEntries(): PackageRegistryEntry[] {
+    return dedupeEntries(this.memoryCache);
   }
 
   async search(input: PackageSearchInput = {}): Promise<PackageRegistryEntry[]> {
-    let npmEntries: PackageRegistryEntry[] = [];
     try {
-      npmEntries = await this.npmClient.search(input);
-      this.npmCache = [...this.npmCache, ...npmEntries];
+      const npmEntries = await this.npmClient.search(input);
+      this.memoryCache = dedupeEntries([...npmEntries, ...this.memoryCache]);
+      if (this.cacheFilePath) {
+        saveCache(this.cacheFilePath, this.npmClient.registryUrl, this.memoryCache);
+      }
+      return npmEntries.filter((entry) => matchesQuery(entry, input.query));
     } catch {
-      npmEntries = [];
+      return this.memoryCache
+        .filter((entry) => !input.kind || entry.kind === input.kind)
+        .filter((entry) => matchesQuery(entry, input.query));
     }
-    return dedupeEntries([
-      ...getOfficialCatalog().map(officialRegistryEntry),
-      ...npmEntries
-    ])
-      .filter((entry) => !input.kind || entry.kind === input.kind)
-      .filter((entry) => matchesQuery(entry, input.query));
   }
 
-  async getPackage(input: { kind?: PackageKind; packageId: string }): Promise<PackageRegistryEntry> {
-    const official = getOfficialCatalog().find((entry) => entry.packageId === input.packageId && (!input.kind || entry.kind === input.kind));
-    if (official) {
-      return officialRegistryEntry(official);
+  async getPackage(input: { kind?: PackageKind; packageId: string; allowCacheOnly?: boolean }): Promise<PackageRegistryEntry> {
+    try {
+      const npmMatches = await this.npmClient.findByPackageId(input);
+      const resolved = this.resolveNpmMatches(input.packageId, npmMatches);
+      this.memoryCache = dedupeEntries([resolved, ...this.memoryCache]);
+      if (this.cacheFilePath) {
+        saveCache(this.cacheFilePath, this.npmClient.registryUrl, this.memoryCache);
+      }
+      return resolved;
+    } catch (error) {
+      const cached = this.memoryCache.find((entry) => entry.packageId === input.packageId && (!input.kind || entry.kind === input.kind));
+      if (cached && input.allowCacheOnly) {
+        return cached;
+      }
+      throw error;
     }
-    const npmMatches = await this.npmClient.findByPackageId(input);
-    const resolved = this.resolveNpmMatches(input.packageId, npmMatches);
-    this.npmCache = [...this.npmCache, resolved];
-    return resolved;
   }
 
   async resolveInstallEntry(input: { kind: PackageKind; packageId: string }): Promise<PackageRegistryEntry> {
-    const entry = await this.getPackage(input);
-    if (entry.kind !== input.kind) {
-      throw new Error(`Package ${input.packageId} is a ${entry.kind} package, not ${input.kind}.`);
+    try {
+      const entry = await this.getPackage(input);
+      if (entry.kind !== input.kind) {
+        throw new Error(`Package ${input.packageId} is a ${entry.kind} package, not ${input.kind}.`);
+      }
+      return entry;
+    } catch (error) {
+      const cached = this.memoryCache.find((entry) => entry.packageId === input.packageId && entry.kind === input.kind);
+      if (cached) {
+        return requireInstallableCachedEntry(cached);
+      }
+      throw error;
     }
-    return entry;
   }
 
   async resolveBundleMemberEntries(input: { members: PackageBundleMember[] }): Promise<PackageRegistryEntry[]> {

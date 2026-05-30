@@ -33,9 +33,10 @@ export class RuntimeHostingService {
     const rollbackSteps: Array<() => Promise<void>> = [];
     try {
       await this.assertEnvironment();
+      const transportConfig = this.deps.config.transport.config;
       await this.deps.transport.start({
-        token: this.deps.config.transport.authToken,
-        metadata: this.deps.config.surfaces.transport.config
+        token: typeof transportConfig.authToken === 'string' ? transportConfig.authToken : undefined,
+        metadata: transportConfig
       });
       rollbackSteps.push(async () => {
         await this.deps.transport.stop();
@@ -90,23 +91,19 @@ export class RuntimeHostingService {
       await this.deps.verifyEnvironment();
     }
     const verification = await this.deps.transport.verifyAccess({
-      authToken: this.deps.config.transport.authToken,
+      authToken: typeof this.deps.config.transport.config.authToken === 'string' ? this.deps.config.transport.config.authToken : undefined,
       scopeId: this.deps.config.transport.scopeId ?? '',
-      applicationId: this.deps.config.transport.applicationId
+      applicationId: typeof this.deps.config.transport.config.applicationId === 'string' ? this.deps.config.transport.config.applicationId : undefined
     });
-    if (this.deps.config.transport.applicationId && verification.applicationId !== this.deps.config.transport.applicationId) {
+    const expectedApplicationId = typeof this.deps.config.transport.config.applicationId === 'string' ? this.deps.config.transport.config.applicationId : null;
+    if (expectedApplicationId && verification.applicationId !== expectedApplicationId) {
       throw new Error('Transport application id does not match the saved Moorline config');
     }
   }
 
   private async bootstrapNamespace(): Promise<RuntimeSurfaceState> {
     const existing = loadInstallationState(this.deps.installationPath);
-    const transportConfig = {
-      ...this.deps.config.surfaces.transport.config,
-      ...(this.deps.config.transport.packageId
-        ? this.deps.config.surfaces.transport.configByPackageId?.[this.deps.config.transport.packageId] ?? {}
-        : {})
-    };
+    const transportConfig = this.deps.config.transport.config;
     if (this.deps.transport.reconcileRuntimeSurface) {
       const adminConfig = this.deps.config.admin ?? defaultAdminConfig();
       const reconciled = await this.deps.authorizeTransportSetup({
@@ -114,7 +111,7 @@ export class RuntimeHostingService {
         execute: async () =>
           await this.deps.transport.reconcileRuntimeSurface!({
             scopeId: this.deps.config.transport.scopeId,
-            actorId: this.deps.config.transport.actorId,
+            actorId: typeof transportConfig.actorId === 'string' ? transportConfig.actorId : undefined,
             names: this.deps.config.surface,
             managedAdminAccessGroup: adminConfig.managedRole,
             managedMemberAccessGroup: adminConfig.managedUserRole,
@@ -139,9 +136,9 @@ export class RuntimeHostingService {
       mainCategoryId: this.deps.config.surface.mainCategoryName,
       chatChannelId: this.deps.config.surface.chatChannelName,
       statusChannelId: this.deps.config.surface.statusChannelName,
-      sessionsCategoryId: this.deps.config.surface.sessionsCategoryName,
-      missionsCategoryId: this.deps.config.surface.missionsCategoryName,
-      archiveCategoryId: this.deps.config.surface.archiveCategoryName,
+      sessionsCategoryId: this.deps.config.surface.sessionsGroupName,
+      missionsCategoryId: this.deps.config.surface.missionsGroupName,
+      archiveCategoryId: this.deps.config.surface.archiveGroupName,
       createdAt: nowIso,
       updatedAt: nowIso
     };

@@ -1,11 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { PackageCatalogEntry } from '../../../types/package.js';
 import type { MoorlineReleaseManifest, MoorlineRuntimeMode } from '../../../types/release.js';
 
 const RELEASE_MANIFEST_FILE = 'release-manifest.json';
-const OFFICIAL_CATALOG_FILE = 'official-catalog.json';
 const RESOURCES_VERSION = 1;
 
 function synthesizeSourceReleaseManifest(assetRoot: string): MoorlineReleaseManifest {
@@ -86,15 +84,4 @@ export function readMoorlineReleaseManifest(assetRoot: string, runtimeMode: Moor
     return JSON.parse(readFileSync(manifestPath, 'utf8')) as MoorlineReleaseManifest;
   }
   return synthesizeSourceReleaseManifest(assetRoot);
-}
-
-export function loadOfficialCatalogResource(assetRoot: string, runtimeMode: MoorlineRuntimeMode): PackageCatalogEntry[] | null {
-  const catalogPath = [join(assetRoot, OFFICIAL_CATALOG_FILE), join(assetRoot, 'resources', OFFICIAL_CATALOG_FILE)]
-    .find((candidate) => existsSync(candidate));
-  if (runtimeMode === 'packaged_release' && catalogPath) {
-    return JSON.parse(readFileSync(catalogPath, 'utf8')) as PackageCatalogEntry[];
-  }
-  return catalogPath
-    ? (JSON.parse(readFileSync(catalogPath, 'utf8')) as PackageCatalogEntry[])
-    : null;
 }

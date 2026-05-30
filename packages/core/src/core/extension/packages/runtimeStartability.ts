@@ -1,6 +1,6 @@
-import { configuredApiAdapterConfig, type MoorlineConfig } from '../../../types/config.js';
+import type { MoorlineConfig } from '../../../types/config.js';
 import type { JsonSchemaLike, PackageDesiredState } from '../../../types/package.js';
-import { activatedPackageForUniqueKey, desiredPackageRefsFromConfig, isBuiltInActivatedPackage } from './packageActivation.js';
+import { activatedPackageForUniqueKey, desiredPackageRefsFromConfig } from './packageActivation.js';
 import { resolvePackageConfigSchema } from './packageConfigSchema.js';
 import { resolvePackageDependencyErrors } from './packageDependencyResolver.js';
 import type { PackageInventoryState } from './packageInventoryStore.js';
@@ -64,12 +64,8 @@ function effectiveSurfaceConfig(
   packageId: string
 ): Record<string, unknown> {
   if (surface === 'api-adapter') {
-    const legacyNested = config.surfaces.apiAdapter.config[packageId];
-    const root = legacyNested && typeof legacyNested === 'object' && !Array.isArray(legacyNested)
-      ? legacyNested as Record<string, unknown>
-      : config.surfaces.apiAdapter.config;
     return {
-      ...root,
+      ...config.surfaces.apiAdapter.config,
       ...(config.surfaces.apiAdapter.configByPackageId?.[packageId] ?? {})
     };
   }
@@ -223,15 +219,12 @@ export function evaluateRuntimeStartability(config: MoorlineConfig, inventory: P
   }
 
   for (const ref of desired.activated) {
-    if (isBuiltInActivatedPackage(ref)) {
-      continue;
-    }
     if (!installedLookup[ref.surface].has(ref.packageId)) {
       addIssue(`Activated ${ref.surface} package ${ref.packageId} is not installed.`);
     }
   }
 
-  if (activeApiAdapter && (installedLookup['api-adapter'].has(activeApiAdapter.packageId) || isBuiltInActivatedPackage(activeApiAdapter))) {
+  if (activeApiAdapter && installedLookup['api-adapter'].has(activeApiAdapter.packageId)) {
     const schema = resolvePackageConfigSchema({
       runtimeRoot: config.runtimeRoot,
       surface: 'api-adapter',
@@ -242,16 +235,9 @@ export function evaluateRuntimeStartability(config: MoorlineConfig, inventory: P
         packageId: activeApiAdapter.packageId,
         schema,
         config: effectiveSurfaceConfig(config, 'api-adapter', activeApiAdapter.packageId),
-        allowUnknownConfigKeys: isBuiltInActivatedPackage(activeApiAdapter)
+        allowUnknownConfigKeys: false
       })) {
       addIssue(issue);
-    }
-    if (activeApiAdapter.packageId === 'official/http') {
-      try {
-        configuredApiAdapterConfig(config, activeApiAdapter.packageId);
-      } catch (error) {
-        addIssue(error instanceof Error ? error.message : String(error));
-      }
     }
   }
 

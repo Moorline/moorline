@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS runtime_orchestration_requests (
   request_id TEXT PRIMARY KEY,
   actor_id TEXT NOT NULL,
   requested_by_thread_id TEXT NOT NULL,
-  requested_by_channel_id TEXT NOT NULL,
+  requested_by_space_id TEXT NOT NULL,
   type TEXT NOT NULL,
   target_session_id TEXT,
   payload_json TEXT NOT NULL,

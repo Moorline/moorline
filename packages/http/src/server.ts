@@ -95,7 +95,7 @@ export class ControlApiServer {
       return;
     }
     if (api?.tls?.enabled) {
-      throw new Error('official/http tls.enabled is not supported by the built-in HTTP API adapter.');
+      throw new Error('official/http tls.enabled is not supported by the official HTTP API adapter package.');
     }
     this.exposure = api?.exposure ?? 'loopback';
 
@@ -182,6 +182,8 @@ export class ControlApiServer {
     const root = mkdtempSync(join(tmpdir(), 'moorline-http-adapter-'));
     const configPath = join(root, 'config.json');
     const adapterConfig: Record<string, unknown> = options.config ?? { ...defaultHttpApiAdapterConfig() };
+    // Adapter-local fallback for standalone HTTP server use, where no host config
+    // exists yet. Regular host startup still reads the selected package from config.
     const config: MoorlineConfig = {
       version: 4,
       runtimeRoot: join(root, 'runtime'),
@@ -309,11 +311,6 @@ export class ControlApiServer {
     }
     if (url.pathname === '/api/state/configure') {
       respondJson(response, 200, (await this.buildState()).configure);
-      return;
-    }
-    if (url.pathname === '/api/packages/catalog') {
-      const state = await this.buildState();
-      respondJson(response, 200, state.configure.packages.catalog);
       return;
     }
     if (url.pathname === '/api/packages/search') {

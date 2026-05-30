@@ -1,13 +1,13 @@
 interface ManagedSpaceOwnership {
   scopeId: string;
-  applicationId: string;
+  ownerApplicationId?: string;
 }
 
 export function buildManagedSpaceMetadata(input: ManagedSpaceOwnership): Record<string, unknown> {
   return {
     moorlineManaged: true,
     moorlineOwnerScopeId: input.scopeId,
-    moorlineOwnerApplicationId: input.applicationId
+    ...(input.ownerApplicationId ? { moorlineOwnerApplicationId: input.ownerApplicationId } : {})
   };
 }
 
@@ -19,6 +19,6 @@ export function isOwnedManagedSpace(
     !!metadata &&
     metadata.moorlineManaged === true &&
     metadata.moorlineOwnerScopeId === input.scopeId &&
-    metadata.moorlineOwnerApplicationId === input.applicationId
+    (!input.ownerApplicationId || metadata.moorlineOwnerApplicationId === input.ownerApplicationId)
   );
 }

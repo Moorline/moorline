@@ -712,7 +712,9 @@ export class RuntimeWorkManagementService {
       kind: 'room',
       metadata: buildManagedSpaceMetadata({
         scopeId: this.deps.config.transport.scopeId,
-        applicationId: this.deps.config.transport.applicationId
+        ...(typeof this.deps.config.transport.config.applicationId === 'string'
+          ? { ownerApplicationId: this.deps.config.transport.config.applicationId }
+          : {})
       }),
       parentId
     });

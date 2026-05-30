@@ -18,14 +18,6 @@ export function saveRuntimePackageLoadReport(path: string, report: RuntimePackag
   writeJson(path, report);
 }
 
-export function clearRuntimePackageLoadFailures(path: string, report: Omit<RuntimePackageLoadReport, 'failures' | 'updatedAt'>): void {
-  saveRuntimePackageLoadReport(path, {
-    ...report,
-    failures: [],
-    updatedAt: new Date().toISOString()
-  });
-}
-
 export function createRuntimePackageLoadReport(input: {
   runtimeMode: RuntimePackageLoadReport['runtimeMode'];
   releaseManifest: RuntimePackageLoadReport['releaseManifest'];
