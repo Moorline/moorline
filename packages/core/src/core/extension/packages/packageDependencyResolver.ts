@@ -6,7 +6,7 @@ import type {
   PackageResolutionError,
   PackageSurface
 } from '../../../types/package.js';
-import { appliedPackageRefs, isBuiltInActivatedPackage, isPackageActivated } from './packageActivation.js';
+import { appliedPackageRefs, isPackageActivated } from './packageActivation.js';
 
 interface DependentPackageRecord {
   surface: PackageSurface;
@@ -30,32 +30,13 @@ export function resolvePackageDependencyErrors(input: {
   desired: PackageDesiredState;
   applied?: PackageAppliedState;
 }): PackageResolutionError[] {
+  const activated = input.applied ? appliedPackageRefs(input.applied) : input.desired.activated;
   const installedByKey = new Map(
     input.installed
       .filter((entry) => recordKind(entry) !== 'bundle')
       .map((entry) => [dependencyNodeId(recordKind(entry) as PackageSurface, entry.packageId), entry] as const)
   );
   const errors: PackageResolutionError[] = [];
-
-  const activated = appliedPackageRefs(input.desired);
-  for (const ref of activated) {
-    if (isBuiltInActivatedPackage(ref)) {
-      installedByKey.set(dependencyNodeId(ref.surface, ref.packageId), {
-        family: 'installable',
-        kind: ref.surface,
-        surface: ref.surface,
-        packageId: ref.packageId,
-        name: ref.packageId,
-        version: 'builtin',
-        installedAt: '',
-        installPath: '',
-        source: { kind: 'local_dir', path: '' },
-        manifestPath: '',
-        manifestHash: 'builtin',
-        dependencies: []
-      });
-    }
-  }
 
   for (const entry of input.installed) {
     const kind = recordKind(entry);

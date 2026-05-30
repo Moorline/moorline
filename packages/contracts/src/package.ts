@@ -48,6 +48,7 @@ export interface PackageBundleMember {
   packageId: string;
   version: string;
   activation: BundleMemberActivation;
+  source?: PackageSourceDescriptor;
   optional?: boolean;
   reason?: string;
 }
@@ -225,6 +226,41 @@ function validatePackageRuntimeKind(value: unknown, label: string): PackageRunti
   throw new Error(`${label} must be one of: api-adapter, transport, provider, plugin, skill`);
 }
 
+function validatePackageSourceDescriptor(value: unknown, label: string): PackageSourceDescriptor | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const source = asRecord(value);
+  if (!source) {
+    throw new Error(`${label} must be an object when provided`);
+  }
+  if (source.kind === 'local_dir') {
+    return {
+      kind: 'local_dir',
+      path: requireNonEmptyString(source.path, `${label}.path`)
+    };
+  }
+  if (source.kind === 'local_archive') {
+    return {
+      kind: 'local_archive',
+      path: requireNonEmptyString(source.path, `${label}.path`)
+    };
+  }
+  if (source.kind === 'remote_archive') {
+    const provenance = source.provenance;
+    return {
+      kind: 'remote_archive',
+      url: requireNonEmptyString(source.url, `${label}.url`),
+      ...(optionalNonEmptyString(source.sha256, `${label}.sha256`) ? { sha256: optionalNonEmptyString(source.sha256, `${label}.sha256`) } : {}),
+      ...(optionalNonEmptyString(source.integrity, `${label}.integrity`) ? { integrity: optionalNonEmptyString(source.integrity, `${label}.integrity`) } : {}),
+      ...(provenance && typeof provenance === 'object' && !Array.isArray(provenance)
+        ? { provenance: provenance as PackageSourceProvenance }
+        : {})
+    };
+  }
+  throw new Error(`${label}.kind must be one of: local_dir, local_archive, remote_archive`);
+}
+
 export function validatePackageBundleMembers(members: unknown, label: string): PackageBundleMember[] {
   if (!Array.isArray(members) || members.length === 0) {
     throw new Error(`${label}.members must declare at least one package`);
@@ -251,12 +287,14 @@ export function validatePackageBundleMembers(members: unknown, label: string): P
       throw new Error(`${label}.members[${index}].optional must be a boolean when provided`);
     }
     const reason = optionalNonEmptyString(member.reason, `${label}.members[${index}].reason`);
+    const source = validatePackageSourceDescriptor(member.source, `${label}.members[${index}].source`);
     return {
       kind,
       surface: kind,
       packageId,
       version,
       activation,
+      ...(source ? { source } : {}),
       ...(member.optional !== undefined ? { optional: member.optional } : {}),
       ...(reason !== undefined ? { reason } : {})
     };

@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, dirname, extname, resolve } from 'node:path';
+import { basename, dirname, extname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { ChildProcessRunner, CommandRunner } from '@moorline/core/core/shared/utils/commandRunner.js';
 import { loadMoorlineConfig, resolveConfigPath, runtimePaths, saveMoorlineConfig } from '@moorline/core/core/system/config/configStore.js';
 import {
@@ -69,11 +70,11 @@ function formatHuman(value: unknown): string {
 }
 
 function sourceLabel(entry: Record<string, unknown>): string {
-  if (entry.registrySource === 'official_catalog') {
-    return 'Moorline official';
-  }
   if (entry.registrySource === 'npm') {
     return entry.trustLevel === 'official' ? 'Moorline official' : 'npm-backed community';
+  }
+  if (entry.registrySource === 'local_cache') {
+    return entry.trustLevel === 'official' ? 'cached Moorline official' : 'cached npm result';
   }
   return 'unknown';
 }
@@ -181,16 +182,21 @@ function initialMoorlineConfig(configPath: string, explicitConfigPath?: string):
     },
     surfaces: {
       apiAdapter: {
-        activePackageId: 'official/http',
-        config: { ...defaultHttpApiAdapterConfig() }
+        activePackageId: null,
+        config: {},
+        configByPackageId: {
+          'official/http': { ...defaultHttpApiAdapterConfig() }
+        }
       },
       transport: {
         activePackageId: null,
-        config: {}
+        config: {},
+        configByPackageId: {}
       },
       provider: {
         activePackageId: null,
-        config: {}
+        config: {},
+        configByPackageId: {}
       },
       plugins: {
         enabledPackageIds: [],
@@ -204,6 +210,29 @@ function initialMoorlineConfig(configPath: string, explicitConfigPath?: string):
   };
 }
 
+function findBundledHttpPackageDir(): string | null {
+  let current = dirname(fileURLToPath(import.meta.url));
+  while (true) {
+    const sourceCheckout = join(current, 'packages', 'http');
+    if (existsSync(join(sourceCheckout, 'manifest.json'))) {
+      return sourceCheckout;
+    }
+    const siblingHttp = join(current, '..', 'http');
+    if (existsSync(join(siblingHttp, 'manifest.json'))) {
+      return siblingHttp;
+    }
+    const nodeModulesHttp = join(current, 'node_modules', '@moorline', 'http');
+    if (existsSync(join(nodeModulesHttp, 'manifest.json'))) {
+      return nodeModulesHttp;
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      return null;
+    }
+    current = parent;
+  }
+}
+
 function ensureCoreRuntimeDirs(runtimeRoot: string): void {
   const paths = runtimePaths(runtimeRoot);
   mkdirSync(paths.stateDir, { recursive: true });
@@ -211,7 +240,7 @@ function ensureCoreRuntimeDirs(runtimeRoot: string): void {
   mkdirSync(paths.logsDir, { recursive: true });
 }
 
-function runInit(command: Extract<CliCommand, { kind: 'init' }>, deps: CliDeps): number {
+async function runInit(command: Extract<CliCommand, { kind: 'init' }>, deps: CliDeps): Promise<number> {
   const configPath = resolveConfigPath(command.configPath);
   if (existsSync(configPath)) {
     deps.output.write(`Moorline config already exists: ${configPath}`);
@@ -221,9 +250,22 @@ function runInit(command: Extract<CliCommand, { kind: 'init' }>, deps: CliDeps):
   const config = initialMoorlineConfig(configPath, command.configPath);
   ensureCoreRuntimeDirs(config.runtimeRoot);
   saveMoorlineConfig(config, configPath);
-  new OperatorPackageService(config, configPath).ensureInitialized();
+  const packageService = new OperatorPackageService(config, configPath);
+  packageService.ensureInitialized();
+  const httpPackageDir = findBundledHttpPackageDir();
+  if (httpPackageDir) {
+    await packageService.installPackage({
+      kind: 'api-adapter',
+      source: {
+        kind: 'local_dir',
+        path: httpPackageDir
+      }
+    });
+    packageService.setSelectedPackage('api-adapter', 'official/http');
+  }
   deps.output.write(`Moorline config: ${configPath}`);
   deps.output.write(`Moorline runtime root: ${config.runtimeRoot}`);
+  deps.output.write(httpPackageDir ? 'Installed and selected bundled official/http API adapter.' : 'No bundled API adapter found; install one before starting the Control API.');
   deps.output.write('Core runtime scaffold initialized. Run moorline run to open the Control API.');
   return 0;
 }
@@ -404,7 +446,7 @@ export async function executeCli(command: CliCommand, deps: CliDeps): Promise<nu
         return 0;
       }
       case 'init': {
-        return runInit(command, deps);
+        return await runInit(command, deps);
       }
       case 'api-run-foreground': {
         return await runApiForeground(command, deps);

@@ -37,7 +37,7 @@ import type {
 export interface PackageInstallRecord {
   family: PackageFamily;
   kind: PackageKind;
-  /** @deprecated use kind. Kept for transitional UI/API compatibility. */
+  /** Route/API field; mirrors kind until external route terminology is fully unified. */
   surface: PackageKind;
   packageId: string;
   name: string;
@@ -54,15 +54,14 @@ export interface PackageInstallRecord {
   installedByPackageIds?: string[];
 }
 
-export interface PackageCatalogEntry {
+export interface PackageMetadataEntry {
   kind: PackageKind;
-  /** @deprecated use kind. Kept for transitional UI/API compatibility. */
+  /** Route/API field; mirrors kind until external route terminology is fully unified. */
   surface: PackageKind;
   packageId: string;
   name: string;
   description: string;
   version?: string;
-  recommendedForSetup: boolean;
   tags: string[];
   source: PackageSourceDescriptor;
   requires: string[];

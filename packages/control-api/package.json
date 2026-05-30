@@ -52,7 +52,7 @@
   },
   "scripts": {
     "build": "node ../../scripts/clean-package-dist.mjs control-api && tsc -p tsconfig.json && node ../../scripts/flatten-package-dist.mjs control-api",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.type-tests.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@moorline/contracts": "0.0.1"

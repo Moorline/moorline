@@ -114,9 +114,11 @@ describe('host repository split contract', () => {
     expect(workflow).not.toContain('build:official-npm-packages');
   });
 
-  it('keeps built-in official/http selected even when runtime inventory has not installed it', () => {
+  it('does not keep an official/http inventory bypass', () => {
     const source = readFileSync(join(root, 'packages', 'core', 'src', 'app', 'bootstrap', 'operatorPackageService.ts'), 'utf8');
-    expect(source).toContain("this.config.surfaces.apiAdapter.activePackageId !== 'official/http'");
+    expect(source).not.toContain("this.config.surfaces.apiAdapter.activePackageId !== 'official/http'");
+    expect(source).toContain('installPackage');
+    expect(source).toContain('setSelectedPackage');
   });
 
   it('resolves migrations and default policy from core package resources', () => {
@@ -130,24 +132,12 @@ describe('host repository split contract', () => {
     expect(existsSync(join(root, 'packages', 'core', 'resources', 'policies', 'default-secure.json'))).toBe(true);
   });
 
-  it('ships a tracked official catalog with split repository release URLs', () => {
-    const catalog = JSON.parse(readFileSync(join(root, 'packages', 'core', 'resources', 'official-catalog.json'), 'utf8')) as Array<{
-      packageId: string;
-      recommendedForSetup?: boolean;
-      source?: {
-        url?: string;
-        sha256?: string;
-      };
-    }>;
-    const urls = catalog.map((entry) => entry.source?.url ?? '').filter(Boolean);
-    expect(urls.every((url) => !url.includes(legacyRepoSlug))).toBe(true);
-    expect(catalog.find((entry) => entry.packageId === 'official/http')?.source?.url).toContain('github.com/Moorline/moorline');
-    expect(catalog.find((entry) => entry.packageId === 'official/codex')?.source?.url).toContain('github.com/Moorline/packages');
-    const missing = catalog
-      .filter((entry) => entry.recommendedForSetup === true)
-      .filter((entry) => !entry.source?.sha256)
-      .map((entry) => entry.packageId);
-    expect(missing).toEqual([]);
+  it('does not ship a tracked official catalog', () => {
+    expect(existsSync(join(root, 'packages', 'core', 'resources', 'official-catalog.json'))).toBe(false);
+    const source = readSourceTree(join(root, 'packages', 'core', 'src', 'core', 'extension', 'packages'));
+    expect(source).not.toContain('officialCatalog');
+    expect(source).not.toContain('official_catalog');
+    expect(source).not.toContain(legacyRepoSlug);
   });
 
   it('does not depend on local package-kit or official package source directories', () => {
@@ -217,8 +207,8 @@ describe('host repository split contract', () => {
     const source = readFileSync(join(root, 'packages', 'core', 'src', 'core', 'system', 'projection', 'managementReadModelService.ts'), 'utf8');
     expect(source).toContain("input.surface === 'api-adapter'");
     expect(source).toContain('input.config.surfaces.apiAdapter.config');
-    expect(source).toContain("this.deps.config.surfaces.apiAdapter.activePackageId === 'official/http'");
-    expect(source).toContain("packageId: 'official/http'");
+    expect(source).toContain("input.packageId === 'official/http'");
+    expect(source).not.toContain("packageId: 'official/http'");
     expect(source).toContain('this.deps.config.surfaces.apiAdapter.activePackageId === entry.packageId');
   });
 

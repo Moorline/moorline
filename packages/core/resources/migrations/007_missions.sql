@@ -1,9 +1,9 @@
 CREATE TABLE IF NOT EXISTS runtime_missions (
   mission_id TEXT PRIMARY KEY,
-  guild_id TEXT NOT NULL,
-  channel_id TEXT NOT NULL UNIQUE,
+  scope_id TEXT NOT NULL,
+  space_id TEXT NOT NULL UNIQUE,
   thread_id TEXT NOT NULL UNIQUE,
-  channel_name TEXT NOT NULL,
+  space_name TEXT NOT NULL,
   title TEXT NOT NULL,
   goal TEXT NOT NULL,
   schedule_text TEXT NOT NULL,

@@ -38,13 +38,11 @@ vi.mock('@moorline/core/app/control-api/services/controlPlane.js', () => ({
         controls: [],
         objects: [],
         packages: {
-          catalog: [],
           installed: [],
           applyPlan: { operations: [], errors: [] }
         },
         configure: {
           packages: {
-            catalog: [],
             installed: [],
             applyPlan: { operations: [], errors: [] }
           },

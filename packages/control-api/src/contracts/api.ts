@@ -31,7 +31,6 @@ interface ManagementReadModel {
   setup: unknown;
   settings: unknown;
   packages: {
-    catalog?: unknown;
     installed?: unknown;
   } & Record<string, unknown>;
   history: {

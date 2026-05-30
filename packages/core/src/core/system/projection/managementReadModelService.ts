@@ -201,10 +201,7 @@ export class ManagementReadModelService {
               ? { packageId: this.deps.config.surfaces.transport.activePackageId }
               : {}),
           scopeId: typeof this.deps.config.transport?.scopeId === 'string' ? this.deps.config.transport.scopeId : '',
-          applicationId: typeof this.deps.config.transport?.applicationId === 'string' ? this.deps.config.transport.applicationId : '',
-          actorId: typeof this.deps.config.transport?.actorId === 'string' ? this.deps.config.transport.actorId : '',
-          invitePermissions:
-            typeof this.deps.config.transport?.invitePermissions === 'string' ? this.deps.config.transport.invitePermissions : ''
+          config: this.deps.config.transport?.config ?? {}
         },
         provider: {
           kind: this.deps.config.provider?.kind ?? this.deps.config.surfaces.provider.activePackageId ?? 'unselected',
@@ -253,7 +250,6 @@ export class ManagementReadModelService {
         alignment: buildProviderAlignment(providerDiagnostics.capabilityMetadata)
       },
       packages: {
-        catalog: this.deps.packageCatalog,
         installed: inventory.installed
           .map<ManagementInstalledPackageRecord>((entry) => {
             const selected =
@@ -373,31 +369,6 @@ export class ManagementReadModelService {
 
   private buildPackageConfig(installed: PackageInstallRecord[]): ManagementPackageConfigRecord[] {
     const configTargets = [...installed];
-    if (
-      this.deps.config.surfaces.apiAdapter.activePackageId === 'official/http' &&
-      !configTargets.some((entry) => entry.surface === 'api-adapter' && entry.packageId === 'official/http')
-    ) {
-      configTargets.push({
-        family: 'installable',
-        kind: 'api-adapter',
-        surface: 'api-adapter',
-        packageId: 'official/http',
-        name: 'Official HTTP API adapter',
-        version: '0.0.1',
-        installedAt: '',
-        installPath: '',
-        source: {
-          kind: 'local_dir',
-          path: 'built-in'
-        },
-        manifestPath: '',
-        manifestHash: 'built-in',
-        dependencies: [],
-        activation: {
-          uniqueKey: 'api-adapter'
-        }
-      });
-    }
     return configTargets
       .filter((entry) => entry.kind !== 'bundle')
       .map<ManagementPackageConfigRecord>((entry) => {

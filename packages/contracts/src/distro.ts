@@ -18,8 +18,7 @@ export interface MoorlineDistroMetadata {
     experimental?: boolean;
   };
   distribution?: {
-    audiences?: Array<'setup' | 'catalog' | 'advanced' | 'internal'>;
-    recommendedForSetup?: boolean;
+    audiences?: Array<'setup' | 'advanced' | 'internal'>;
     setupOrder?: number;
   };
   compatibility?: {

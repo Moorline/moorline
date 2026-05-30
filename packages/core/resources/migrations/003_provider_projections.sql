@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS provider_bindings (
 CREATE TABLE IF NOT EXISTS runtime_receipts (
   thread_id TEXT PRIMARY KEY,
   session_id TEXT,
-  channel_id TEXT,
+  space_id TEXT,
   active_turn_id TEXT,
   state TEXT NOT NULL,
   wait_reason TEXT,
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS runtime_receipts (
 CREATE TABLE IF NOT EXISTS domain_events (
   event_id TEXT PRIMARY KEY,
   thread_id TEXT NOT NULL,
-  channel_id TEXT,
+  space_id TEXT,
   session_id TEXT,
   type TEXT NOT NULL,
   payload_json TEXT NOT NULL,

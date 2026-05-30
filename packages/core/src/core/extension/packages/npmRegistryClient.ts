@@ -300,7 +300,6 @@ export class NpmRegistryClient {
       name: displayNameFromPackageId(moorline.packageId),
       description,
       version,
-      recommendedForSetup: false,
       tags: keywords.filter((keyword) => !keyword.startsWith('moorline-')).sort(),
       source: sourceForNpm({
         registryUrl: this.registryUrl,

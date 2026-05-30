@@ -83,6 +83,8 @@ function ensureScopedIndexes(db: DatabaseSync): void {
 }
 
 function isLegacyChunkSchema(columns: TableColumnInfo[]): boolean {
+  // These names are only accepted as old retrieval-index fingerprints. Active
+  // storage uses scope_id/space_id and asks operators to rebuild stale indexes.
   return (
     columns.length > 0 &&
     (!hasColumn(columns, 'scope_key') || hasColumn(columns, 'guild_id') || hasColumn(columns, 'channel_id') || !hasColumn(columns, 'layer'))
@@ -90,6 +92,8 @@ function isLegacyChunkSchema(columns: TableColumnInfo[]): boolean {
 }
 
 function isLegacyFileSchema(columns: TableColumnInfo[]): boolean {
+  // These names are only accepted as old retrieval-index fingerprints. Active
+  // storage uses scope_id/space_id and asks operators to rebuild stale indexes.
   return (
     columns.length > 0 &&
     (!hasColumn(columns, 'scope_key') || hasColumn(columns, 'guild_id') || hasColumn(columns, 'channel_id') || !hasColumn(columns, 'layer'))

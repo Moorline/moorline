@@ -34,13 +34,3 @@ export function buildHealthEmbed(input: {
     timestamp: new Date().toISOString()
   };
 }
-
-export function buildErrorEmbed(reason: string): EmbedPayload {
-  return {
-    title: 'Runtime Error',
-    description: reason,
-    color: 0xe74c3c,
-    fields: [{ name: 'Status', value: 'Action blocked (fail-closed).' }],
-    timestamp: new Date().toISOString()
-  };
-}

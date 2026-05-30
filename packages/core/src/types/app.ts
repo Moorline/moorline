@@ -2,7 +2,7 @@ import type { RuntimeProviderDiagnostics } from './provider.js';
 import type { RuntimeModeName } from './runtime.js';
 import type { RuntimeSurfaceState } from './config.js';
 import type { HistoryEntry, HistoryStatus } from './history.js';
-import type { JsonSchemaLike, PackageApplyPlan, PackageCatalogEntry, PackageKind, PackageSurface } from './package.js';
+import type { JsonSchemaLike, PackageApplyPlan, PackageKind, PackageSurface } from './package.js';
 import type { RuntimeManagementContribution } from './plugin.js';
 import type { MoorlineReleaseManifest, MoorlineRuntimeMode, RuntimePackageLoadFailure } from './release.js';
 
@@ -172,9 +172,7 @@ export interface ManagementSettingsContract {
     kind: string;
     packageId?: string;
     scopeId: string;
-    applicationId: string;
-    actorId: string;
-    invitePermissions: string;
+    config: Record<string, unknown>;
   };
   provider: {
     kind: string;
@@ -325,8 +323,6 @@ export interface ManagementReadModelPresentation {
   };
 }
 
-export type ManagementPackageCatalogEntry = PackageCatalogEntry;
-
 export interface ManagementInstalledPackageRecord {
   kind: PackageKind;
   surface: PackageKind;
@@ -417,7 +413,6 @@ export interface ManagementReadModel {
     alignment: ManagementProviderAlignment;
   };
   packages: {
-    catalog: ManagementPackageCatalogEntry[];
     installed: ManagementInstalledPackageRecord[];
     config: ManagementPackageConfigRecord[];
     applyPlan: PackageApplyPlan;

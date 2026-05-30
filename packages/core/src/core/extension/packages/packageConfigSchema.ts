@@ -33,36 +33,6 @@ function readSchemaFromManifest(path: string, root: string): JsonSchemaLike | un
   return parsed.configSchema;
 }
 
-function builtinPackageConfigSchema(surface: PackageSurface, packageId: string): JsonSchemaLike | undefined {
-  if (surface !== 'api-adapter' || packageId !== 'official/http') {
-    return undefined;
-  }
-  return {
-    type: 'object',
-    properties: {
-      host: {
-        type: 'string',
-        title: 'Host',
-        description: 'HTTP bind host.',
-        default: '127.0.0.1'
-      },
-      port: {
-        type: 'number',
-        title: 'Port',
-        description: 'HTTP bind port.',
-        default: 45173
-      },
-      exposure: {
-        type: 'string',
-        title: 'Exposure',
-        description: 'Use loopback by default; remote is intended for reverse-proxy deployments.',
-        default: 'loopback',
-        enum: ['loopback', 'remote']
-      }
-    }
-  };
-}
-
 export function resolvePackageConfigSchema(input: {
   runtimeRoot: string;
   surface: PackageSurface;
@@ -81,11 +51,6 @@ export function resolvePackageConfigSchema(input: {
   const installed = readSchemaFromManifest(installedManifest, input.runtimeRoot);
   if (installed) {
     return installed;
-  }
-
-  const builtin = builtinPackageConfigSchema(input.surface, input.packageId);
-  if (builtin) {
-    return builtin;
   }
 
   const assetRoot = resolveBundledMoorlineAssetRoot(import.meta.url);

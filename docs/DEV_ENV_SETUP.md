@@ -92,9 +92,6 @@ bun run moorline configure package install --kind bundle --source "$MOORLINE_PAC
 bun run moorline configure package config --surface provider --package official/codex --key command --value codex
 bun run moorline configure package config --surface transport --package official/discord --key authToken --value test-token
 bun run moorline configure package config --surface transport --package official/discord --key scopeId --value scope-123
-bun run moorline configure package config --surface transport --package official/discord --key applicationId --value app-123
-bun run moorline configure package config --surface transport --package official/discord --key actorId --value actor-123
-bun run moorline configure package config --surface transport --package official/discord --key invitePermissions --value 268528720
 bun run moorline configure apply
 timeout 15s bun run moorline run || test $? -eq 124
 ```
@@ -117,5 +114,5 @@ rm -rf "$MOORLINE_HOME"
   Run `bun run moorline configure state` and address `Startability blockers` or dependency errors.
 - Transport verification fails:
   Confirm transport credentials/config keys were set correctly with `moorline configure package config set`.
-- Managed channels are missing:
-  Restart with `moorline run` to trigger namespace reconciliation.
+- Managed transport resources are missing:
+  Check the active transport package docs, then restart with `moorline run` after repairing native resources.

@@ -57,7 +57,7 @@ import { ManagementReadModelService } from '../system/projection/managementReadM
 import { RuntimeControlService } from './supervision/runtimeControlService.js';
 import type { RuntimeManagementSurfaceHandle } from './hosting/runtimeManagementPort.js';
 import { RuntimeWorkManagementService } from '../domain/sessions/runtimeWorkManagementService.js';
-import { ManagedChannelLifecycleService } from './lifecycle/managedChannelLifecycleService.js';
+import { ManagedSpaceLifecycleService } from './lifecycle/managedSpaceLifecycleService.js';
 import { RuntimeInteractionService } from './execution/runtimeInteractionService.js';
 import { RuntimeTransportSurfaceService } from './hosting/runtimeTransportSurfaceService.js';
 import { ProviderOrchestrator } from './execution/providerOrchestration/providerOrchestrator.js';
@@ -113,7 +113,7 @@ export class MoorlineRuntime {
   private readonly managementReadModel: ManagementReadModelService;
   private readonly runtimeControl: RuntimeControlService;
   private readonly workManagement: RuntimeWorkManagementService;
-  private readonly managedChannelLifecycle: ManagedChannelLifecycleService;
+  private readonly managedSpaceLifecycle: ManagedSpaceLifecycleService;
   private readonly interactions: RuntimeInteractionService;
   private readonly transportSurface: RuntimeTransportSurfaceService;
   private readonly providerOrchestrator: ProviderOrchestrator;
@@ -214,7 +214,7 @@ export class MoorlineRuntime {
     this.managementReadModel = graph.managementReadModel;
     this.runtimeControl = graph.runtimeControl;
     this.workManagement = graph.workManagement;
-    this.managedChannelLifecycle = graph.managedChannelLifecycle;
+    this.managedSpaceLifecycle = graph.managedSpaceLifecycle;
     this.interactions = graph.interactions;
     this.transportSurface = graph.transportSurface;
     this.providerOrchestrator = graph.providerOrchestrator;
@@ -258,7 +258,7 @@ export class MoorlineRuntime {
       actions: this.pluginHost.listActions((pluginId) => this.createPluginContext(`plugin:${pluginId}`)),
       onTransportEvent: async (event) => {
         if (event.type === 'resource.lifecycle') {
-          await this.managedChannelLifecycle.handleEvent(event);
+          await this.managedSpaceLifecycle.handleEvent(event);
         }
         await this.interactions.handleTransportEvent(event);
       }
@@ -305,7 +305,7 @@ export class MoorlineRuntime {
     this.appendAuditEvent('runtime.started', {
       scopeId: this.deps.config.transport!.scopeId,
       transportKind: this.deps.config.transport!.kind,
-      applicationId: this.deps.config.transport!.applicationId
+      transportApplicationId: this.deps.config.transport!.config.applicationId
     });
     await this.sendStatusUpdate({
       text: 'Moorline runtime online.',

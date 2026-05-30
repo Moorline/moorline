@@ -12,8 +12,6 @@ const policyTargetDir = join(distRoot, 'packages', 'core', 'resources', 'policie
 const resourcesPolicyDir = join(resourcesRoot, 'policies');
 const runtimeManifestPath = join(distRoot, 'runtime-manifest.json');
 const releaseManifestPath = join(resourcesRoot, 'release-manifest.json');
-const officialCatalogPath = join(resourcesRoot, 'official-catalog.json');
-const coreOfficialCatalogPath = join(projectRoot, 'packages', 'core', 'resources', 'official-catalog.json');
 const packageJson = JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8'));
 
 function resetDir(path) {
@@ -50,8 +48,6 @@ async function main() {
     runtimeMode: 'packaged_release',
     resourcesVersion: 1
   });
-
-  writeJson(officialCatalogPath, JSON.parse(readFileSync(coreOfficialCatalogPath, 'utf8')));
 }
 
 await main();

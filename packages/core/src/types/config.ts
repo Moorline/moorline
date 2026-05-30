@@ -15,25 +15,22 @@ export interface RuntimeSurfaceNames {
   mainCategoryName: string;
   chatChannelName: string;
   statusChannelName: string;
-  sessionsCategoryName: string;
-  missionsCategoryName: string;
-  archiveCategoryName: string;
+  sessionsGroupName: string;
+  missionsGroupName: string;
+  archiveGroupName: string;
 }
 
 export interface TransportConfig {
   kind: string;
   packageId?: string;
-  authToken: string;
+  config: Record<string, unknown>;
   scopeId: string;
-  applicationId: string;
-  actorId: string;
-  invitePermissions: string;
 }
 
 export interface ProviderConfig {
   kind: string;
   packageId?: string;
-  command?: string;
+  config: Record<string, unknown>;
 }
 
 export const DEFAULT_MOORLINE_ADMIN_ROLE_NAME = 'Moorline Admin';
@@ -280,14 +277,13 @@ function parseStringList(value: unknown, label: string): string[] {
 
 function parseTransportConfig(root: Record<string, unknown>): TransportConfig {
   const packageId = parseOptionalPackageId(root.packageId, 'config.transport.packageId');
+  const config = parseRecord(root.config);
+  const scopeId = typeof root.scopeId === 'string' && root.scopeId.trim() ? root.scopeId : typeof config.scopeId === 'string' ? config.scopeId : '';
   return {
     kind: typeof root.kind === 'string' && root.kind.trim() ? root.kind : (packageId ?? 'transport'),
     ...(packageId ? { packageId } : {}),
-    authToken: asString(root.authToken, 'config.transport.authToken'),
-    scopeId: asString(root.scopeId, 'config.transport.scopeId'),
-    applicationId: asString(root.applicationId, 'config.transport.applicationId'),
-    actorId: asString(root.actorId, 'config.transport.actorId'),
-    invitePermissions: asString(root.invitePermissions, 'config.transport.invitePermissions')
+    config,
+    scopeId
   };
 }
 
@@ -296,7 +292,7 @@ function parseProviderConfig(root: Record<string, unknown>): ProviderConfig {
   return {
     kind: typeof root.kind === 'string' && root.kind.trim() ? root.kind : (packageId ?? 'provider'),
     ...(packageId ? { packageId } : {}),
-    ...(typeof root.command === 'string' && root.command.trim() ? { command: root.command } : {})
+    config: parseRecord(root.config)
   };
 }
 
@@ -473,12 +469,12 @@ function parseSurfaceNames(root: Record<string, unknown>): RuntimeSurfaceNames {
     mainCategoryName: asString(root.mainCategoryName, 'config.surface.mainCategoryName'),
     chatChannelName: asString(root.chatChannelName, 'config.surface.chatChannelName'),
     statusChannelName: asString(root.statusChannelName, 'config.surface.statusChannelName'),
-    sessionsCategoryName: asString(root.sessionsCategoryName, 'config.surface.sessionsCategoryName'),
-    missionsCategoryName:
-      root.missionsCategoryName === undefined
-        ? defaults.missionsCategoryName
-        : asString(root.missionsCategoryName, 'config.surface.missionsCategoryName'),
-    archiveCategoryName: asString(root.archiveCategoryName, 'config.surface.archiveCategoryName')
+    sessionsGroupName: asString(root.sessionsGroupName, 'config.surface.sessionsGroupName'),
+    missionsGroupName:
+      root.missionsGroupName === undefined
+        ? defaults.missionsGroupName
+        : asString(root.missionsGroupName, 'config.surface.missionsGroupName'),
+    archiveGroupName: asString(root.archiveGroupName, 'config.surface.archiveGroupName')
   };
 }
 
@@ -549,9 +545,9 @@ export function defaultNamespaceNames(): RuntimeSurfaceNames {
     mainCategoryName: 'Moorline',
     chatChannelName: 'moorline-chat',
     statusChannelName: 'moorline-status',
-    sessionsCategoryName: 'Moorline Sessions',
-    missionsCategoryName: 'Moorline Missions',
-    archiveCategoryName: 'Moorline Archive'
+    sessionsGroupName: 'Moorline Sessions',
+    missionsGroupName: 'Moorline Missions',
+    archiveGroupName: 'Moorline Archive'
   };
 }
 

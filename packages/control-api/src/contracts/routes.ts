@@ -13,7 +13,6 @@ export type ControlApiGetPath =
   | '/api/main/status'
   | '/api/state/operations'
   | '/api/state/configure'
-  | '/api/packages/catalog'
   | '/api/packages/search'
   | `/api/packages/search?${string}`
   | `/api/packages/info?${string}`

@@ -22,7 +22,7 @@ export function createTempRoot(prefix: string, options: { keepOnFailure?: boolea
   return root;
 }
 
-export async function cleanupTempRoots(options: { testFailed?: boolean } = {}): Promise<void> {
+async function cleanupTempRoots(options: { testFailed?: boolean } = {}): Promise<void> {
   if (shouldKeepTempRoots()) {
     trackedRoots.clear();
     return;
@@ -37,7 +37,6 @@ export async function cleanupTempRoots(options: { testFailed?: boolean } = {}): 
   }
 }
 
-afterEach(async (context) => {
-  const task = context.task as { result?: { state?: string } } | undefined;
-  await cleanupTempRoots({ testFailed: task?.result?.state === 'fail' });
+afterEach(async () => {
+  await cleanupTempRoots();
 });

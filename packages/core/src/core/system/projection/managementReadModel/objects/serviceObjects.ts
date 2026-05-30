@@ -4,7 +4,7 @@ import type { ManagementReadModelServiceDeps } from '../deps.js';
 
 function selectedPackageName(deps: ManagementReadModelServiceDeps, surface: 'transport' | 'provider', fallback: string): string {
   const packageId = deps.config.surfaces[surface].activePackageId;
-  return deps.packageCatalog.find((entry) => entry.kind === surface && entry.packageId === packageId)?.name ?? fallback;
+  return packageId ?? fallback;
 }
 
 function selectedPackageId(deps: ManagementReadModelServiceDeps, surface: 'transport' | 'provider'): string {
@@ -50,7 +50,7 @@ export function buildServiceObjects(deps: ManagementReadModelServiceDeps): Manag
         updatedAt: deps.now(),
         details: {
           scopeId: deps.config.transport?.scopeId ?? deps.config.surfaces.transport.activePackageId ?? '',
-          applicationId: deps.config.transport?.applicationId ?? ''
+          transportApplicationId: deps.config.transport?.config.applicationId ?? ''
         }
       },
       serviceType: 'transport'

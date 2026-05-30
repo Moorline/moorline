@@ -1,4 +1,4 @@
-import type { PackageCatalogEntry, PackageKind } from '../../../types/package.js';
+import type { PackageKind, PackageSourceDescriptor, PackageBundleMember } from '../../../types/package.js';
 
 export type PackageTrustLevel =
   | 'official'
@@ -9,15 +9,26 @@ export type PackageTrustLevel =
   | 'direct_url'
   | 'blocked';
 
-export type PackageRegistrySource = 'official_catalog' | 'npm';
+export type PackageRegistrySource = 'npm' | 'local_cache';
 
 export interface PackageCompatibility {
   moorline?: string;
   platforms?: string[];
 }
 
-export interface PackageRegistryEntry extends PackageCatalogEntry {
+export interface PackageRegistryEntry {
   schemaVersion: 1;
+  kind: PackageKind;
+  /** Route/API field; mirrors kind until external route terminology is fully unified. */
+  surface: PackageKind;
+  packageId: string;
+  name: string;
+  description: string;
+  version?: string;
+  tags: string[];
+  source: PackageSourceDescriptor;
+  requires: string[];
+  members?: PackageBundleMember[];
   trustLevel: PackageTrustLevel;
   registrySource: PackageRegistrySource;
   publisher: string;

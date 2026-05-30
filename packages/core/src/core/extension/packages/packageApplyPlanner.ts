@@ -5,8 +5,7 @@ import {
   desiredPackageRefsFromConfig,
   sortPackageRefs,
   appliedPackageRefs,
-  isPackageActivated,
-  isBuiltInActivatedPackage
+  isPackageActivated
 } from './packageActivation.js';
 import { resolvePackageDependencyErrors } from './packageDependencyResolver.js';
 import type { PackageInventoryState } from './packageInventoryStore.js';
@@ -51,9 +50,6 @@ export function createPackageApplyPlan(config: MoorlineConfig, inventory: Packag
     applied
   });
   for (const ref of desired.activated) {
-    if (isBuiltInActivatedPackage(ref)) {
-      continue;
-    }
     if (!installedBySurface[ref.surface].has(ref.packageId)) {
       errors.push({
         code: 'unknown_package',

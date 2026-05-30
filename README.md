@@ -24,10 +24,6 @@ Official provider, transport, plugin, skill, and bundle packages live in `Moorli
 ### Prerequisites
 - Bun 1.3.11+
 - Node.js 22+
-- `codex` installed on `PATH`
-- successful `codex login status`
-- a Discord application with a bot token
-- a Discord server you want Moorline to manage inside its own namespace
 
 ### Install
 
@@ -62,7 +58,7 @@ Use Control API-backed CLI commands to complete package setup. Local commands ca
 
 If setup is incomplete, the Control API stays in management-only mode so you can install, select, configure, and apply one API adapter, one transport, and one provider.
 
-Official first-run setup recommends a small set of bundles: `official/discord-default`, `official/codex-default`, and `official/basic-essentials`. Bundles install and activate their member packages while keeping every underlying API adapter, provider, transport, plugin, and skill independently inspectable. Those recommendations are optional; setup readiness depends on one active API adapter, one active transport, and one active provider.
+Install package bundles or individual packages for the transport, provider, plugins, and skills you want to run. Bundles install and activate their member packages while keeping every underlying API adapter, provider, transport, plugin, and skill independently inspectable. Optional bundles do not block setup readiness; setup readiness depends on one active API adapter, one active transport, and one active provider.
 
 Package trust note:
 - API adapter, provider, transport, and plugin packages are trusted local code once enabled
@@ -130,43 +126,11 @@ bun run moorline configure import ~/moorline-backup.tgz --force --token <api-tok
 
 `--force` wipes current local runtime state before restoring from the archive.
 
-Catalog integrity note:
-- clean source checkouts can run `help/run` even when `dist/installable-archives` is missing.
-- diagnostics export reports checksum state in `catalog.integrity`.
-- catalog installs (`moorline configure package install --kind <kind> --package <catalog-id>`) still enforce recommended checksum presence.
-- build official package archives in `Moorline/packages` before release-level catalog validation:
-```bash
-cd ../packages
-bun run build
-```
-
-## Managed Discord Namespace
-
-Moorline only creates and repairs its own managed surfaces:
-- `Moorline`
-- `#moorline-chat`
-- `#moorline-status`
-- `Moorline Sessions`
-- `Moorline Missions`
-- `Moorline Archive`
-- `Moorline Admin`
-- `Moorline User`
-
-The runtime does not reorganize unrelated parts of the server.
-
-Managed role onboarding and recovery:
-- keep `admin.managedRole.enabled` and `admin.managedUserRole.enabled` enabled unless you intentionally run fully explicit role assignment
-- verify the managed roles exist and are assigned to expected operators/users after first `moorline run`
-- if roles/channels are renamed, run `moorline run` (or `/admin reload mode:graceful`) to reconcile tracked managed resources back to the configured names
-- if role assignment drift blocks user interaction, reassign `Moorline User` to expected users and re-run runtime reconciliation
-
 ## Runtime Behavior
 
-Moorline uses the provider's latest default model by default unless you change it with `/model select`.
+Moorline uses the active provider package for model and turn execution.
 
 ### Admin control
-
-Moorline supports admin-gated runtime control through the official Discord admin package.
 
 Configure admin authority in `~/.moorline/config.json`:
 
@@ -190,42 +154,28 @@ Admin authority is explicit by default, with a managed Moorline-scoped role boot
 - `managedRole.name` lets you rename that dedicated Moorline-only role
 - `allowTransportAdmin` can optionally allow transport-native elevated permissions to count as admin authority
 
-Available admin commands:
-- `/admin status`
-- `/admin reload mode:graceful|force`
-- `/admin provider-stop scope:all|current`
-- `/admin provider-start scope:all|current`
-- `/admin accepting value:true|false`
-
 ### Main chat
-- bound to `#moorline-chat`
-- Codex-backed
+- bound by the active transport package
+- provider-backed
 - uses the configured default runtime mode
 - intended for coordination, status, and lightweight help
 - shares the managed chat workspace under the runtime root
 
-### Session channels
-- created with `/session create`
+### Sessions
+- created by the active transport/plugin package surface
 - each session gets its own local workspace under the runtime root
-- each session is mapped to a Discord text channel in `Moorline Sessions`
-- session messages run through Codex in the session workspace
-- `/session archive` moves the session channel into `Moorline Archive`
-- `/session delete confirm:delete` deletes an archived session channel and removes its local workspace
+- session messages run through the active provider in the session workspace
 
 ### Model selection
-- `/model list` shows the configured default model and the latest provider model list Moorline has observed
-- `/model select name:<model>` pins a specific default model for future turns
-- `/model select name:latest` returns Moorline to the provider default model
+Provider packages can expose model-listing and model-selection commands through plugins.
 
 ### Runtime Modes
 
 Moorline 0.0.x operator-facing session modes:
-- `full-access`: Codex runs with full local access and no approval gate.
-- `approval-required`: Codex runs in untrusted approval mode so protected actions request approval before they continue.
+- `full-access`: the active provider runs with full local access and no approval gate.
+- `approval-required`: protected provider actions request approval before they continue.
 
 Both modes run locally on the operator machine. `approval-required` adds operator review, not host isolation.
-
-Moorline 0.0.x ships a Discord-first product surface, but the runtime host is no longer hard-wired to Discord as a permanent architectural dependency.
 
 ### Mission schedules and hooks
 Mission schedules support:
@@ -234,7 +184,7 @@ Mission schedules support:
 - one-shot absolute timestamps (`once 2026-05-20T09:30:00Z`)
 - repeat-cycle alias (`repeat every 2 hours`)
 
-Mission hook triggers are generic string keys. Plugins and runtime tools can bind hooks to missions and emit hook events to trigger mission runs without requiring a built-in trigger catalog in core.
+Mission hook triggers are generic string keys. Plugins and runtime tools can bind hooks to missions and emit hook events to trigger mission runs without requiring a hard-coded trigger list in core.
 
 ## Local State And Local History
 

@@ -1,9 +1,9 @@
 CREATE TABLE IF NOT EXISTS runtime_sessions (
   session_id TEXT PRIMARY KEY,
-  guild_id TEXT NOT NULL,
-  channel_id TEXT NOT NULL UNIQUE,
+  scope_id TEXT NOT NULL,
+  space_id TEXT NOT NULL UNIQUE,
   thread_id TEXT NOT NULL UNIQUE,
-  channel_name TEXT NOT NULL,
+  space_name TEXT NOT NULL,
   workspace_path TEXT NOT NULL,
   runtime_mode TEXT NOT NULL,
   lifecycle_status TEXT NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS runtime_sessions (
 CREATE TABLE IF NOT EXISTS runtime_events (
   event_id TEXT PRIMARY KEY,
   thread_id TEXT NOT NULL,
-  channel_id TEXT,
+  space_id TEXT,
   turn_id TEXT,
   item_id TEXT,
   request_id TEXT,
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS pending_runtime_requests (
   request_id TEXT PRIMARY KEY,
   thread_id TEXT NOT NULL,
   turn_id TEXT,
-  channel_id TEXT NOT NULL,
+  space_id TEXT NOT NULL,
   request_type TEXT NOT NULL,
   status TEXT NOT NULL,
   detail TEXT,
@@ -49,8 +49,8 @@ CREATE TABLE IF NOT EXISTS pending_runtime_requests (
   resolved_at TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_pending_runtime_requests_channel_status
-ON pending_runtime_requests(channel_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_pending_runtime_requests_space_status
+ON pending_runtime_requests(space_id, status, created_at);
 
 CREATE TABLE IF NOT EXISTS runtime_metadata (
   key TEXT PRIMARY KEY,

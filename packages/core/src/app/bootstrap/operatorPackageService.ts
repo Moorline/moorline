@@ -1,8 +1,8 @@
 import { copyFileSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { defaultHttpApiAdapterConfig, homeRootForRuntime, type MoorlineConfig } from '../../types/config.js';
+import { homeRootForRuntime, type MoorlineConfig } from '../../types/config.js';
 import type { MoorlineShareBundle } from '../../types/config.js';
-import type { JsonSchemaLike, PackageApplyPlan, PackageCatalogEntry, PackageKind, PackageSourceDescriptor, PackageSurface } from '../../types/package.js';
+import type { JsonSchemaLike, PackageApplyPlan, PackageMetadataEntry, PackageKind, PackageSourceDescriptor, PackageSurface } from '../../types/package.js';
 import { createPackageApplyPlan } from '../../core/extension/packages/packageApplyPlanner.js';
 import { findDependentRecords, findDependents } from '../../core/extension/packages/packageDependencyResolver.js';
 import { resolvePackageConfigSchema } from '../../core/extension/packages/packageConfigSchema.js';
@@ -12,17 +12,12 @@ import { coerceSurfaceConfigInput, evaluateRuntimeStartability } from '../../cor
 import {
   appliedPackageRefs,
   desiredPackageRefsFromConfig,
-  isBuiltInActivatedPackage,
   packageActivationUniqueKey
 } from '../../core/extension/packages/packageActivation.js';
 import { buildRequiredAppliedSurfaceConfigs, buildShareableMoorlineConfig, runtimePaths, saveMoorlineConfig } from '../../core/system/config/configStore.js';
 import { recordHistoryCheckpoint } from '../../core/system/vcs/gitCheckpointService.js';
 import { GitHistoryService } from '../../core/system/vcs/gitHistoryService.js';
 import { loadTransportPackageById } from './transportPackageLoader.js';
-import {
-  assertOfficialCatalogChecksums,
-  getOfficialCatalog
-} from './officialCatalog.js';
 import { packageVersionSatisfiesRange, resolveBundleMembers } from '../../core/extension/packages/packageVersionResolver.js';
 import { PackageRegistryService } from '../../core/extension/packages/packageRegistryService.js';
 import type { PackageRegistryEntry, PackageSearchInput } from '../../core/extension/packages/packageRegistryTypes.js';
@@ -158,13 +153,15 @@ function coercePackageConfigValue(input: {
 }
 
 function isBuiltInPackage(surface: PackageSurface, packageId: string): boolean {
-  return surface === 'api-adapter' && packageId === 'official/http';
+  void surface;
+  void packageId;
+  return false;
 }
 
 export class OperatorPackageService {
   private readonly inventory: PackageInventoryStore;
   private readonly installer: PackageInstaller;
-  private readonly packageRegistry = new PackageRegistryService();
+  private readonly packageRegistry: PackageRegistryService;
   private readonly history = new GitHistoryService();
   private readonly homeRoot: string;
 
@@ -176,6 +173,7 @@ export class OperatorPackageService {
   ) {
     this.inventory = new PackageInventoryStore(config.runtimeRoot);
     this.installer = new PackageInstaller(config.runtimeRoot, now);
+    this.packageRegistry = new PackageRegistryService({ runtimeRoot: config.runtimeRoot });
     this.homeRoot = homeRoot;
   }
 
@@ -304,15 +302,15 @@ export class OperatorPackageService {
     });
   }
 
-  listCatalog(): PackageRegistryEntry[] {
-    return this.packageRegistry.listCachedCatalog();
+  listPackageCache(): PackageRegistryEntry[] {
+    return this.packageRegistry.listCachedEntries();
   }
 
-  async searchCatalog(input: PackageSearchInput): Promise<PackageRegistryEntry[]> {
+  async searchPackages(input: PackageSearchInput): Promise<PackageRegistryEntry[]> {
     return await this.packageRegistry.search(input);
   }
 
-  async getCatalogPackage(input: { kind?: PackageKind; packageId: string }): Promise<PackageRegistryEntry> {
+  async getPackageInfo(input: { kind?: PackageKind; packageId: string }): Promise<PackageRegistryEntry> {
     return await this.packageRegistry.getPackage(input);
   }
 
@@ -381,9 +379,9 @@ export class OperatorPackageService {
 
   private embeddedBundleMemberEntries(input: {
     bundleInstallPath: string;
-    members: NonNullable<PackageCatalogEntry['members']>;
-  }): PackageCatalogEntry[] {
-    const entries: PackageCatalogEntry[] = [];
+    members: NonNullable<PackageMetadataEntry['members']>;
+  }): PackageMetadataEntry[] {
+    const entries: PackageMetadataEntry[] = [];
     for (const member of input.members) {
       const packageDir = join(input.bundleInstallPath, 'packages', packageInstallDirName(member.kind), ...member.packageId.split('/'));
       if (!existsSync(join(packageDir, 'manifest.json'))) {
@@ -397,7 +395,6 @@ export class OperatorPackageService {
         name: loaded.manifest.name,
         description: loaded.manifest.description ?? loaded.manifest.id,
         version: loaded.manifest.version,
-        recommendedForSetup: false,
         tags: ['embedded'],
         source: {
           kind: 'local_dir',
@@ -419,18 +416,12 @@ export class OperatorPackageService {
     if (!kind) {
       throw new Error('Package install requires a kind.');
     }
-    if (input.packageId) {
-      assertOfficialCatalogChecksums({
-        kind,
-        packageId: input.packageId
-      });
-    }
     const registryEntry = input.source || !input.packageId
       ? null
       : await this.packageRegistry.resolveInstallEntry({ kind, packageId: input.packageId });
     const source = input.source ?? registryEntry?.source ?? null;
     if (!source) {
-      throw new Error('Package install requires a source descriptor or a catalog package id');
+      throw new Error('Package install requires a source descriptor or package id');
     }
     if (kind === 'bundle') {
       return await this.installBundle({ packageId: input.packageId, source, registryEntry: registryEntry ?? undefined });
@@ -541,7 +532,6 @@ export class OperatorPackageService {
       name: record.name,
       description: record.description ?? record.packageId,
       version: record.version,
-      recommendedForSetup: false,
       tags: [],
       source: input.source,
       requires: [],
@@ -556,13 +546,27 @@ export class OperatorPackageService {
       });
       const embeddedKeys = new Set(embeddedMemberEntries.map((entry) => `${entry.kind}:${entry.packageId}`));
       const externalMembers = requestedMembers.filter((member) => !embeddedKeys.has(`${member.kind}:${member.packageId}`));
-      const memberEntries = externalMembers.length > 0
-        ? await this.packageRegistry.resolveBundleMemberEntries({ members: externalMembers })
+      const sourceMemberEntries = externalMembers
+        .filter((member) => member.source)
+        .map((member) => ({
+          kind: member.kind,
+          surface: member.kind,
+          packageId: member.packageId,
+          name: member.packageId,
+          description: member.reason ?? member.packageId,
+          version: member.version === '*' || member.version === 'latest' || member.version === 'stable' ? undefined : member.version,
+          tags: ['member-source'],
+          source: member.source!,
+          requires: []
+        }));
+      const npmMembers = externalMembers.filter((member) => !member.source);
+      const memberEntries = npmMembers.length > 0
+        ? await this.packageRegistry.resolveBundleMemberEntries({ members: npmMembers })
         : [];
       members = resolveBundleMembers({
-        catalog: [
+        entries: [
           ...embeddedMemberEntries,
-          ...getOfficialCatalog(),
+          ...sourceMemberEntries,
           ...memberEntries
         ],
         bundle
@@ -575,56 +579,56 @@ export class OperatorPackageService {
       }
       const detail = error instanceof Error ? error.message : String(error);
       throw new Error(
-        `Bundle ${record.packageId} can only reference packages that are present in catalog metadata in this version. ${detail}`
+        `Bundle ${record.packageId} can only reference packages that can be resolved from embedded packages, member sources, or registry metadata. ${detail}`
       );
     }
     try {
       for (const resolved of members) {
-        const existing = this.inventory.get(resolved.catalogEntry.kind, resolved.catalogEntry.packageId);
+        const existing = this.inventory.get(resolved.packageEntry.kind, resolved.packageEntry.packageId);
         if (!existing) {
           await this.installer.install({
-            surface: resolved.catalogEntry.kind,
-            source: resolved.catalogEntry.source,
+            surface: resolved.packageEntry.kind,
+            source: resolved.packageEntry.source,
             installedByPackageId: record.packageId,
-            expectedPackage: this.expectedPackageForEntry(resolved.catalogEntry)
+            expectedPackage: this.expectedPackageForEntry(resolved.packageEntry)
           });
         } else {
           const satisfiesBundleRange = packageVersionSatisfiesRange({
-            packageId: resolved.catalogEntry.packageId,
+            packageId: resolved.packageEntry.packageId,
             version: existing.version,
             range: resolved.member.version
           });
           if (!satisfiesBundleRange) {
             if (!existing.installedByPackageIds || existing.installedByPackageIds.length === 0) {
               throw new Error(
-                `Installed ${resolved.catalogEntry.kind} package ${existing.packageId}@${existing.version} does not satisfy bundle ` +
+                `Installed ${resolved.packageEntry.kind} package ${existing.packageId}@${existing.version} does not satisfy bundle ` +
                   `${record.packageId} requirement ${resolved.member.version}. Remove or update it before installing the bundle.`
               );
             }
             this.assertReplacementSatisfiesExistingBundleOwners({
-              kind: resolved.catalogEntry.kind,
-              packageId: resolved.catalogEntry.packageId,
-              replacementVersion: resolved.catalogEntry.version,
+              kind: resolved.packageEntry.kind,
+              packageId: resolved.packageEntry.packageId,
+              replacementVersion: resolved.packageEntry.version,
               ownerPackageIds: existing.installedByPackageIds
             });
             await this.installer.install({
-              surface: resolved.catalogEntry.kind,
-              source: resolved.catalogEntry.source,
+              surface: resolved.packageEntry.kind,
+              source: resolved.packageEntry.source,
               installedByPackageId: record.packageId,
-              expectedPackage: this.expectedPackageForEntry(resolved.catalogEntry)
+              expectedPackage: this.expectedPackageForEntry(resolved.packageEntry)
             });
           } else if (existing.installedByPackageIds && existing.installedByPackageIds.length > 0) {
             this.addBundleOwner({
-              kind: resolved.catalogEntry.kind,
-              packageId: resolved.catalogEntry.packageId,
+              kind: resolved.packageEntry.kind,
+              packageId: resolved.packageEntry.packageId,
               bundlePackageId: record.packageId
             });
           }
         }
         if (resolved.member.activation === 'select') {
-          this.setSelectedPackage(resolved.member.kind as 'transport' | 'provider', resolved.catalogEntry.packageId);
+          this.setSelectedPackage(resolved.member.kind as 'transport' | 'provider', resolved.packageEntry.packageId);
         } else if (resolved.member.activation === 'enable') {
-          this.enablePackage(resolved.member.kind as 'plugin' | 'skill', resolved.catalogEntry.packageId);
+          this.enablePackage(resolved.member.kind as 'plugin' | 'skill', resolved.packageEntry.packageId);
         }
       }
     } catch (error) {
@@ -788,7 +792,6 @@ export class OperatorPackageService {
     if (pruneDesiredSelections) {
       if (
         this.config.surfaces.apiAdapter.activePackageId &&
-        this.config.surfaces.apiAdapter.activePackageId !== 'official/http' &&
         !installed['api-adapter'].has(this.config.surfaces.apiAdapter.activePackageId)
       ) {
         this.config.surfaces.apiAdapter.activePackageId = null;
@@ -808,7 +811,7 @@ export class OperatorPackageService {
     }
 
     for (const packageId of Object.keys(this.config.surfaces.apiAdapter.configByPackageId ?? {})) {
-      if (packageId !== 'official/http' && !installed['api-adapter'].has(packageId)) {
+      if (!installed['api-adapter'].has(packageId)) {
         delete this.config.surfaces.apiAdapter.configByPackageId?.[packageId];
         configChanged = true;
       }
@@ -850,9 +853,7 @@ export class OperatorPackageService {
       }
     }
 
-    const normalizedApplied = appliedPackageRefs(state.applied).filter(
-      (entry) => isBuiltInActivatedPackage(entry) || installed[entry.surface].has(entry.packageId)
-    );
+    const normalizedApplied = appliedPackageRefs(state.applied).filter((entry) => installed[entry.surface].has(entry.packageId));
     if (JSON.stringify(normalizedApplied) !== JSON.stringify(state.applied.activated)) {
       state.applied.activated = normalizedApplied;
       inventoryChanged = true;
@@ -896,9 +897,8 @@ export class OperatorPackageService {
         this.config.surfaces.apiAdapter.config = {};
       } else {
         const savedConfig = this.config.surfaces.apiAdapter.configByPackageId?.[packageId];
-        const legacyDefaultConfig = packageId === 'official/http' ? defaultHttpApiAdapterConfig() : {};
         this.config.surfaces.apiAdapter.config = {
-          ...(savedConfig ?? legacyDefaultConfig)
+          ...(savedConfig ?? {})
         };
       }
     } else if (surface === 'transport') {

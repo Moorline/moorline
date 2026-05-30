@@ -186,7 +186,7 @@ export class ControlApiActionsService {
   }
 
   searchPackages(input: { query?: string; kind?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; compatibleOnly?: boolean }) {
-    return this.packageService(this.loadConfig()).searchCatalog({
+    return this.packageService(this.loadConfig()).searchPackages({
       query: input.query,
       kind: input.kind,
       compatibleOnly: input.compatibleOnly
@@ -194,7 +194,7 @@ export class ControlApiActionsService {
   }
 
   packageInfo(input: { packageId: string; kind?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle' }) {
-    return this.packageService(this.loadConfig()).getCatalogPackage(input);
+    return this.packageService(this.loadConfig()).getPackageInfo(input);
   }
 
   removePackage(input: { kind?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; surface?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; packageId: string; cascade?: boolean }) {

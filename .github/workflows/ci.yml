@@ -64,7 +64,15 @@ jobs:
       - run: tar -xzf dist/release-artifacts/moorline-cli-linux-x64.tar.gz -C /tmp/moorline-cli-smoke
       - run: /tmp/moorline-cli-smoke/moorline-cli-linux-x64/moorline help
       - run: /tmp/moorline-cli-smoke/moorline-cli-linux-x64/moorline init --config /tmp/moorline-ci-config.json
-      - run: timeout 10s /tmp/moorline-cli-smoke/moorline-cli-linux-x64/moorline run --config /tmp/moorline-ci-config.json || test $? -eq 124
+      - name: Assert split CLI requires an installed API adapter before run
+        run: |
+          set +e
+          output=$(/tmp/moorline-cli-smoke/moorline-cli-linux-x64/moorline run --config /tmp/moorline-ci-config.json 2>&1)
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -eq 1
+          grep -q "No API adapter package is selected" <<< "$output"
 
   full-gate:
     needs:
