@@ -3,11 +3,10 @@ import { MoorlineRuntime } from '@moorline/core/core/runtime/moorlineRuntime.js'
 import { createWorkerControlBridge } from '@moorline/core/core/runtime/supervision/runtimeSupervisor.js';
 import { loadMoorlineConfig, resolveConfigPath } from '@moorline/core/core/system/config/configStore.js';
 import { detectSqliteRuntimeSupport } from '@moorline/core/core/system/state/sqliteSupport.js';
-import { configuredApiAdapterConfig, defaultHttpApiAdapterConfig, selectedApiAdapterPackageConfig } from '@moorline/core/types/config.js';
+import { defaultHttpApiAdapterConfig, selectedApiAdapterPackageConfig } from '@moorline/core/types/config.js';
 import { OperatorPackageService } from '@moorline/core/app/bootstrap/operatorPackageService.js';
 import { loadConfiguredApiAdapterPackage } from '@moorline/core/app/bootstrap/apiAdapterPackageLoader.js';
 import { loadConfiguredRuntimePackages } from '@moorline/core/app/bootstrap/runtimeBootstrap.js';
-import officialHttpAdapterPackage from '@moorline/http';
 import { clearControlApiBootstrapRecord, writeControlApiBootstrapRecord } from '@moorline/control-api/bootstrap.js';
 import type { RuntimeApiAdapterPackage } from '@moorline/contracts';
 import type { CliDeps } from './cli.js';
@@ -22,13 +21,6 @@ function sqliteRuntimeGuidance(detail: string): string {
 }
 
 function selectedApiAdapterHostPort(config: ReturnType<typeof loadMoorlineConfig>, packageId: string): { host: string; port: number } {
-  if (packageId === 'official/http') {
-    const api = configuredApiAdapterConfig(config, packageId);
-    return {
-      host: api.host,
-      port: api.port
-    };
-  }
   const rawConfig = selectedApiAdapterPackageConfig(config, packageId);
   return {
     host: typeof rawConfig.host === 'string' && rawConfig.host.trim().length > 0 ? rawConfig.host.trim() : defaultHttpApiAdapterConfig().host,
@@ -43,9 +35,6 @@ async function loadSelectedApiAdapterPackage(input: {
   const selectedPackageId = input.config.surfaces.apiAdapter.activePackageId;
   if (!selectedPackageId) {
     throw new Error('No API adapter package is selected. Run `moorline configure` to select an API adapter.');
-  }
-  if (selectedPackageId === 'official/http') {
-    return officialHttpAdapterPackage;
   }
   return await loadConfiguredApiAdapterPackage({
     config: input.config,

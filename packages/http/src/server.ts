@@ -34,6 +34,7 @@ import {
   parseControlApiPostRoute,
   parsePendingInspectQuery
 } from '@moorline/control-api/contracts/routes.js';
+import manifest from '../manifest.json' with { type: 'json' };
 
 interface ControlApiServerOptions {
   host: string;
@@ -95,7 +96,7 @@ export class ControlApiServer {
       return;
     }
     if (api?.tls?.enabled) {
-      throw new Error('official/http tls.enabled is not supported by the official HTTP API adapter package.');
+      throw new Error('HTTP API adapter tls.enabled is not supported by this adapter package.');
     }
     this.exposure = api?.exposure ?? 'loopback';
 
@@ -199,7 +200,7 @@ export class ControlApiServer {
       },
       surfaces: {
         apiAdapter: {
-          activePackageId: 'official/http',
+          activePackageId: manifest.id,
           config: adapterConfig,
           configByPackageId: {}
         },

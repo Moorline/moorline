@@ -5,7 +5,6 @@ import { loadMoorlineConfig, resolveConfigPath, runtimePaths } from '../../../co
 import { resolveRuntimeMigrationsDir } from '../../../core/runtime/graph/runtimePaths.js';
 import { runMigrations } from '../../../core/system/state/migrationRunner.js';
 import {
-  configuredApiAdapterConfig,
   defaultHttpApiAdapterConfig,
   defaultMainProcessConfig,
   selectedApiAdapterPackageConfig,
@@ -41,24 +40,16 @@ export class ControlPlane {
       getRuntimeControlStatus: () => this.runtimeHost.runtimeControlStatus(),
       getManagementSurface: () => {
         const config = this.loadConfig();
-        if (config.surfaces.apiAdapter.activePackageId !== 'official/http') {
-          const adapterConfig = selectedApiAdapterPackageConfig(config);
-          const defaults = defaultHttpApiAdapterConfig();
-          const host = typeof adapterConfig.host === 'string' && adapterConfig.host.trim().length > 0 ? adapterConfig.host.trim() : defaults.host;
-          const port = typeof adapterConfig.port === 'number' && Number.isInteger(adapterConfig.port) ? adapterConfig.port : 0;
-          return {
-            enabled: true,
-            host,
-            port,
-            url: null
-          };
-        }
-        const api = configuredApiAdapterConfig(config);
+        const adapterConfig = selectedApiAdapterPackageConfig(config);
+        const defaults = defaultHttpApiAdapterConfig();
+        const enabled = adapterConfig.enabled !== false;
+        const host = typeof adapterConfig.host === 'string' && adapterConfig.host.trim().length > 0 ? adapterConfig.host.trim() : defaults.host;
+        const port = typeof adapterConfig.port === 'number' && Number.isInteger(adapterConfig.port) ? adapterConfig.port : 0;
         return {
-          enabled: api.enabled !== false,
-          host: api.host,
-          port: api.port,
-          url: api.enabled === false ? null : `http://${api.host}:${api.port}`
+          enabled,
+          host,
+          port,
+          url: enabled && port > 0 ? `http://${host}:${port}` : null
         };
       }
     });

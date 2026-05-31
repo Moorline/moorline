@@ -415,12 +415,18 @@ export class MoorlineRuntime {
 
   private initializePolicyGuard(): void {
     const policyProfile = loadPolicyProfile(this.runtimePolicyPath);
+    const pluginActorRules = this.pluginHost.listPluginManifests().map((manifest) => ({
+      actorPrefix: `plugin:${manifest.id}`,
+      allowCapabilities: [...manifest.capabilities],
+      denyCapabilities: [],
+      targetPrefixes: []
+    }));
     const policyEngine = createPolicyEngine({
       grantedCapabilities: new Set(policyProfile.allowCapabilities),
       denyUnknownCapabilities: policyProfile.denyUnknownCapabilities,
       hooks: [
         createActorRulePolicyHook({
-          rules: policyProfile.actorRules
+          rules: [...policyProfile.actorRules, ...pluginActorRules]
         }),
         createNetworkPolicyHook(policyProfile.network)
       ]

@@ -660,7 +660,10 @@ export function parseMoorlineConfig(input: unknown): MoorlineConfig {
   };
 }
 
-export function configuredApiAdapterConfig(config: MoorlineConfig, packageId = 'official/http'): ControlApiConfig {
-  const selectedPackageId = config.surfaces.apiAdapter.activePackageId ?? packageId;
+export function configuredApiAdapterConfig(
+  config: MoorlineConfig,
+  packageId = config.surfaces.apiAdapter.activePackageId
+): ControlApiConfig {
+  const selectedPackageId = packageId;
   return parseHttpApiAdapterConfig(selectedApiAdapterPackageConfig(config, selectedPackageId));
 }

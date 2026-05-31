@@ -4,7 +4,6 @@ import { desiredPackageRefsFromConfig, isPackageActivated, packageActivationUniq
 import { resolvePackageConfigSchema } from '../../extension/packages/packageConfigSchema.js';
 import { PackageInventoryStore } from '../../extension/packages/packageInventoryStore.js';
 import { evaluateRuntimeStartability } from '../../extension/packages/runtimeStartability.js';
-import { configuredApiAdapterConfig } from '../../../types/config.js';
 import { GitHistoryService } from '../vcs/gitHistoryService.js';
 import {
   detectMoorlineRuntimeMode,
@@ -93,12 +92,10 @@ function configRootForPackage(input: {
 }): Record<string, unknown> {
   if (input.surface === 'api-adapter') {
     if (input.packageId === input.config.surfaces.apiAdapter.activePackageId) {
-      return input.packageId === 'official/http'
-        ? { ...configuredApiAdapterConfig(input.config) }
-        : {
-            ...input.config.surfaces.apiAdapter.config,
-            ...(input.config.surfaces.apiAdapter.configByPackageId?.[input.packageId] ?? {})
-          };
+      return {
+        ...input.config.surfaces.apiAdapter.config,
+        ...(input.config.surfaces.apiAdapter.configByPackageId?.[input.packageId] ?? {})
+      };
     }
     return {
       ...(input.config.surfaces.apiAdapter.configByPackageId?.[input.packageId] ?? {})
