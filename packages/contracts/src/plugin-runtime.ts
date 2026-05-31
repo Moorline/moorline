@@ -22,7 +22,6 @@ export interface RuntimeDomainEvent {
   threadId: string;
   spaceId?: string | null;
   sessionId?: string | null;
-  missionId?: string | null;
   sourceProviderEventId?: string | null;
   createdAt: string;
   type: string;
@@ -62,8 +61,6 @@ export interface WrittenSkillResult {
 export type RuntimeEntityRecord = {
   id?: string;
   sessionId?: string;
-  missionId?: string;
-  runId?: string;
   threadId?: string;
   spaceId?: string;
   name?: string;
@@ -95,23 +92,6 @@ export type RuntimeSessionRow = RuntimeEntityRecord & {
   lastError: string | null;
   lifecycleStatus: SessionLifecycleStatus;
   runtimeMode: RuntimeModeName;
-};
-
-export type RuntimeMissionRow = RuntimeEntityRecord & {
-  missionId: string;
-  title: string;
-  spaceId: string;
-};
-
-export type RuntimeMissionRunRow = RuntimeEntityRecord & {
-  runId: string;
-  missionId: string;
-};
-
-export type RuntimeMissionHookBindingRow = RuntimeEntityRecord & {
-  bindingId: string;
-  missionId: string;
-  hookKey: string;
 };
 
 export interface RuntimeReceiptRecord {
@@ -237,7 +217,7 @@ export interface ManagedSidecarRecord {
   status: string;
 }
 
-export type AgentSurface = 'main_chat' | 'session' | 'mission';
+export type AgentSurface = 'main_chat' | 'session';
 
 export interface BeforeAgentPromptInput {
   surface: AgentSurface;
@@ -258,26 +238,33 @@ export interface CreatedSessionResult {
   spaceId: string;
 }
 
-export type MissionHookCondition = Record<string, string | number | boolean | null>;
+export type ArchivedSpaceTarget = { kind: 'session'; session: RuntimeSessionRow };
 
-export interface MissionHookDispatchResult {
-  hookKey: string;
-  source: string;
-  bindingCount: number;
-  matchedBindingCount: number;
-  triggeredMissionIds: string[];
-}
-
-export type ArchivedSpaceTarget =
-  | { kind: 'session'; session: RuntimeSessionRow }
-  | { kind: 'mission'; mission: RuntimeMissionRow };
-
-export type SessionOwnerKind = 'mission' | 'run' | 'parent_session' | 'orchestrator';
+export type SessionOwnerKind = string;
 
 export interface SessionOwnerLink {
   kind: SessionOwnerKind;
   id: string;
   label?: string;
+}
+
+export interface RuntimePackageStateRecord<T = unknown> {
+  packageId: string;
+  key: string;
+  value: T | null;
+  updatedAt: string;
+}
+
+export interface RuntimePackageJobRecord {
+  packageId: string;
+  jobId: string;
+  actionId: string;
+  schedule: string;
+  scheduleAnchorAt: string;
+  nextRunAt: string | null;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SessionQueryFilter {
@@ -337,14 +324,19 @@ export interface RuntimeToolContext {
   listSessions(): RuntimeSessionRow[];
   getSessionBySpaceId(spaceId: string): RuntimeSessionRow | null;
   getSessionById(sessionId: string): RuntimeSessionRow | null;
-  listMissions(): RuntimeMissionRow[];
-  getMissionBySpaceId(spaceId: string): RuntimeMissionRow | null;
-  getMissionById(missionId: string): RuntimeMissionRow | null;
-  listMissionRuns(missionId: string, limit?: number): RuntimeMissionRunRow[];
-  listMissionHookBindings(filter?: { missionId?: string; hookKey?: string }): RuntimeMissionHookBindingRow[];
-  bindMissionHook(input: { missionId: string; hookKey: string; condition?: MissionHookCondition }): Promise<RuntimeMissionHookBindingRow>;
-  unbindMissionHook(input: { bindingId: string }): Promise<RuntimeMissionHookBindingRow | null>;
-  emitMissionHook(input: { hookKey: string; payload?: Record<string, unknown>; source?: string }): Promise<MissionHookDispatchResult>;
+  getPackageState<T = unknown>(key: string): T | null;
+  putPackageState<T = unknown>(key: string, value: T): Promise<void>;
+  deletePackageState(key: string): Promise<void>;
+  listPackageState<T = unknown>(prefix?: string): RuntimePackageStateRecord<T>[];
+  schedulePackageJob(input: {
+    jobId: string;
+    actionId: string;
+    schedule: string;
+    startTime?: string;
+    payload?: Record<string, unknown>;
+  }): Promise<RuntimePackageJobRecord>;
+  cancelPackageJob(jobId: string): Promise<RuntimePackageJobRecord | null>;
+  listPackageJobs(): RuntimePackageJobRecord[];
   querySessions(filter?: SessionQueryFilter): RuntimeSessionSnapshot[];
   createSession(input: {
     requestedName: string;
@@ -365,17 +357,6 @@ export interface RuntimeToolContext {
   }>;
   archiveSession(input: { spaceId: string; sessionId?: string }): Promise<RuntimeSessionRow | null>;
   deleteArchivedSession(input: { spaceId: string; sessionId?: string }): Promise<RuntimeSessionRow | null>;
-  createMission(input: {
-    title: string;
-    goal: string;
-    schedule: string;
-    startTime?: string;
-    runtimeMode: RuntimeModeName;
-  }): Promise<{ mission: RuntimeMissionRow; spaceId: string }>;
-  pauseMission(input: { spaceId: string; missionId?: string }): Promise<RuntimeMissionRow | null>;
-  resumeMission(input: { spaceId: string; missionId?: string }): Promise<RuntimeMissionRow | null>;
-  stopMission(input: { spaceId: string; missionId?: string }): Promise<RuntimeMissionRow | null>;
-  runMissionNow(input: { spaceId: string; missionId?: string; requesterActorId?: string }): Promise<RuntimeMissionRow | null>;
   sendMessage(spaceId: string, payload: RuntimeMessagePayload): Promise<void>;
   sendStatusUpdate(payload: RuntimeMessagePayload): Promise<void>;
   appendAuditEvent(event: string, payload: Record<string, unknown>): void;
@@ -456,8 +437,6 @@ export interface RuntimePluginMemoryCapability {
 }
 
 export interface RuntimePluginWorkManagementCapability {
-  archiveMission(input: { spaceId: string; missionId?: string }): Promise<RuntimeMissionRow | null>;
-  deleteArchivedMission(input: { spaceId: string; missionId?: string }): Promise<RuntimeMissionRow | null>;
   archiveSpaceTarget(input: { spaceId: string }): Promise<ArchivedSpaceTarget | null>;
   deleteArchivedSpaceTarget(input: { spaceId: string }): Promise<ArchivedSpaceTarget | null>;
   respondToRuntimeRequest(input: {

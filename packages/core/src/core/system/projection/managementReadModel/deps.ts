@@ -1,6 +1,5 @@
 import type { MoorlineConfig, RuntimeSurfaceState } from '../../../../types/config.js';
 import type { RuntimeProvider } from '../../../../types/provider.js';
-import type { MissionRegistry } from '../../../domain/missions/missionRegistry.js';
 import type { SkillRegistry } from '../../../extension/skills/skillRegistry.js';
 import type { RuntimeControlStatus } from '../../../runtime/supervision/runtimeControl.js';
 import type { SidecarManager } from '../../../runtime/supervision/sidecarManager.js';
@@ -18,7 +17,6 @@ export interface ManagementReadModelServiceDeps {
   runtimeRoot: string;
   config: MoorlineConfig;
   snapshots: RuntimeSnapshotQuery;
-  missions: MissionRegistry;
   skills: SkillRegistry;
   provider: RuntimeProvider;
   sidecars: SidecarManager;

@@ -81,6 +81,5 @@ class ActorScopedCapability {
 }
 
 export class PluginSessionCapability extends ActorScopedCapability {}
-export class PluginMissionCapability extends ActorScopedCapability {}
 export class PluginObservabilityCapability extends ActorScopedCapability {}
 export class PluginSidecarCapability extends ActorScopedCapability {}

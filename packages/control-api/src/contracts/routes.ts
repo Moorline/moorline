@@ -54,13 +54,6 @@ export type ControlApiPostPath =
   | '/api/work/session/direct'
   | '/api/work/session/archive'
   | '/api/work/session/delete'
-  | '/api/work/mission/create'
-  | '/api/work/mission/pause'
-  | '/api/work/mission/resume'
-  | '/api/work/mission/stop'
-  | '/api/work/mission/run'
-  | '/api/work/mission/archive'
-  | '/api/work/mission/delete'
   | '/api/packages/install'
   | '/api/packages/remove'
   | '/api/packages/enable'
@@ -81,7 +74,6 @@ export type ControlApiPostPath =
 
 type SessionTargetPayload = { sessionId?: string; spaceId?: string };
 type SpaceSessionTargetPayload = { sessionId?: string; spaceId: string };
-type MissionTargetPayload = { missionId?: string; spaceId: string };
 type RuntimeReloadMode = 'graceful' | 'force';
 
 export type ControlApiPayloadForPath<Path extends ControlApiPostPath> =
@@ -96,8 +88,6 @@ export type ControlApiPayloadForPath<Path extends ControlApiPostPath> =
   Path extends '/api/work/session/create' ? { requestedName: string; runtimeMode: ReturnType<typeof parseControlApiRuntimeMode>; initialInstruction?: string; objective?: string } :
   Path extends '/api/work/session/direct' ? SessionTargetPayload & { instruction: string; reason?: string } :
   Path extends '/api/work/session/archive' | '/api/work/session/delete' ? SpaceSessionTargetPayload :
-  Path extends '/api/work/mission/create' ? { title: string; goal: string; schedule: string; runtimeMode: ReturnType<typeof parseControlApiRuntimeMode>; startTime?: string } :
-  Path extends '/api/work/mission/pause' | '/api/work/mission/resume' | '/api/work/mission/stop' | '/api/work/mission/run' | '/api/work/mission/archive' | '/api/work/mission/delete' ? MissionTargetPayload :
   Path extends '/api/packages/install' ? { kind: PackageKind; surface?: PackageKind; packageId?: string; source?: string } :
   Path extends '/api/packages/remove' ? { kind: PackageKind; surface?: PackageKind; packageId: string; cascade?: boolean } :
   Path extends '/api/packages/enable' | '/api/packages/disable' ? { surface: 'plugin' | 'skill'; packageId: string } :
@@ -227,18 +217,6 @@ function parseSpaceSessionTarget(body: Record<string, unknown>): SpaceSessionTar
   };
 }
 
-function parseMissionTarget(body: Record<string, unknown>): MissionTargetPayload {
-  const missionId = optionalString(body, 'missionId');
-  const spaceId = optionalString(body, 'spaceId');
-  if (!spaceId) {
-    throw new JsonBodyError(422, 'spaceId is required.');
-  }
-  return {
-    ...(missionId ? { missionId } : {}),
-    spaceId
-  };
-}
-
 function parseRequestAnswers(value: unknown): Record<string, string | string[]> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new JsonBodyError(422, 'answers must be an object mapping question ids to answer strings.');
@@ -287,13 +265,6 @@ function requireRoutePath(pathname: string): ControlApiPostPath {
     case '/api/work/session/direct':
     case '/api/work/session/archive':
     case '/api/work/session/delete':
-    case '/api/work/mission/create':
-    case '/api/work/mission/pause':
-    case '/api/work/mission/resume':
-    case '/api/work/mission/stop':
-    case '/api/work/mission/run':
-    case '/api/work/mission/archive':
-    case '/api/work/mission/delete':
     case '/api/packages/install':
     case '/api/packages/remove':
     case '/api/packages/enable':
@@ -482,75 +453,6 @@ export function parseControlApiPostRoute(pathname: string, rawBody: unknown): Co
         kind: 'api',
         path,
         payload: parseSpaceSessionTarget(body)
-      };
-
-    case '/api/work/mission/create': {
-      const startTime = optionalString(body, 'startTime');
-      return {
-        kind: 'api',
-        path,
-        payload: {
-          title: requireString(body, 'title'),
-          goal: requireString(body, 'goal'),
-          schedule: requireString(body, 'schedule'),
-          runtimeMode: parseControlApiRuntimeMode(body.runtimeMode, 'runtimeMode'),
-          ...(startTime ? { startTime } : {})
-        }
-      };
-    }
-
-    case '/api/work/mission/pause':
-      return {
-        kind: 'api',
-        path,
-        payload: {
-          ...parseMissionTarget(body)
-        }
-      };
-
-    case '/api/work/mission/resume':
-      return {
-        kind: 'api',
-        path,
-        payload: {
-          ...parseMissionTarget(body)
-        }
-      };
-
-    case '/api/work/mission/stop':
-      return {
-        kind: 'api',
-        path,
-        payload: {
-          ...parseMissionTarget(body)
-        }
-      };
-
-    case '/api/work/mission/run':
-      return {
-        kind: 'api',
-        path,
-        payload: {
-          ...parseMissionTarget(body)
-        }
-      };
-
-    case '/api/work/mission/archive':
-      return {
-        kind: 'api',
-        path,
-        payload: {
-          ...parseMissionTarget(body)
-        }
-      };
-
-    case '/api/work/mission/delete':
-      return {
-        kind: 'api',
-        path,
-        payload: {
-          ...parseMissionTarget(body)
-        }
       };
 
     case '/api/packages/install': {

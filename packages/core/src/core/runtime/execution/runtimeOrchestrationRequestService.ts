@@ -3,11 +3,9 @@ import type { RuntimePluginContext } from '../../../types/plugin.js';
 import type {
   AnswerPendingRequestOrchestrationPayload,
   ArchiveSessionOrchestrationPayload,
-  CreateMissionOrchestrationPayload,
   CreateSessionOrchestrationPayload,
   DeleteSessionOrchestrationPayload,
   DirectSessionOrchestrationPayload,
-  MissionLifecycleOrchestrationPayload,
   ProviderSessionControlOrchestrationPayload,
   ProviderTestOrchestrationPayload,
   PostMessageOrchestrationPayload,
@@ -260,46 +258,6 @@ export class RuntimeOrchestrationRequestService {
           }
         });
       }
-      case 'create_mission':
-        return await this.deps.createPluginContext(request.actorId).createMission(
-          decodeOrchestrationPayload('create_mission', parsedPayload) as CreateMissionOrchestrationPayload
-        );
-      case 'pause_mission':
-        return await this.deps.workManagement.updateMissionLifecycle(
-          request.actorId,
-          decodeOrchestrationPayload('pause_mission', parsedPayload) as MissionLifecycleOrchestrationPayload,
-          'pause'
-        );
-      case 'resume_mission':
-        return await this.deps.workManagement.updateMissionLifecycle(
-          request.actorId,
-          decodeOrchestrationPayload('resume_mission', parsedPayload) as MissionLifecycleOrchestrationPayload,
-          'resume'
-        );
-      case 'stop_mission':
-        return await this.deps.workManagement.updateMissionLifecycle(
-          request.actorId,
-          decodeOrchestrationPayload('stop_mission', parsedPayload) as MissionLifecycleOrchestrationPayload,
-          'stop'
-        );
-      case 'run_mission':
-        {
-          const payload = decodeOrchestrationPayload('run_mission', parsedPayload) as MissionLifecycleOrchestrationPayload;
-          return await this.deps.createPluginContext(request.actorId).runMissionNow({
-            spaceId: payload.spaceId,
-            missionId: payload.missionId
-          });
-        }
-      case 'archive_mission':
-        return await this.deps.workManagement.archiveMission({
-          actorId: request.actorId,
-          ...(decodeOrchestrationPayload('archive_mission', parsedPayload) as MissionLifecycleOrchestrationPayload)
-        });
-      case 'delete_mission':
-        return await this.deps.workManagement.deleteArchivedMission({
-          actorId: request.actorId,
-          ...(decodeOrchestrationPayload('delete_mission', parsedPayload) as MissionLifecycleOrchestrationPayload)
-        });
       case 'runtime_set_accepting': {
         const payload = decodeOrchestrationPayload(
           'runtime_set_accepting',

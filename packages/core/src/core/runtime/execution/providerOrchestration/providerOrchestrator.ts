@@ -1,6 +1,6 @@
 import type { RuntimeMessagePayload } from '../../../../types/transport.js';
 import type { ProviderRuntimeEvent } from '../../../../types/runtime.js';
-import type { RuntimeMissionRow, RuntimeSessionRow } from '../../../system/state/sqliteSessionStore.js';
+import type { RuntimeSessionRow } from '../../../system/state/sqliteSessionStore.js';
 import type { ProviderConnectionStore } from '../providerProjectionTypes.js';
 import type { RuntimeProvider } from '../../../../types/provider.js';
 import type { ProviderCompactionPolicy } from './providerCompactionPolicy.js';
@@ -46,10 +46,6 @@ export class ProviderOrchestrator {
 
   async runTurn(input: RuntimeProviderTurnInput): Promise<RuntimeMessagePayload> {
     return await this.deps.turns.runTurn(input);
-  }
-
-  async recoverMissionProviders(missionAsSession: (mission: RuntimeMissionRow) => RuntimeSessionRow): Promise<void> {
-    await this.deps.sessions.recoverMissionProviders(missionAsSession);
   }
 
   teardownThread(threadId: string, reason: string): void {

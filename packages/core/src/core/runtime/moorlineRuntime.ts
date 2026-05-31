@@ -15,14 +15,8 @@ import { RuntimeActionGuard } from '../system/policy/runtimeActionGuard.js';
 import type { PendingRuntimeRequestRecord } from '../../types/runtime.js';
 import type { RuntimeProvider } from '../../types/provider.js';
 import { SessionLifecycleService } from '../domain/sessions/sessionLifecycleService.js';
-import { MissionRegistry } from '../domain/missions/missionRegistry.js';
 import { SkillRegistry } from '../extension/skills/skillRegistry.js';
-import {
-  type RuntimeMissionRow,
-  type RuntimeMissionRunRow,
-  type RuntimeSessionRow,
-  SqliteSessionStore
-} from '../system/state/sqliteSessionStore.js';
+import { type RuntimeSessionRow, SqliteSessionStore } from '../system/state/sqliteSessionStore.js';
 import { JsonAuditLogger } from '../system/audit/auditLogger.js';
 import { SessionRegistry } from '../domain/sessions/sessionState.js';
 import { MemoryStore } from '../domain/memory/store.js';
@@ -64,6 +58,7 @@ import { ProviderOrchestrator } from './execution/providerOrchestration/provider
 import { RuntimeProjectionService } from '../system/projection/runtimeProjectionService.js';
 import { RuntimeOrchestrationRequestService } from './execution/runtimeOrchestrationRequestService.js';
 import { RuntimeLifecycleService } from './lifecycle/runtimeLifecycleService.js';
+import { PackageJobSchedulerService } from './lifecycle/packageJobSchedulerService.js';
 import { RuntimePluginContextService } from './execution/runtimePluginContextService.js';
 import { RuntimePendingRequestService } from './execution/runtimePendingRequestService.js';
 import { RuntimeHostingService } from './hosting/runtimeHostingService.js';
@@ -91,7 +86,6 @@ export class MoorlineRuntime {
   private readonly paths;
   private readonly store: SqliteSessionStore;
   private readonly sessionRegistry: SessionRegistry;
-  private readonly missionRegistry: MissionRegistry;
   private readonly sessionLifecycle: SessionLifecycleService;
   private pluginHost: PluginHost;
   private readonly skillRegistry: SkillRegistry;
@@ -123,6 +117,7 @@ export class MoorlineRuntime {
   private readonly orchestrationRequests: RuntimeOrchestrationRequestService;
   private readonly lifecycleService: RuntimeLifecycleService;
   private readonly pendingRequestService: RuntimePendingRequestService;
+  private readonly packageJobScheduler: PackageJobSchedulerService;
   private readonly pluginHostRef: { current: PluginHost };
   private pluginContexts!: RuntimePluginContextService;
   private readonly providerQueue: KeyedDrainableWorker;
@@ -191,7 +186,6 @@ export class MoorlineRuntime {
     this.runtimePolicyPath = graph.runtimePolicyPath;
     this.store = graph.store;
     this.sessionRegistry = graph.sessionRegistry;
-    this.missionRegistry = graph.missionRegistry;
     this.sessionLifecycle = graph.sessionLifecycle;
     this.pluginHostRef = graph.pluginHostRef;
     this.pluginHost = graph.pluginHost;
@@ -224,6 +218,7 @@ export class MoorlineRuntime {
     this.orchestrationRequests = graph.orchestrationRequests;
     this.lifecycleService = graph.lifecycleService;
     this.pendingRequestService = graph.pendingRequestService;
+    this.packageJobScheduler = graph.packageJobScheduler;
     this.pluginContexts = graph.pluginContexts;
     this.providerQueue = graph.providerQueue;
     this.commandQueue = graph.commandQueue;
@@ -296,10 +291,10 @@ export class MoorlineRuntime {
       runtimeRoot: this.paths.runtimeRoot,
       ...(this.configuredProviderModel() ? { model: this.configuredProviderModel() } : {})
     });
-    await this.providerOrchestrator.recoverMissionProviders((mission) => this.lifecycleService.missionAsSession(mission));
     await this.recoverOpenRequests();
     await this.reconcileRecoveredState();
     this.lifecycleService.start();
+    this.packageJobScheduler.start();
     this.orchestrationRequests.start();
     this.startedAtIso = this.now();
     this.appendAuditEvent('runtime.started', {
@@ -338,6 +333,7 @@ export class MoorlineRuntime {
     this.stoppingReason = 'Moorline runtime stopped before the active turn completed.';
     try {
       this.lifecycleService.stop();
+      this.packageJobScheduler.stop();
       this.orchestrationRequests.stop();
       this.providerOrchestrator.clearRequestAttribution();
       this.rejectKnownProviderThreads(this.stoppingReason);
@@ -369,9 +365,6 @@ export class MoorlineRuntime {
     const threadIds = new Set<string>();
     for (const session of this.sessionRegistry.list()) {
       threadIds.add(session.threadId);
-    }
-    for (const mission of this.missionRegistry.list()) {
-      threadIds.add(mission.threadId);
     }
     for (const threadId of threadIds) {
       this.providerOrchestrator.rejectThread(threadId, reason);
@@ -503,19 +496,6 @@ export class MoorlineRuntime {
       nowIso: this.now(),
       providerAutoStartEnabled: this.providerAutoStartDefault
     })!;
-  }
-
-  private missionAsSession(mission: RuntimeMissionRow): RuntimeSessionRow {
-    return this.lifecycleService.missionAsSession(mission);
-  }
-
-  private async runMissionTurn(
-    missionId: string,
-    trigger: RuntimeMissionRunRow['trigger'],
-    actorId: string,
-    requesterUserId: string | null = null
-  ): Promise<void> {
-    await this.lifecycleService.runMissionTurn(missionId, trigger, actorId, requesterUserId);
   }
 
   private providerAutoStartEnabled(session: RuntimeSessionRow): boolean {

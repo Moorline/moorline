@@ -45,7 +45,7 @@ interface CronSchedule {
   expression: string;
 }
 
-type MissionScheduleMeta =
+type PackageScheduleMeta =
   | {
       kind: 'interval';
       intervalMinutes: number;
@@ -59,10 +59,10 @@ type MissionScheduleMeta =
       runAt: string;
     };
 
-interface ParsedMissionSchedule {
+interface ParsedPackageSchedule {
   cadenceMinutes: number;
   normalized: string;
-  meta: MissionScheduleMeta;
+  meta: PackageScheduleMeta;
 }
 
 function parsePositiveInt(input: string, label: string): number {
@@ -160,7 +160,7 @@ function normalizeIntervalUnit(unitMinutes: number, amount: number): string {
   return `day${amount === 1 ? '' : 's'}`;
 }
 
-function parseNaturalLanguageIntervalSchedule(normalizedInput: string): ParsedMissionSchedule | null {
+function parseNaturalLanguageIntervalSchedule(normalizedInput: string): ParsedPackageSchedule | null {
   if (normalizedInput === 'hourly') {
     return {
       cadenceMinutes: 60,
@@ -315,7 +315,7 @@ function looksLikeCronExpression(input: string): boolean {
   return input.trim().split(/\s+/u).length === 5;
 }
 
-function parseCronSchedule(rawInput: string): ParsedMissionSchedule | null {
+function parseCronSchedule(rawInput: string): ParsedPackageSchedule | null {
   const trimmed = rawInput.trim();
   if (!trimmed) {
     return null;
@@ -335,7 +335,7 @@ function parseCronSchedule(rawInput: string): ParsedMissionSchedule | null {
   };
 }
 
-function parseOneShotSchedule(rawInput: string): ParsedMissionSchedule | null {
+function parseOneShotSchedule(rawInput: string): ParsedPackageSchedule | null {
   const trimmed = rawInput.trim();
   const lower = trimmed.toLowerCase();
   if (!lower.startsWith('once ') && !lower.startsWith('at ')) {
@@ -382,7 +382,7 @@ function computeCronRunAtOrAfter(input: { expression: string; anchorIso: string;
   const anchorMs = Date.parse(input.anchorIso);
   const referenceMs = Date.parse(input.referenceIso);
   if (!Number.isFinite(anchorMs) || !Number.isFinite(referenceMs)) {
-    throw new Error('Mission schedule timestamps must be valid ISO values.');
+    throw new Error('Package job schedule timestamps must be valid ISO values.');
   }
   let candidateMs = Math.max(anchorMs, referenceMs);
   candidateMs = Math.floor(candidateMs / 60_000) * 60_000;
@@ -400,7 +400,7 @@ function computeCronRunAtOrAfter(input: { expression: string; anchorIso: string;
   return null;
 }
 
-function isMissionScheduleMeta(value: unknown): value is MissionScheduleMeta {
+function isPackageScheduleMeta(value: unknown): value is PackageScheduleMeta {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false;
   }
@@ -417,23 +417,23 @@ function isMissionScheduleMeta(value: unknown): value is MissionScheduleMeta {
   return false;
 }
 
-export function parseMissionScheduleMeta(input: string | null | undefined): MissionScheduleMeta | null {
+export function parsePackageScheduleMeta(input: string | null | undefined): PackageScheduleMeta | null {
   if (!input || !input.trim()) {
     return null;
   }
   try {
     const parsed = JSON.parse(input) as unknown;
-    return isMissionScheduleMeta(parsed) ? parsed : null;
+    return isPackageScheduleMeta(parsed) ? parsed : null;
   } catch {
     return null;
   }
 }
 
-export function missionScheduleMetaToJson(meta: MissionScheduleMeta): string {
+export function packageScheduleMetaToJson(meta: PackageScheduleMeta): string {
   return JSON.stringify(meta);
 }
 
-export function parseMissionSchedule(input: string): ParsedMissionSchedule {
+export function parsePackageSchedule(input: string): ParsedPackageSchedule {
   const normalized = input.trim().toLowerCase().replace(/\s+/g, ' ');
   if (!normalized) {
     throw new Error('Schedule is required.');
@@ -455,7 +455,7 @@ export function parseMissionSchedule(input: string): ParsedMissionSchedule {
   );
 }
 
-export function parseMissionStartTime(input: string | undefined, nowIso: string): string {
+export function parsePackageScheduleStartTime(input: string | undefined, nowIso: string): string {
   if (!input || input.trim() === '') {
     return nowIso;
   }
@@ -483,11 +483,11 @@ export function parseMissionStartTime(input: string | undefined, nowIso: string)
   );
 }
 
-export function computeMissionRunAtOrAfter(anchorIso: string, cadenceMinutes: number, referenceIso: string): string {
+export function computePackageJobRunAtOrAfter(anchorIso: string, cadenceMinutes: number, referenceIso: string): string {
   const anchorMs = Date.parse(anchorIso);
   const referenceMs = Date.parse(referenceIso);
   if (Number.isNaN(anchorMs) || Number.isNaN(referenceMs)) {
-    throw new Error('Mission schedule timestamps must be valid ISO values.');
+    throw new Error('Package job schedule timestamps must be valid ISO values.');
   }
   if (referenceMs <= anchorMs) {
     return new Date(anchorMs).toISOString();
@@ -499,27 +499,27 @@ export function computeMissionRunAtOrAfter(anchorIso: string, cadenceMinutes: nu
   return new Date(anchorMs + intervals * cadenceMs).toISOString();
 }
 
-export function computeNextMissionRunAt(anchorIso: string, cadenceMinutes: number, afterIso: string): string {
-  return computeMissionRunAtOrAfter(anchorIso, cadenceMinutes, new Date(Date.parse(afterIso) + 1).toISOString());
+export function computeNextPackageJobRunAt(anchorIso: string, cadenceMinutes: number, afterIso: string): string {
+  return computePackageJobRunAtOrAfter(anchorIso, cadenceMinutes, new Date(Date.parse(afterIso) + 1).toISOString());
 }
 
-export function computeMissionRunAtOrAfterWithMeta(
+export function computePackageJobRunAtOrAfterWithMeta(
   anchorIso: string,
   cadenceMinutes: number,
   referenceIso: string,
-  meta: MissionScheduleMeta | null
+  meta: PackageScheduleMeta | null
 ): string | null {
   if (!meta || meta.kind === 'interval') {
     if (cadenceMinutes <= 0) {
       return null;
     }
-    return computeMissionRunAtOrAfter(anchorIso, cadenceMinutes, referenceIso);
+    return computePackageJobRunAtOrAfter(anchorIso, cadenceMinutes, referenceIso);
   }
   if (meta.kind === 'once') {
     const runAtMs = Date.parse(meta.runAt);
     const referenceMs = Date.parse(referenceIso);
     if (!Number.isFinite(runAtMs) || !Number.isFinite(referenceMs)) {
-      throw new Error('Mission schedule timestamps must be valid ISO values.');
+      throw new Error('Package job schedule timestamps must be valid ISO values.');
     }
     return runAtMs >= referenceMs ? new Date(runAtMs).toISOString() : null;
   }
@@ -530,16 +530,16 @@ export function computeMissionRunAtOrAfterWithMeta(
   });
 }
 
-export function computeNextMissionRunAtWithMeta(
+export function computeNextPackageJobRunAtWithMeta(
   anchorIso: string,
   cadenceMinutes: number,
   afterIso: string,
-  meta: MissionScheduleMeta | null
+  meta: PackageScheduleMeta | null
 ): string | null {
   if (meta?.kind === 'once') {
     return null;
   }
-  return computeMissionRunAtOrAfterWithMeta(
+  return computePackageJobRunAtOrAfterWithMeta(
     anchorIso,
     cadenceMinutes,
     new Date(Date.parse(afterIso) + 1).toISOString(),

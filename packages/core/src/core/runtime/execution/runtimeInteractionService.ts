@@ -1,14 +1,10 @@
 import type { AppliedMoorlineConfig } from '../../../types/config.js';
 import type { RuntimePluginContext } from '../../../types/plugin.js';
 import type { RuntimeActionDefinition, RuntimeMessagePayload, RuntimeTransportEvent } from '../../../types/transport.js';
-import type { RuntimeModeName } from '../../../types/runtime.js';
-import type { RuntimeMissionRow } from '../../system/state/sqliteSessionStore.js';
-import type { MissionRegistry } from '../../domain/missions/missionRegistry.js';
 import type { PluginHost } from '../../extension/plugins/pluginHost.js';
 import type { RuntimeSnapshotQuery } from '../../system/projection/runtimeSnapshotQuery.js';
 import type { SessionLifecycleService } from '../../domain/sessions/sessionLifecycleService.js';
 import type { SessionRegistry } from '../../domain/sessions/sessionState.js';
-import { buildDraftMissionSetupPrompt, parseDraftMissionSetupMessage } from '../../domain/missions/missionDraftSetup.js';
 import { PendingRequestActionError } from './runtimePendingRequestService.js';
 
 type RuntimeMessageReceivedEvent = Extract<RuntimeTransportEvent, { type: 'message.received' }>;
@@ -41,7 +37,6 @@ function hasNativeReply(
 interface RuntimeInteractionServiceDeps {
   config: AppliedMoorlineConfig;
   sessionRegistry: SessionRegistry;
-  missionRegistry: MissionRegistry;
   sessionLifecycle: SessionLifecycleService;
   snapshots: RuntimeSnapshotQuery;
   getPluginHost(): PluginHost;
@@ -52,16 +47,6 @@ interface RuntimeInteractionServiceDeps {
   postTransportMessage(actor: string, spaceId: string, payload: RuntimeMessagePayload): Promise<void>;
   appendAuditEvent(event: string, payload: Record<string, unknown>): void;
   createPluginContext(actorId: string): RuntimePluginContext;
-  createMissionReply(event: RuntimeMessageReceivedEvent, mission: RuntimeMissionRow): Promise<RuntimeMessagePayload>;
-  configureDraftMission(input: {
-    actorId: string;
-    spaceId: string;
-    missionId: string;
-    goal: string;
-    schedule: string;
-    startTime?: string;
-    runtimeMode?: RuntimeModeName;
-  }): Promise<RuntimeMissionRow>;
   isAdminActor(input: RuntimeMessageReceivedEvent['actor']): boolean;
   respondToProviderRequest(
     actorId: string,
@@ -135,12 +120,6 @@ export class RuntimeInteractionService {
           return;
         }
         this.deps.sessionLifecycle.recordActivity(session.threadId, this.deps.now());
-      }
-
-      const mission = this.deps.missionRegistry.getBySpaceId(event.spaceId);
-      if (mission) {
-        await this.handleMissionMessage(event, mission);
-        return;
       }
 
       const result = await this.deps.getPluginHost().handleTransportEvent(event, (pluginId) =>
@@ -232,86 +211,5 @@ export class RuntimeInteractionService {
       decision === 'accept' ? `Approved request ${requestId}.` : decision === 'decline' ? `Declined request ${requestId}.` : `Cancelled request ${requestId}.`;
     await this.replyToAction(event, responseText);
     return true;
-  }
-
-  private async handleMissionMessage(event: RuntimeMessageReceivedEvent, mission: RuntimeMissionRow): Promise<void> {
-    await this.deps.queue(`mission:${mission.missionId}`, async () => {
-      const currentMission = this.deps.missionRegistry.getById(mission.missionId);
-      if (currentMission?.lifecycleStatus === 'draft') {
-        await this.handleDraftMissionMessage(event, currentMission);
-        return;
-      }
-      if (
-        !currentMission ||
-        currentMission.archivedAt ||
-        currentMission.lifecycleStatus === 'stopped' ||
-        currentMission.lifecycleStatus === 'completed'
-      ) {
-        await this.deps.postTransportMessage('runtime:mission/message', event.spaceId, {
-          text: `Mission ${mission.missionId} is not accepting new messages because it is ${currentMission?.archivedAt ? 'archived' : currentMission?.lifecycleStatus ?? 'missing'}.`
-        });
-        return;
-      }
-
-      const reply = await this.deps.createMissionReply(event, currentMission);
-      await this.deps.postTransportMessage('runtime:mission/message', event.spaceId, reply);
-      this.deps.appendAuditEvent('mission.replied', {
-        missionId: currentMission.missionId,
-        spaceId: currentMission.spaceId,
-        actorId: event.actor.actorId
-      });
-    });
-  }
-
-  private async handleDraftMissionMessage(event: RuntimeMessageReceivedEvent, mission: RuntimeMissionRow): Promise<void> {
-    const draftPrompt = buildDraftMissionSetupPrompt({
-      title: mission.title,
-      missionId: mission.missionId
-    });
-    let setup;
-    try {
-      setup = parseDraftMissionSetupMessage(event.message.text);
-    } catch (error) {
-      await this.deps.postTransportMessage('runtime:mission/setup', event.spaceId, {
-        text: `Could not parse draft mission setup: ${error instanceof Error ? error.message : String(error)}\n\n${draftPrompt}`
-      });
-      return;
-    }
-
-    if (!setup) {
-      await this.deps.postTransportMessage('runtime:mission/setup', event.spaceId, {
-        text: draftPrompt
-      });
-      return;
-    }
-
-    let configured: RuntimeMissionRow;
-    try {
-      configured = await this.deps.configureDraftMission({
-        actorId: event.actor.actorId,
-        spaceId: event.spaceId,
-        missionId: mission.missionId,
-        goal: setup.goal,
-        schedule: setup.schedule,
-        ...(setup.startTime ? { startTime: setup.startTime } : {}),
-        ...(setup.runtimeMode ? { runtimeMode: setup.runtimeMode } : {})
-      });
-    } catch (error) {
-      await this.deps.postTransportMessage('runtime:mission/setup', event.spaceId, {
-        text: `Could not configure draft mission: ${error instanceof Error ? error.message : String(error)}\n\n${draftPrompt}`
-      });
-      return;
-    }
-    await this.deps.postTransportMessage('runtime:mission/setup', event.spaceId, {
-      text:
-        `Configured mission ${configured.missionId}. ` +
-        `It will run on ${configured.scheduleText}` +
-        `${configured.nextRunAt ? ` starting at ${configured.nextRunAt}` : ''}.`
-    });
-    this.deps.appendAuditEvent('mission.configured_from_message', {
-      missionId: configured.missionId,
-      spaceId: configured.spaceId,
-      actorId: event.actor.actorId
-    });
   }
 }

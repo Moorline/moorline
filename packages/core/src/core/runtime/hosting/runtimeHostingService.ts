@@ -137,7 +137,6 @@ export class RuntimeHostingService {
       chatChannelId: this.deps.config.surface.chatChannelName,
       statusChannelId: this.deps.config.surface.statusChannelName,
       sessionsCategoryId: this.deps.config.surface.sessionsGroupName,
-      missionsCategoryId: this.deps.config.surface.missionsGroupName,
       archiveCategoryId: this.deps.config.surface.archiveGroupName,
       createdAt: nowIso,
       updatedAt: nowIso

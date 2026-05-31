@@ -49,7 +49,7 @@ export interface ProviderRuntimePorts extends ProviderAuditPort, ProviderGuardPo
   now(): string;
 }
 
-export type ProviderTurnSurface = 'main_chat' | 'session' | 'mission';
+export type ProviderTurnSurface = 'main_chat' | 'session';
 
 export interface TurnBufferAttachment {
   path: string;

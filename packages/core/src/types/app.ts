@@ -16,7 +16,6 @@ export type SidecarRestartPolicy = 'never' | 'on-failure';
 
 export type ManagedObjectKind =
   | 'session'
-  | 'mission'
   | 'plugin'
   | 'skill'
   | 'service'
@@ -87,19 +86,6 @@ export interface ManagedSessionRecord extends ManagedObjectBase {
   providerStatus: string | null;
   pendingRequestCount: number;
   recentActivityCount: number;
-}
-
-export interface ManagedMissionRecord extends ManagedObjectBase {
-  spaceId: string;
-  threadId: string;
-  lifecycleStatus: string;
-  runtimeMode: RuntimeModeName;
-  goal: string;
-  scheduleText: string;
-  nextRunAt: string | null;
-  lastRunAt: string | null;
-  pausedAt: string | null;
-  archivedAt: string | null;
 }
 
 export interface ManagedPluginRecord extends ManagedObjectBase {
@@ -463,7 +449,6 @@ export interface ManagementReadModel {
   };
   overview: {
     sessions: number;
-    missions: number;
     pendingRequests: number;
     plugins: number;
     skills: number;
@@ -473,7 +458,6 @@ export interface ManagementReadModel {
   };
   objects: {
     sessions: ManagedSessionRecord[];
-    missions: ManagedMissionRecord[];
     plugins: ManagedPluginRecord[];
     skills: ManagedSkillRecord[];
     services: ManagedServiceRecord[];

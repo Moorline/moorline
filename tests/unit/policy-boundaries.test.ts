@@ -7,7 +7,7 @@ import { loadPolicyProfile } from '../../packages/core/src/core/system/policy/po
 const root = process.cwd();
 
 describe('default actor policy boundaries', () => {
-  it('does not grant removed local-management capabilities or prefix-spoofed plugin actors', async () => {
+  it('does not grant removed local-management capabilities or third-party plugin actors', async () => {
     const policyPath = join(root, 'packages', 'core', 'resources', 'policies', 'default-secure.json');
     const rawPolicy = readFileSync(policyPath, 'utf8');
     expect(rawPolicy).not.toContain('plugin:official/local-management');
@@ -17,7 +17,7 @@ describe('default actor policy boundaries', () => {
 
     await expect(
       hook({
-        actor: 'plugin:official/local-management-evil',
+        actor: 'plugin:acme/local-management',
         action: 'session.create'
       })
     ).resolves.toMatchObject({
@@ -35,7 +35,7 @@ describe('default actor policy boundaries', () => {
 
     await expect(
       hook({
-        actor: 'plugin:official/session-orchestration-evil',
+        actor: 'plugin:acme/session-orchestration',
         action: 'session.create'
       })
     ).resolves.toMatchObject({

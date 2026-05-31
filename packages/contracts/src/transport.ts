@@ -11,7 +11,6 @@ export interface RuntimeSurfaceNames {
   chatChannelName: string;
   statusChannelName: string;
   sessionsGroupName: string;
-  missionsGroupName: string;
   archiveGroupName: string;
 }
 
@@ -49,7 +48,6 @@ export interface RuntimeSurfaceState {
   chatChannelId: string;
   statusChannelId: string;
   sessionsCategoryId: string;
-  missionsCategoryId: string;
   archiveCategoryId: string;
   adminAccessGroupId?: string;
   memberAccessGroupId?: string;

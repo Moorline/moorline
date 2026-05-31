@@ -3,8 +3,9 @@ import type { ManagedSidecarRecord, SidecarScopeKind } from '../../runtime/super
 import { openRuntimeSqliteDatabase } from './sqlite/connection.js';
 import { DomainEventLogRepository } from './sqlite/domainEventLogRepository.js';
 import { ManagedSidecarRepository } from './sqlite/managedSidecarRepository.js';
-import { MissionRepository } from './sqlite/missionRepository.js';
 import { RuntimeOrchestrationRepository } from './sqlite/orchestrationRepository.js';
+import { PackageJobRepository } from './sqlite/packageJobRepository.js';
+import { PackageStateRepository } from './sqlite/packageStateRepository.js';
 import { PendingRequestRepository } from './sqlite/pendingRequestRepository.js';
 import { ProviderBindingRepository } from './sqlite/providerBindingRepository.js';
 import { ProviderEventLogRepository } from './sqlite/providerEventLogRepository.js';
@@ -19,21 +20,19 @@ import {
   type ProviderBindingRecord,
   type ProviderRuntimeEvent,
   type RuntimeDomainEvent,
-  type RuntimeMissionHookBindingRow,
   type RuntimeEventRow,
-  type RuntimeMissionRow,
-  type RuntimeMissionRunRow,
   type RuntimeOrchestrationRequestRow,
+  type RuntimePackageJobRow,
+  type RuntimePackageStateRow,
   type RuntimeReceiptRecord,
   type RuntimeSessionRow
 } from './sqlite/types.js';
 
 export type {
-  RuntimeMissionHookBindingRow,
-  RuntimeMissionRow,
-  RuntimeMissionRunRow,
   RuntimeOrchestrationRequestRow,
   RuntimeOrchestrationRequestType,
+  RuntimePackageJobRow,
+  RuntimePackageStateRow,
   RuntimeSessionRow
 } from './sqlite/types.js';
 
@@ -44,8 +43,9 @@ export class SqliteSessionStore {
   private readonly historyPruning: RuntimeHistoryPruningRepository;
   private readonly managedSidecars: ManagedSidecarRepository;
   private readonly metadata: SessionMetadataRepository;
-  private readonly missions: MissionRepository;
   private readonly orchestration: RuntimeOrchestrationRepository;
+  private readonly packageJobs: PackageJobRepository;
+  private readonly packageState: PackageStateRepository;
   private readonly pendingRequests: PendingRequestRepository;
   private readonly providerBindings: ProviderBindingRepository;
   private readonly providerEvents: ProviderEventLogRepository;
@@ -64,8 +64,9 @@ export class SqliteSessionStore {
     this.historyPruning = new RuntimeHistoryPruningRepository(this.db);
     this.managedSidecars = new ManagedSidecarRepository(this.db);
     this.metadata = new SessionMetadataRepository(this.db);
-    this.missions = new MissionRepository(this.db);
     this.orchestration = new RuntimeOrchestrationRepository(this.db);
+    this.packageJobs = new PackageJobRepository(this.db);
+    this.packageState = new PackageStateRepository(this.db);
     this.pendingRequests = new PendingRequestRepository(this.db);
     this.providerBindings = new ProviderBindingRepository(this.db);
     this.providerEvents = new ProviderEventLogRepository(this.db);
@@ -97,64 +98,44 @@ export class SqliteSessionStore {
     return this.sessions.listSessions();
   }
 
-  upsertMission(row: RuntimeMissionRow): void {
-    this.missions.upsertMission(row);
-  }
-
-  getMission(missionId: string): RuntimeMissionRow | null {
-    return this.missions.getMission(missionId);
-  }
-
-  getMissionBySpaceId(spaceId: string | null | undefined): RuntimeMissionRow | null {
-    return this.missions.getMissionBySpaceId(spaceId);
-  }
-
-  getMissionByThreadId(threadId: string): RuntimeMissionRow | null {
-    return this.missions.getMissionByThreadId(threadId);
-  }
-
-  listMissions(): RuntimeMissionRow[] {
-    return this.missions.listMissions();
-  }
-
-  deleteMission(missionId: string): void {
-    this.missions.deleteMission(missionId);
-  }
-
-  upsertMissionRun(row: RuntimeMissionRunRow): void {
-    this.missions.upsertMissionRun(row);
-  }
-
-  getMissionRun(runId: string): RuntimeMissionRunRow | null {
-    return this.missions.getMissionRun(runId);
-  }
-
-  listMissionRuns(missionId: string, limit = 20): RuntimeMissionRunRow[] {
-    return this.missions.listMissionRuns(missionId, limit);
-  }
-
-  getActiveMissionRun(missionId: string): RuntimeMissionRunRow | null {
-    return this.missions.getActiveMissionRun(missionId);
-  }
-
-  upsertMissionHookBinding(row: RuntimeMissionHookBindingRow): void {
-    this.missions.upsertMissionHookBinding(row);
-  }
-
-  getMissionHookBinding(bindingId: string): RuntimeMissionHookBindingRow | null {
-    return this.missions.getMissionHookBinding(bindingId);
-  }
-
-  listMissionHookBindings(input?: { missionId?: string; hookKey?: string }): RuntimeMissionHookBindingRow[] {
-    return this.missions.listMissionHookBindings(input);
-  }
-
-  deleteMissionHookBinding(bindingId: string): RuntimeMissionHookBindingRow | null {
-    return this.missions.deleteMissionHookBinding(bindingId);
-  }
-
   deleteSession(sessionId: string): void {
     this.sessions.deleteSession(sessionId);
+  }
+
+  getPackageState(packageId: string, key: string): RuntimePackageStateRow | null {
+    return this.packageState.get(packageId, key);
+  }
+
+  listPackageState(packageId: string, prefix?: string): RuntimePackageStateRow[] {
+    return this.packageState.list(packageId, prefix);
+  }
+
+  putPackageState(row: RuntimePackageStateRow): void {
+    this.packageState.put(row);
+  }
+
+  deletePackageState(packageId: string, key: string): RuntimePackageStateRow | null {
+    return this.packageState.delete(packageId, key);
+  }
+
+  upsertPackageJob(row: RuntimePackageJobRow): void {
+    this.packageJobs.upsert(row);
+  }
+
+  getPackageJob(packageId: string, jobId: string): RuntimePackageJobRow | null {
+    return this.packageJobs.get(packageId, jobId);
+  }
+
+  listPackageJobs(packageId: string): RuntimePackageJobRow[] {
+    return this.packageJobs.list(packageId);
+  }
+
+  listDuePackageJobs(nowIso: string): RuntimePackageJobRow[] {
+    return this.packageJobs.listDue(nowIso);
+  }
+
+  deletePackageJob(packageId: string, jobId: string): RuntimePackageJobRow | null {
+    return this.packageJobs.delete(packageId, jobId);
   }
 
   upsertManagedSidecar(row: ManagedSidecarRecord): void {

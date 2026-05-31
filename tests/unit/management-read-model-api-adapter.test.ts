@@ -121,10 +121,6 @@ describe('management read model api-adapter config', () => {
         overview: () => ({ openRequests: [] }),
         listRecentActivities: () => []
       } as never,
-      missions: {
-        list: () => [],
-        listRuns: () => []
-      } as never,
       skills: {
         list: () => []
       } as never,

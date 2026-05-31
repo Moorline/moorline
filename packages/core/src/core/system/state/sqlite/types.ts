@@ -10,7 +10,6 @@ import type {
 import { isStringArray, safeReadJson, safeReadJsonValue } from '../safeJson.js';
 
 export type SessionLifecycleStatus = 'hot' | 'cool' | 'archived';
-export type MissionLifecycleStatus = 'draft' | 'active' | 'sleeping' | 'waiting_on_user' | 'completed' | 'stopped' | 'failed';
 
 export interface RuntimeSessionRow {
   sessionId: string;
@@ -49,13 +48,6 @@ export type RuntimeOrchestrationRequestType =
   | 'archive_session'
   | 'delete_session'
   | 'post_message'
-  | 'create_mission'
-  | 'pause_mission'
-  | 'resume_mission'
-  | 'stop_mission'
-  | 'run_mission'
-  | 'archive_mission'
-  | 'delete_mission'
   | 'runtime_set_accepting'
   | 'runtime_reload'
   | 'provider_test'
@@ -87,50 +79,23 @@ export interface RuntimeOrchestrationRequestRow {
   updatedAt: string;
 }
 
-export interface RuntimeMissionRow {
-  missionId: string;
-  scopeId: string;
-  spaceId: string;
-  threadId: string;
-  spaceName: string;
-  title: string;
-  goal: string;
-  scheduleText: string;
-  scheduleAnchorAt: string;
-  cadenceMinutes: number;
-  scheduleMetaJson?: string | null;
-  runtimeMode: RuntimeModeName;
-  workspacePath: string;
-  lifecycleStatus: MissionLifecycleStatus;
-  pausedAt: string | null;
-  lastRunAt: string | null;
-  nextRunAt: string | null;
-  lastSuccessAt: string | null;
-  completedAt: string | null;
-  stoppedAt: string | null;
-  archivedAt: string | null;
-  lastError: string | null;
-  createdAt: string;
+export interface RuntimePackageStateRow {
+  packageId: string;
+  key: string;
+  valueJson: string;
   updatedAt: string;
 }
 
-export interface RuntimeMissionRunRow {
-  runId: string;
-  missionId: string;
-  trigger: 'schedule' | 'manual' | 'resume' | 'hook';
-  lifecycleStatus: 'running' | 'waiting_on_user' | 'completed' | 'failed' | 'stopped';
-  summary: string | null;
-  errorMessage: string | null;
-  startedAt: string;
-  finishedAt: string | null;
-}
-
-export interface RuntimeMissionHookBindingRow {
-  bindingId: string;
-  missionId: string;
-  hookKey: string;
-  conditionJson: string | null;
-  createdBy: string;
+export interface RuntimePackageJobRow {
+  packageId: string;
+  jobId: string;
+  actionId: string;
+  schedule: string;
+  scheduleAnchorAt: string;
+  cadenceMinutes: number;
+  scheduleMetaJson: string;
+  payloadJson: string;
+  nextRunAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -228,35 +193,6 @@ export const RUNTIME_SESSION_SELECT = `
     last_directed_at as lastDirectedAt,
     last_directed_by as lastDirectedBy
   FROM runtime_sessions
-`;
-
-export const RUNTIME_MISSION_SELECT = `
-  SELECT
-    mission_id as missionId,
-    scope_id as scopeId,
-    space_id as spaceId,
-    thread_id as threadId,
-    space_name as spaceName,
-    title,
-    goal,
-    schedule_text as scheduleText,
-    schedule_anchor_at as scheduleAnchorAt,
-    cadence_minutes as cadenceMinutes,
-    schedule_meta_json as scheduleMetaJson,
-    runtime_mode as runtimeMode,
-    workspace_path as workspacePath,
-    lifecycle_status as lifecycleStatus,
-    paused_at as pausedAt,
-    last_run_at as lastRunAt,
-    next_run_at as nextRunAt,
-    last_success_at as lastSuccessAt,
-    completed_at as completedAt,
-    stopped_at as stoppedAt,
-    archived_at as archivedAt,
-    last_error as lastError,
-    created_at as createdAt,
-    updated_at as updatedAt
-  FROM runtime_missions
 `;
 
 export const MANAGED_SIDECAR_SELECT = `

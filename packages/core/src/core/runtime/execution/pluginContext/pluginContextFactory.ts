@@ -3,7 +3,6 @@ import type { RuntimePluginAdminConfig } from '../../../../types/plugin.js';
 import {
   PluginAdminCapability,
   PluginMemoryCapability,
-  PluginMissionCapability,
   PluginObservabilityCapability,
   PluginSessionCapability,
   PluginSidecarCapability
@@ -29,7 +28,6 @@ export function createPluginContextCapabilities(input: {
       runGuardedAction: input.runGuardedAction
     }),
     sessions: new PluginSessionCapability(input.actorId),
-    missions: new PluginMissionCapability(input.actorId),
     observability: new PluginObservabilityCapability(input.actorId),
     sidecars: new PluginSidecarCapability(input.actorId)
   };
