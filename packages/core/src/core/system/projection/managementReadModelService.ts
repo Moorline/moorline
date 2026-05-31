@@ -26,7 +26,6 @@ import type {
   ManagementInstalledPackageRecord,
   ManagementPackageConfigRecord,
   ManagementReadModelPresentation,
-  ManagedMissionRecord,
   ManagedPendingRequestRecord,
   ManagedPluginRecord,
   ManagedProviderThreadRecord,
@@ -145,7 +144,6 @@ export class ManagementReadModelService {
     const applyPlan = createPackageApplyPlan(this.deps.config, inventory);
     const runtimeStartability = evaluateRuntimeStartability(this.deps.config, inventory);
     const sessions = this.buildSessions();
-    const missions = this.buildMissions();
     const plugins = this.buildPlugins(inventory);
     const skills = this.buildSkills(inventory);
     const services = this.buildServices();
@@ -334,7 +332,6 @@ export class ManagementReadModelService {
       },
       overview: {
         sessions: sessions.length,
-        missions: missions.length,
         pendingRequests: pendingRequests.length,
         plugins: plugins.length,
         skills: skills.length,
@@ -344,7 +341,6 @@ export class ManagementReadModelService {
       },
       objects: {
         sessions,
-        missions,
         plugins,
         skills,
         services,
@@ -477,51 +473,6 @@ export class ManagementReadModelService {
       providerStatus: snapshot.provider?.status ?? snapshot.session.providerStatus,
       pendingRequestCount: snapshot.pendingRequests.length,
       recentActivityCount: snapshot.recentActivities.length
-    }));
-  }
-
-  private buildMissions(): ManagedMissionRecord[] {
-    return this.deps.missions.list().map((mission) => ({
-      id: mission.missionId,
-      kind: 'mission',
-      name: mission.title,
-      summary: summarize(mission.goal),
-      controls:
-        mission.lifecycleStatus === 'draft'
-          ? ['inspect', 'configure', 'archive', 'delete_archived']
-          : ['inspect', 'pause', 'resume', 'stop', 'run_now', 'archive', 'delete_archived'],
-      mutability: {
-        editable: true,
-        installable: false,
-        removable: mission.archivedAt !== null
-      },
-      trust: {
-        level: 'operator',
-        source: 'local SQLite runtime state'
-      },
-      sourceOfTruth: {
-        kind: 'sqlite',
-        label: 'runtime_missions'
-      },
-      runtimeState: {
-        status: mission.lifecycleStatus,
-        updatedAt: mission.updatedAt,
-        details: {
-          nextRunAt: mission.nextRunAt,
-          pausedAt: mission.pausedAt,
-          archivedAt: mission.archivedAt
-        }
-      },
-      spaceId: mission.spaceId,
-      threadId: mission.threadId,
-      lifecycleStatus: mission.lifecycleStatus,
-      runtimeMode: mission.runtimeMode,
-      goal: mission.goal,
-      scheduleText: mission.scheduleText,
-      nextRunAt: mission.nextRunAt,
-      lastRunAt: this.deps.missions.listRuns(mission.missionId, 1)[0]?.startedAt ?? null,
-      pausedAt: mission.pausedAt,
-      archivedAt: mission.archivedAt
     }));
   }
 

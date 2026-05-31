@@ -6,7 +6,7 @@ export function truncatePreview(value: string, maxChars: number): string {
   return `${normalized.slice(0, Math.max(0, maxChars - 1)).trimEnd()}...`;
 }
 
-export function slugifySpaceName(prefix: 'session' | 'mission', value: string): string {
+export function slugifySpaceName(prefix: 'session', value: string): string {
   const normalized = value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')

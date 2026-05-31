@@ -16,7 +16,6 @@ export interface RuntimeSurfaceNames {
   chatChannelName: string;
   statusChannelName: string;
   sessionsGroupName: string;
-  missionsGroupName: string;
   archiveGroupName: string;
 }
 
@@ -181,7 +180,6 @@ export interface RuntimeSurfaceState {
   chatChannelId: string;
   statusChannelId: string;
   sessionsCategoryId: string;
-  missionsCategoryId: string;
   archiveCategoryId: string;
   adminAccessGroupId?: string;
   memberAccessGroupId?: string;
@@ -464,16 +462,11 @@ function parseManagementHost(
 }
 
 function parseSurfaceNames(root: Record<string, unknown>): RuntimeSurfaceNames {
-  const defaults = defaultNamespaceNames();
   return {
     mainCategoryName: asString(root.mainCategoryName, 'config.surface.mainCategoryName'),
     chatChannelName: asString(root.chatChannelName, 'config.surface.chatChannelName'),
     statusChannelName: asString(root.statusChannelName, 'config.surface.statusChannelName'),
     sessionsGroupName: asString(root.sessionsGroupName, 'config.surface.sessionsGroupName'),
-    missionsGroupName:
-      root.missionsGroupName === undefined
-        ? defaults.missionsGroupName
-        : asString(root.missionsGroupName, 'config.surface.missionsGroupName'),
     archiveGroupName: asString(root.archiveGroupName, 'config.surface.archiveGroupName')
   };
 }
@@ -546,7 +539,6 @@ export function defaultNamespaceNames(): RuntimeSurfaceNames {
     chatChannelName: 'moorline-chat',
     statusChannelName: 'moorline-status',
     sessionsGroupName: 'Moorline Sessions',
-    missionsGroupName: 'Moorline Missions',
     archiveGroupName: 'Moorline Archive'
   };
 }

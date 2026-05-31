@@ -5,7 +5,6 @@ interface ManagementContribution {
 interface ManagementReadModel {
   overview: {
     sessions: number;
-    missions: number;
     pendingRequests: number;
   };
   runtime: {
@@ -25,7 +24,6 @@ interface ManagementReadModel {
   objects: {
     managementContributions: ManagementContribution[];
     sessions: unknown;
-    missions: unknown;
     pendingRequests: unknown;
   };
   setup: unknown;
@@ -50,7 +48,6 @@ export interface ControlApiState {
 export interface ControlApiOperationsState {
   summary: {
     sessions: number;
-    missions: number;
     pendingRequests: number;
     runningSessions: number;
     waitingSessions: number;
@@ -60,7 +57,6 @@ export interface ControlApiOperationsState {
   diagnostics: Pick<ManagementReadModel['diagnostics'], 'runtimeHealth' | 'recentRuntimeActivities' | 'recentAuditEvents'>;
   managementContributions: ManagementReadModel['objects']['managementContributions'];
   sessions: ManagementReadModel['objects']['sessions'];
-  missions: ManagementReadModel['objects']['missions'];
   pendingRequests: ManagementReadModel['objects']['pendingRequests'];
 }
 
@@ -76,7 +72,6 @@ export function projectOperationsState(model: ManagementReadModel): ControlApiOp
   return {
     summary: {
       sessions: model.overview.sessions,
-      missions: model.overview.missions,
       pendingRequests: model.overview.pendingRequests,
       runningSessions: model.runtime.status.runningSessions,
       waitingSessions: model.runtime.status.waitingSessions,
@@ -92,7 +87,6 @@ export function projectOperationsState(model: ManagementReadModel): ControlApiOp
       typeof contribution.placement === 'string' && ['overview', 'control', 'work', 'health'].includes(contribution.placement)
     ),
     sessions: model.objects.sessions,
-    missions: model.objects.missions,
     pendingRequests: model.objects.pendingRequests
   };
 }

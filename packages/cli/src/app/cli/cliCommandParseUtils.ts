@@ -123,32 +123,6 @@ export function parseSessionTarget(tokens: string[], usage: string): { sessionId
   };
 }
 
-export function parseMissionTarget(tokens: string[], usage: string): { missionId?: string; spaceId?: string } {
-  let missionId: string | undefined;
-  let spaceId: string | undefined;
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index];
-    if (token === '--mission') {
-      missionId = requireValue(tokens[index + 1], `Missing mission id. Usage: ${usage}`);
-      index += 1;
-      continue;
-    }
-    if (token === '--space') {
-      spaceId = requireValue(tokens[index + 1], `Missing space id. Usage: ${usage}`);
-      index += 1;
-      continue;
-    }
-    throw new Error(`Unknown option: ${token}. Usage: ${usage}`);
-  }
-  if (!missionId && !spaceId) {
-    throw new Error(`Either --mission <id> or --space <id> is required. Usage: ${usage}`);
-  }
-  return {
-    ...(missionId ? { missionId } : {}),
-    ...(spaceId ? { spaceId } : {})
-  };
-}
-
 export function parseOutOption(tokens: string[], usage: string): { outPath?: string } {
   let outPath: string | undefined;
   for (let index = 0; index < tokens.length; index += 1) {

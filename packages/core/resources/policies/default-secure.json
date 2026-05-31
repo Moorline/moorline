@@ -29,11 +29,9 @@
     "session.direct",
     "session.archive",
     "session.delete",
-    "mission.inspect",
-    "mission.create",
-    "mission.control",
-    "mission.archive",
-    "mission.delete",
+    "package.state.read",
+    "package.state.write",
+    "package.job.manage",
     "net.connect",
     "runtime.control",
     "sidecar.manage"
@@ -45,9 +43,7 @@
         "transport.action.register",
         "transport.message.send",
         "transport.space.update",
-        "session.archive",
-        "mission.create",
-        "mission.archive"
+        "session.archive"
       ]
     },
     {
@@ -67,8 +63,8 @@
       "allowCapabilities": ["memory.write", "session.archive", "transport.space.update"]
     },
     {
-      "actorPrefix": "runtime:mission/",
-      "allowCapabilities": ["transport.message.send", "net.connect"]
+      "actorPrefix": "runtime:package-job",
+      "allowCapabilities": ["transport.message.send", "net.connect", "session.direct", "package.state.read", "package.state.write", "package.job.manage"]
     },
     {
       "actorPrefix": "runtime:pending-request-action",
@@ -77,6 +73,18 @@
     {
       "actorPrefix": "runtime:provider/",
       "allowCapabilities": ["net.connect"]
+    },
+    {
+      "actorPrefix": "plugin:official/",
+      "allowCapabilities": [
+        "transport.message.send",
+        "transport.space.create",
+        "session.create",
+        "session.direct",
+        "package.state.read",
+        "package.state.write",
+        "package.job.manage"
+      ]
     },
     {
       "actorPrefix": "plugin:official/model-picker",
@@ -99,10 +107,7 @@
         "transport.space.delete",
         "session.create",
         "session.archive",
-        "session.delete",
-        "mission.create",
-        "mission.control",
-        "mission.inspect"
+        "session.delete"
       ]
     },
     {
@@ -118,9 +123,6 @@
         "session.direct",
         "session.archive",
         "session.delete",
-        "mission.inspect",
-        "mission.create",
-        "mission.control",
         "sidecar.manage"
       ]
     },

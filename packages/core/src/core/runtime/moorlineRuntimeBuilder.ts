@@ -16,8 +16,6 @@ import { appliedPackageRefs } from '../extension/packages/packageActivation.js';
 import type { RuntimePluginContext } from '../../types/plugin.js';
 import type { RuntimeActionGuard } from '../system/policy/runtimeActionGuard.js';
 import { SessionLifecycleService } from '../domain/sessions/sessionLifecycleService.js';
-import { MissionRegistry } from '../domain/missions/missionRegistry.js';
-import { MissionHookService } from '../domain/missions/missionHookService.js';
 import { SkillRegistry } from '../extension/skills/skillRegistry.js';
 import { runMigrations } from '../system/state/migrationRunner.js';
 import { SqliteSessionStore, type RuntimeSessionRow } from '../system/state/sqliteSessionStore.js';
@@ -65,7 +63,6 @@ import { ProviderRequestAttributionService } from './execution/providerCoordinat
 import { ProviderAttachmentResolver } from './execution/providerOrchestration/providerAttachmentResolver.js';
 import { ProviderCompactionPolicy } from './execution/providerOrchestration/providerCompactionPolicy.js';
 import { ProviderEventPipeline } from './execution/providerOrchestration/providerEventPipeline.js';
-import { ProviderMissionEventProjector } from './execution/providerOrchestration/providerMissionEventProjector.js';
 import { ProviderOrchestrator } from './execution/providerOrchestration/providerOrchestrator.js';
 import { ProviderRequestProjector } from './execution/providerOrchestration/providerRequestProjector.js';
 import { ProviderSessionOrchestrator } from './execution/providerOrchestration/providerSessionOrchestrator.js';
@@ -74,6 +71,7 @@ import { providerPolicyTarget } from './execution/providerCoordination/providerP
 import { RuntimeProjectionService } from '../system/projection/runtimeProjectionService.js';
 import { RuntimeOrchestrationRequestService } from './execution/runtimeOrchestrationRequestService.js';
 import { RuntimeLifecycleService } from './lifecycle/runtimeLifecycleService.js';
+import { PackageJobSchedulerService } from './lifecycle/packageJobSchedulerService.js';
 import { RuntimePluginContextService, defaultSessionOwner } from './execution/runtimePluginContextService.js';
 import { RuntimePendingRequestService } from './execution/runtimePendingRequestService.js';
 import { RuntimeHostingService } from './hosting/runtimeHostingService.js';
@@ -181,8 +179,6 @@ interface MoorlineRuntimeBuilderCallbacks {
 export interface RuntimeStateGraph {
   store: SqliteSessionStore;
   sessionRegistry: SessionRegistry;
-  missionRegistry: MissionRegistry;
-  missionHooks: MissionHookService;
   sessionLifecycle: SessionLifecycleService;
   memoryStore: MemoryStore;
   audit: JsonAuditLogger;
@@ -228,6 +224,7 @@ export interface RuntimeManagementGraph {
   orchestrationRequests: RuntimeOrchestrationRequestService;
   lifecycleService: RuntimeLifecycleService;
   pendingRequestService: RuntimePendingRequestService;
+  packageJobScheduler: PackageJobSchedulerService;
 }
 
 export interface MoorlineRuntimeServiceGraph
@@ -283,7 +280,6 @@ export function buildMoorlineRuntimeServiceGraph(
   runMigrations(paths.sqlitePath, resolveRuntimeMigrationsDir(import.meta.url));
   const store = new SqliteSessionStore(paths.sqlitePath);
   const sessionRegistry = new SessionRegistry(store, paths.workspacesDir, providerPackageId);
-  const missionRegistry = new MissionRegistry(store, join(paths.workspacesDir, 'missions'));
   const sessionLifecycle = new SessionLifecycleService(store, {
     cooldownMinutes: 120,
     archiveAfterDays: 14
@@ -369,7 +365,6 @@ export function buildMoorlineRuntimeServiceGraph(
     getGuard: callbacks.requireGuard,
     requireNamespaceState: callbacks.requireNamespaceState,
     sessionRegistry,
-    missionRegistry,
     snapshots,
     reactor,
     providerService,
@@ -391,7 +386,6 @@ export function buildMoorlineRuntimeServiceGraph(
     config: normalizedConfig,
     getNamespaceState: callbacks.getNamespaceState,
     sessionRegistry,
-    missionRegistry,
     providerService,
     providerDirectory,
     workManagement,
@@ -409,7 +403,6 @@ export function buildMoorlineRuntimeServiceGraph(
   const interactions = new RuntimeInteractionService({
     config: normalizedConfig,
     sessionRegistry,
-    missionRegistry,
     sessionLifecycle,
     snapshots,
     getPluginHost: () => pluginHostRef.current,
@@ -422,31 +415,6 @@ export function buildMoorlineRuntimeServiceGraph(
     },
     appendAuditEvent: callbacks.appendAuditEvent,
     createPluginContext: callbacks.createPluginContext,
-    createMissionReply: async (event, mission) => {
-      const missionSession = lifecycleService.missionAsSession(mission);
-      return await callbacks.createPluginContext('runtime:mission/message').runAgent({
-        surface: 'mission',
-        spaceId: mission.spaceId,
-        actorId: event.actor.actorId,
-        actorLabel: event.actor.displayName ?? event.actor.actorId,
-        text: event.message.text,
-        attachments: event.message.attachments,
-        session: missionSession,
-        cwd: mission.workspacePath,
-        runtimeMode: mission.runtimeMode,
-        basePromptSections: await pluginContexts.loadMissionPromptSections(mission)
-      });
-    },
-    configureDraftMission: async (input) =>
-      await workManagement.configureDraftMission({
-        actorId: input.actorId,
-        spaceId: input.spaceId,
-        missionId: input.missionId,
-        goal: input.goal,
-        schedule: input.schedule,
-        ...(input.startTime ? { startTime: input.startTime } : {}),
-        ...(input.runtimeMode ? { runtimeMode: input.runtimeMode } : {})
-      }),
     isAdminActor: callbacks.isAdminActor,
     respondToProviderRequest: async (actorId, threadId, requestId, decision, deniedTitle, metadata) =>
       await pendingRequestService.respondToProviderRequest(actorId, threadId, requestId, decision, deniedTitle, metadata),
@@ -485,7 +453,6 @@ export function buildMoorlineRuntimeServiceGraph(
     provider: providerService,
     connections: providerDirectory,
     sessions: sessionRegistry,
-    missions: missionRegistry,
     now: callbacks.now,
     upsertSession: (session) => store.upsertSession(session),
     setProviderAutoStartDefault: (enabled) => {
@@ -518,7 +485,6 @@ export function buildMoorlineRuntimeServiceGraph(
     runtimeRoot: paths.runtimeRoot,
     now: callbacks.now,
     getSessionByThreadId: (threadId) => sessionRegistry.getByThreadId(threadId),
-    getMissionByThreadId: (threadId) => missionRegistry.getByThreadId(threadId),
     ...providerAuditPort
   });
   const providerCompactionPolicy = new ProviderCompactionPolicy({
@@ -529,10 +495,6 @@ export function buildMoorlineRuntimeServiceGraph(
     ...providerGuardPort,
     ...providerAuditPort
   });
-  const providerMissionEventProjector = new ProviderMissionEventProjector({
-    missions: missionRegistry,
-    upsertMissionRun: (run) => store.upsertMissionRun(run)
-  });
   const providerEventPipeline = new ProviderEventPipeline({
     canonicalEvents,
     ingestion,
@@ -541,11 +503,9 @@ export function buildMoorlineRuntimeServiceGraph(
     requests: providerRequestProjector,
     turns: providerTurnBroker,
     attachments: providerAttachmentResolver,
-    missions: providerMissionEventProjector,
     getPluginHost: () => pluginHostRef.current,
     createPluginContext: callbacks.createPluginContext,
     getSessionByThreadId: (threadId) => sessionRegistry.getByThreadId(threadId),
-    getMissionByThreadId: (threadId) => missionRegistry.getByThreadId(threadId),
     handleDomainEvent: async (event) => await projectionService.handleDomainEvent(event)
   });
   providerOrchestrator = new ProviderOrchestrator({
@@ -585,10 +545,8 @@ export function buildMoorlineRuntimeServiceGraph(
       const allowlistedRoots = [join(paths.runtimeRoot, 'chat')];
       if (input.requestedByThreadId) {
         const session = sessionRegistry.getByThreadId(input.requestedByThreadId);
-        const mission = missionRegistry.getByThreadId(input.requestedByThreadId);
-        const workspacePath = session?.workspacePath ?? mission?.workspacePath;
-        if (workspacePath) {
-          allowlistedRoots.push(workspacePath);
+        if (session?.workspacePath) {
+          allowlistedRoots.push(session.workspacePath);
         }
         allowlistedRoots.push(join(paths.runtimeRoot, 'state', 'input-images', input.requestedByThreadId));
       }
@@ -619,20 +577,12 @@ export function buildMoorlineRuntimeServiceGraph(
     store,
     transport,
     transportScopeId: normalizedConfig.transport.scopeId,
-    providerPackageId,
     sessionLifecycle,
     sessionRegistry,
-    missionRegistry,
-    providerOrchestrator,
     requireGuard: callbacks.requireGuard,
     getNamespaceState: callbacks.getNamespaceState,
-    queue: async (key, work) => await enqueueWithDiagnostics(commandQueue, key, 'runtime-lifecycle', work),
     now: callbacks.now,
-    postTransportMessage: async (actor, spaceId, payload) => {
-      await callbacks.postTransportMessage(actor, spaceId, payload);
-    },
     sendStatusUpdate: async (payload) => await callbacks.sendStatusUpdate(payload),
-    normalizeReply: (text) => normalizeRuntimeReply(text),
     appendAuditEvent: callbacks.appendAuditEvent,
     runMaintenance: async () => {
       const nowMs = Date.now();
@@ -707,9 +657,11 @@ export function buildMoorlineRuntimeServiceGraph(
     },
     cleanupScopedSidecars: callbacks.cleanupScopedSidecars
   });
-  const missionHooks = new MissionHookService({
+  const packageJobScheduler = new PackageJobSchedulerService({
     store,
-    lifecycle: lifecycleService,
+    getPluginHost: () => pluginHostRef.current,
+    createPluginContext: callbacks.createPluginContext,
+    queue: async (key, work) => await enqueueWithDiagnostics(commandQueue, key, 'package-jobs', work),
     now: callbacks.now,
     appendAuditEvent: callbacks.appendAuditEvent
   });
@@ -733,8 +685,6 @@ export function buildMoorlineRuntimeServiceGraph(
     chatWorkspacePath,
     store,
     sessionRegistry,
-    missionRegistry,
-    missionHooks,
     skillRegistry,
     memoryStore,
     activities,
@@ -743,7 +693,6 @@ export function buildMoorlineRuntimeServiceGraph(
     providerService,
     canonicalEvents,
     workManagement,
-    lifecycleService,
     runtimeControl,
     sidecars,
     providerOrchestrator,
@@ -785,7 +734,6 @@ export function buildMoorlineRuntimeServiceGraph(
     runtimeRoot: paths.runtimeRoot,
     config: normalizedConfig,
     snapshots,
-    missions: missionRegistry,
     skills: skillRegistry,
     provider: providerService,
     sidecars,
@@ -836,7 +784,6 @@ export function buildMoorlineRuntimeServiceGraph(
     runtimePolicyPath,
     store,
     sessionRegistry,
-    missionRegistry,
     sessionLifecycle,
     pluginHostRef,
     pluginHost: pluginHostRef.current,
@@ -869,7 +816,7 @@ export function buildMoorlineRuntimeServiceGraph(
     orchestrationRequests,
     lifecycleService,
     pendingRequestService,
-    missionHooks,
+    packageJobScheduler,
     pluginContexts,
     providerQueue,
     commandQueue,

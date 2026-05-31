@@ -22,11 +22,9 @@ import {
   waitForOrchestrationRequest,
   type AnswerPendingRequestOrchestrationPayload,
   type ArchiveSessionOrchestrationPayload,
-  type CreateMissionOrchestrationPayload,
   type CreateSessionOrchestrationPayload,
   type DeleteSessionOrchestrationPayload,
   type DirectSessionOrchestrationPayload,
-  type MissionLifecycleOrchestrationPayload,
   type ProviderSessionControlOrchestrationPayload,
   type ProviderTestOrchestrationPayload,
   type ResolvePendingRequestOrchestrationPayload,
@@ -258,34 +256,6 @@ export class ControlApiActionsService {
 
   async deleteArchivedSession(input: DeleteSessionOrchestrationPayload) {
     return await this.runRuntimeRequest('delete_session', input);
-  }
-
-  async createMission(input: CreateMissionOrchestrationPayload) {
-    return await this.runRuntimeRequest('create_mission', input);
-  }
-
-  async pauseMission(input: MissionLifecycleOrchestrationPayload) {
-    return await this.runRuntimeRequest('pause_mission', input);
-  }
-
-  async resumeMission(input: MissionLifecycleOrchestrationPayload) {
-    return await this.runRuntimeRequest('resume_mission', input);
-  }
-
-  async stopMission(input: MissionLifecycleOrchestrationPayload) {
-    return await this.runRuntimeRequest('stop_mission', input);
-  }
-
-  async runMissionNow(input: MissionLifecycleOrchestrationPayload) {
-    return await this.runRuntimeRequest('run_mission', input);
-  }
-
-  async archiveMission(input: MissionLifecycleOrchestrationPayload) {
-    return await this.runRuntimeRequest('archive_mission', input);
-  }
-
-  async deleteArchivedMission(input: MissionLifecycleOrchestrationPayload) {
-    return await this.runRuntimeRequest('delete_mission', input);
   }
 
   async setAcceptingNewWork(accepting: boolean) {

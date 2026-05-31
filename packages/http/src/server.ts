@@ -444,20 +444,6 @@ export class ControlApiServer {
         return await this.controlPlane.archiveSession(route.payload);
       case '/api/work/session/delete':
         return await this.controlPlane.deleteArchivedSession(route.payload);
-      case '/api/work/mission/create':
-        return await this.controlPlane.createMission(route.payload);
-      case '/api/work/mission/pause':
-        return await this.controlPlane.pauseMission(route.payload);
-      case '/api/work/mission/resume':
-        return await this.controlPlane.resumeMission(route.payload);
-      case '/api/work/mission/stop':
-        return await this.controlPlane.stopMission(route.payload);
-      case '/api/work/mission/run':
-        return await this.controlPlane.runMissionNow(route.payload);
-      case '/api/work/mission/archive':
-        return await this.controlPlane.archiveMission(route.payload);
-      case '/api/work/mission/delete':
-        return await this.controlPlane.deleteArchivedMission(route.payload);
       case '/api/packages/install':
         return this.controlPlane.installPackage(route.payload);
       case '/api/packages/remove':

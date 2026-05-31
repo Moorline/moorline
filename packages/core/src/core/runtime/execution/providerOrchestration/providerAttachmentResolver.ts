@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { statSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
-import type { RuntimeMissionRow, RuntimeSessionRow } from '../../../system/state/sqliteSessionStore.js';
+import type { RuntimeSessionRow } from '../../../system/state/sqliteSessionStore.js';
 import { assertCanonicalExistingPathWithinRoot } from '../../../shared/fs/canonicalPathContainment.js';
 import type { ProviderAuditPort } from './ports.js';
 
@@ -9,7 +9,6 @@ export interface ProviderAttachmentResolverDeps extends ProviderAuditPort {
   runtimeRoot: string;
   now(): string;
   getSessionByThreadId(threadId: string): RuntimeSessionRow | null;
-  getMissionByThreadId(threadId: string): RuntimeMissionRow | null;
 }
 
 export class ProviderAttachmentResolver {
@@ -17,8 +16,7 @@ export class ProviderAttachmentResolver {
 
   resolve(threadId: string, localPath: string, sourceEventId: string): string | null {
     const session = this.deps.getSessionByThreadId(threadId);
-    const mission = this.deps.getMissionByThreadId(threadId);
-    const workspaceRoot = session?.workspacePath ?? mission?.workspacePath;
+    const workspaceRoot = session?.workspacePath;
     if (!workspaceRoot) {
       return null;
     }
@@ -45,15 +43,15 @@ export class ProviderAttachmentResolver {
 
     this.deps.appendAuditEvent('provider.attachment.rejected', {
       threadId,
-      sessionId: session?.sessionId ?? mission?.missionId ?? null,
-      spaceId: session?.spaceId ?? mission?.spaceId ?? null,
+      sessionId: session?.sessionId ?? null,
+      spaceId: session?.spaceId ?? null,
       localPath,
       reason: 'outside-allowlisted-roots'
     });
     this.deps.recordRuntimeActivity({
       threadId,
       sessionId: session?.sessionId ?? null,
-      spaceId: session?.spaceId ?? mission?.spaceId ?? null,
+      spaceId: session?.spaceId ?? null,
       sourceEventId: sourceEventId || randomUUID(),
       kind: 'provider.attachment.rejected',
       severity: 'warning',

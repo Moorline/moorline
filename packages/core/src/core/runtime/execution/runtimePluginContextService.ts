@@ -6,8 +6,6 @@ import {
 } from '../../../types/config.js';
 import { saveMoorlineConfig } from '../../system/config/configStore.js';
 import type { RuntimeControlStatus } from '../supervision/runtimeControl.js';
-import type { MissionRegistry } from '../../domain/missions/missionRegistry.js';
-import type { MissionHookService } from '../../domain/missions/missionHookService.js';
 import type { RuntimeDomainEvent } from './runtimeDomain.js';
 import type { RuntimeActivityStore } from '../../system/projection/runtimeActivityStore.js';
 import type { ProjectionStateStore } from '../../system/projection/projectionStateStore.js';
@@ -19,7 +17,7 @@ import type { PluginHost } from '../../extension/plugins/pluginHost.js';
 import type { RuntimeActionGuard } from '../../system/policy/runtimeActionGuard.js';
 import type { SidecarManager } from '../supervision/sidecarManager.js';
 import type { SkillRegistry } from '../../extension/skills/skillRegistry.js';
-import type { RuntimeMissionRow, RuntimeSessionRow, SqliteSessionStore } from '../../system/state/sqliteSessionStore.js';
+import type { RuntimeSessionRow, SqliteSessionStore } from '../../system/state/sqliteSessionStore.js';
 import type {
   RuntimeAttachmentPayload,
   RuntimeActorIdentity,
@@ -29,7 +27,6 @@ import { parseRuntimeModeName } from '../../../types/runtime.js';
 import { refreshMemoryIndex, retrieveFromMemoryWithSQLite } from '../../domain/memory/retrieval.js';
 import { MemoryStore } from '../../domain/memory/store.js';
 import type { RuntimeControlService } from '../supervision/runtimeControlService.js';
-import type { RuntimeLifecycleService } from '../lifecycle/runtimeLifecycleService.js';
 import type { ProviderOrchestrator } from './providerOrchestration/providerOrchestrator.js';
 import type { RuntimeWorkManagementService } from '../../domain/sessions/runtimeWorkManagementService.js';
 import type { SessionRegistry } from '../../domain/sessions/sessionState.js';
@@ -38,6 +35,12 @@ import { createPluginContextCapabilities } from './pluginContext/pluginContextFa
 import { describeTransportAuthor } from './pluginContext/transportAuthor.js';
 import { toPluginPackageId } from '../../extension/plugins/pluginId.js';
 import { normalizeAndValidateDefaultModel } from './defaultModelSelection.js';
+import {
+  computePackageJobRunAtOrAfterWithMeta,
+  packageScheduleMetaToJson,
+  parsePackageSchedule,
+  parsePackageScheduleStartTime
+} from '../../shared/scheduling/packageSchedule.js';
 
 export { defaultSessionOwner } from './pluginContext/defaultSessionOwner.js';
 
@@ -50,8 +53,6 @@ interface RuntimePluginContextServiceDeps {
   chatWorkspacePath: string;
   store: SqliteSessionStore;
   sessionRegistry: SessionRegistry;
-  missionRegistry: MissionRegistry;
-  missionHooks: MissionHookService;
   skillRegistry: SkillRegistry;
   memoryStore: MemoryStore;
   activities: RuntimeActivityStore;
@@ -60,7 +61,6 @@ interface RuntimePluginContextServiceDeps {
   providerService: RuntimeProvider;
   canonicalEvents: CanonicalEventLogStore;
   workManagement: RuntimeWorkManagementService;
-  lifecycleService: RuntimeLifecycleService;
   runtimeControl: RuntimeControlService;
   sidecars: SidecarManager;
   providerOrchestrator: ProviderOrchestrator;
@@ -140,6 +140,18 @@ export class RuntimePluginContextService {
     return `provider:${providerId}:${threadId}:${suffix}`;
   }
 
+  private contextPackageId(actorId: string): string {
+    return actorId.startsWith('plugin:') ? actorId.slice('plugin:'.length) : actorId;
+  }
+
+  private packageState<T>(valueJson: string): T | null {
+    try {
+      return JSON.parse(valueJson) as T;
+    } catch {
+      return null;
+    }
+  }
+
   createContext(actorId: string): RuntimePluginContext {
     const capabilities = createPluginContextCapabilities({
       actorId,
@@ -172,57 +184,121 @@ export class RuntimePluginContextService {
       listSessions: () => this.deps.snapshots.listSessions().map((entry) => entry.session),
       getSessionBySpaceId: (spaceId) => this.deps.snapshots.getSessionBySpaceId(spaceId)?.session ?? null,
       getSessionById: (sessionId) => this.deps.snapshots.getSessionById(sessionId)?.session ?? null,
-      listMissions: () => this.deps.missionRegistry.list(),
-      getMissionBySpaceId: (spaceId) => this.deps.missionRegistry.getBySpaceId(spaceId),
-      getMissionById: (missionId) => this.deps.missionRegistry.getById(missionId),
-      listMissionRuns: (missionId, limit) => this.deps.missionRegistry.listRuns(missionId, limit),
-      listMissionHookBindings: (filter) =>
-        this.deps.missionHooks.listBindings({
-          ...(filter?.missionId ? { missionId: filter.missionId } : {}),
-          ...(filter?.hookKey ? { hookKey: filter.hookKey } : {})
-        }),
-      bindMissionHook: ({ missionId, hookKey, condition }) =>
-        this.deps.runGuardedAction({
-          action: 'mission.control',
+      getPackageState: (key) => {
+        const row = this.deps.store.getPackageState(this.contextPackageId(actorId), key);
+        return row ? this.packageState(row.valueJson) : null;
+      },
+      putPackageState: async (key, value) =>
+        await this.deps.runGuardedAction({
+          action: 'package.state.write',
           actor: actorId,
-          target: missionId,
-          payload: { hookKey, hasCondition: Boolean(condition) },
-          title: 'Mission hook binding blocked',
-          execute: async () =>
-            this.deps.missionHooks.bind({
-              actorId,
-              missionId,
-              hookKey,
-              ...(condition ? { condition } : {})
-            })
+          target: `${this.contextPackageId(actorId)}:${key}`,
+          title: 'Package state write blocked',
+          execute: async () => {
+            this.deps.store.putPackageState({
+              packageId: this.contextPackageId(actorId),
+              key,
+              valueJson: JSON.stringify(value),
+              updatedAt: this.deps.now()
+            });
+          }
         }),
-      unbindMissionHook: ({ bindingId }) =>
-        this.deps.runGuardedAction({
-          action: 'mission.control',
+      deletePackageState: async (key) =>
+        await this.deps.runGuardedAction({
+          action: 'package.state.write',
           actor: actorId,
-          target: bindingId,
-          title: 'Mission hook binding removal blocked',
-          execute: async () =>
-            this.deps.missionHooks.unbind({
-              actorId,
-              bindingId
-            })
+          target: `${this.contextPackageId(actorId)}:${key}`,
+          title: 'Package state delete blocked',
+          execute: async () => {
+            this.deps.store.deletePackageState(this.contextPackageId(actorId), key);
+          }
         }),
-      emitMissionHook: ({ hookKey, payload, source }) =>
-        this.deps.runGuardedAction({
-          action: 'mission.control',
+      listPackageState: (prefix) =>
+        this.deps.store.listPackageState(this.contextPackageId(actorId), prefix).map((row) => ({
+          packageId: row.packageId,
+          key: row.key,
+          value: this.packageState(row.valueJson),
+          updatedAt: row.updatedAt
+        })),
+      schedulePackageJob: async ({ jobId, actionId, schedule, startTime, payload }) =>
+        await this.deps.runGuardedAction({
+          action: 'package.job.manage',
           actor: actorId,
-          target: hookKey,
-          payload: { source: source ?? actorId, payloadKeys: Object.keys(payload ?? {}) },
-          title: 'Mission hook trigger blocked',
-          execute: async () =>
-            await this.deps.missionHooks.emit({
-              actorId,
-              hookKey,
-              ...(payload ? { payload } : {}),
-              ...(source ? { source } : {})
-            })
+          target: `${this.contextPackageId(actorId)}:${jobId}`,
+          payload: { actionId, schedule },
+          title: 'Package job schedule blocked',
+          execute: async () => {
+            const nowIso = this.deps.now();
+            const parsed = parsePackageSchedule(schedule);
+            const anchor = parsePackageScheduleStartTime(startTime, nowIso);
+            const nextRunAt = computePackageJobRunAtOrAfterWithMeta(
+              anchor,
+              parsed.cadenceMinutes,
+              nowIso,
+              parsed.meta
+            );
+            const row = {
+              packageId: this.contextPackageId(actorId),
+              jobId,
+              actionId,
+              schedule: parsed.normalized,
+              scheduleAnchorAt: anchor,
+              cadenceMinutes: parsed.cadenceMinutes,
+              scheduleMetaJson: packageScheduleMetaToJson(parsed.meta),
+              payloadJson: JSON.stringify(payload ?? {}),
+              nextRunAt,
+              createdAt: this.deps.store.getPackageJob(this.contextPackageId(actorId), jobId)?.createdAt ?? nowIso,
+              updatedAt: nowIso
+            };
+            this.deps.store.upsertPackageJob(row);
+            return {
+              packageId: row.packageId,
+              jobId: row.jobId,
+              actionId: row.actionId,
+              schedule: row.schedule,
+              scheduleAnchorAt: row.scheduleAnchorAt,
+              nextRunAt: row.nextRunAt,
+              payload: payload ?? {},
+              createdAt: row.createdAt,
+              updatedAt: row.updatedAt
+            };
+          }
         }),
+      cancelPackageJob: async (jobId) =>
+        await this.deps.runGuardedAction({
+          action: 'package.job.manage',
+          actor: actorId,
+          target: `${this.contextPackageId(actorId)}:${jobId}`,
+          title: 'Package job cancel blocked',
+          execute: async () => {
+            const row = this.deps.store.deletePackageJob(this.contextPackageId(actorId), jobId);
+            return row
+              ? {
+                  packageId: row.packageId,
+                  jobId: row.jobId,
+                  actionId: row.actionId,
+                  schedule: row.schedule,
+                  scheduleAnchorAt: row.scheduleAnchorAt,
+                  nextRunAt: row.nextRunAt,
+                  payload: this.packageState<Record<string, unknown>>(row.payloadJson) ?? {},
+                  createdAt: row.createdAt,
+                  updatedAt: row.updatedAt
+                }
+              : null;
+          }
+        }),
+      listPackageJobs: () =>
+        this.deps.store.listPackageJobs(this.contextPackageId(actorId)).map((row) => ({
+          packageId: row.packageId,
+          jobId: row.jobId,
+          actionId: row.actionId,
+          schedule: row.schedule,
+          scheduleAnchorAt: row.scheduleAnchorAt,
+          nextRunAt: row.nextRunAt,
+          payload: this.packageState<Record<string, unknown>>(row.payloadJson) ?? {},
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt
+        })),
       listPendingRequests: (spaceId) =>
         this.deps.store.listPendingRequestsBySpace(spaceId).filter((request) => request.status === 'open'),
       listRuntimeReceipts: () => this.deps.snapshots.overview().receipts,
@@ -392,18 +468,6 @@ export class RuntimePluginContextService {
           spaceId: spaceId,
           sessionId
         }),
-      archiveMission: async ({ spaceId, missionId }) =>
-        await this.deps.workManagement.archiveMission({
-          actorId,
-          spaceId: spaceId,
-          missionId
-        }),
-      deleteArchivedMission: async ({ spaceId, missionId }) =>
-        await this.deps.workManagement.deleteArchivedMission({
-          actorId,
-          spaceId: spaceId,
-          missionId
-        }),
       archiveSpaceTarget: async ({ spaceId }) =>
         await this.deps.workManagement.archiveChannelTarget({
           actorId,
@@ -414,47 +478,6 @@ export class RuntimePluginContextService {
           actorId,
           spaceId: spaceId
         }),
-      createMission: async ({ title, goal, schedule, startTime, runtimeMode }) => {
-        const safeRuntimeMode = parseRuntimeModeName(runtimeMode, 'runtime_mode');
-        const created = await this.deps.workManagement.createMission({
-          actorId,
-          title,
-          goal,
-          schedule,
-          startTime,
-          runtimeMode: safeRuntimeMode
-        });
-        return { mission: created.mission, spaceId: created.spaceId };
-      },
-      pauseMission: async ({ spaceId, missionId }) => this.deps.workManagement.updateMissionLifecycle(actorId, { spaceId: spaceId, missionId }, 'pause'),
-      resumeMission: async ({ spaceId, missionId }) => this.deps.workManagement.updateMissionLifecycle(actorId, { spaceId: spaceId, missionId }, 'resume'),
-      stopMission: async ({ spaceId, missionId }) => this.deps.workManagement.updateMissionLifecycle(actorId, { spaceId: spaceId, missionId }, 'stop'),
-      runMissionNow: async ({ spaceId, missionId, requesterActorId }) => {
-        const mission = this.deps.workManagement.resolveMission({ spaceId, missionId });
-        if (!mission) {
-          return null;
-        }
-        await this.deps.runGuardedAction({
-          action: 'mission.control',
-          actor: actorId,
-          target: mission.missionId,
-          title: 'Mission control blocked',
-          execute: async () => undefined
-        });
-        if (mission.lifecycleStatus === 'draft' || mission.lifecycleStatus === 'stopped' || mission.completedAt || mission.archivedAt) {
-          throw new Error(`Mission ${mission.missionId} cannot be run because it is not fully configured or is stopped.`);
-        }
-        void this.deps.lifecycleService
-          .runMissionTurn(mission.missionId, 'manual', 'runtime:mission/manual', requesterActorId ?? null)
-          .catch((error) => {
-            this.deps.appendAuditEvent('mission.trigger.failed', {
-              missionId: mission.missionId,
-              actorId,
-              error: error instanceof Error ? error.message : String(error)
-            });
-        });
-        return this.deps.missionRegistry.getById(mission.missionId) ?? mission;
-      },
       respondToRuntimeRequest: async ({ threadId, requestId, decision, requesterActor }) => {
         await this.deps.resolvePendingRequest({
           actorId,
@@ -707,19 +730,6 @@ export class RuntimePluginContextService {
     }
 
     return dynamicSections;
-  }
-
-  async loadMissionPromptSections(mission: RuntimeMissionRow): Promise<string[]> {
-    return [
-      `Mission ID: ${mission.missionId}`,
-      `Mission title: ${mission.title}`,
-      `Mission goal: ${mission.goal}`,
-      `Mission schedule: ${mission.scheduleText}`,
-      `Mission workspace: ${mission.workspacePath}`,
-      `Runtime mode: ${mission.runtimeMode}`,
-      'Mission interactions are independent operator messages. Respond directly to the current message while using the persistent mission thread context when helpful.',
-      'Manual mission messages must not change or cancel the recurring mission schedule.'
-    ];
   }
 
   private normalizePluginSidecarScope(scope: { kind: 'global' } | { kind: 'session' | 'ephemeral'; key: string }) {

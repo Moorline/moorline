@@ -3,7 +3,6 @@ import {
   apiPost,
   parseConfigPath,
   parseConnectionOptions,
-  parseMissionTarget,
   parseRuntimeMode,
   parseSurface,
   parseSessionTarget,
@@ -353,77 +352,6 @@ export function parseCliArgs(argv: string[]): CliCommand {
     const parsed = parseConnectionOptions(rest.slice(3));
     const path = action === 'archive' ? '/api/work/session/archive' : '/api/work/session/delete';
     return apiPost(path, parseSessionTarget(parsed.rest, usage), configPath, parsed.options, parsed.json);
-  }
-
-  if (command === 'ops' && rest[1] === 'mission' && rest[2] === 'create') {
-    const usage =
-      'Usage: moorline ops mission create --title <text> --goal <text> --schedule <cron> [--mode <full-access|approval-required>] [--start-time <iso>] [--url <url>] [--token <token>] [--json] [--config <path>]';
-    const parsed = parseConnectionOptions(rest.slice(3));
-    let title: string | undefined;
-    let goal: string | undefined;
-    let schedule: string | undefined;
-    let runtimeMode: 'full-access' | 'approval-required' = 'full-access';
-    let startTime: string | undefined;
-    for (let index = 0; index < parsed.rest.length; index += 1) {
-      const token = parsed.rest[index];
-      if (token === '--title') {
-        title = requireValue(parsed.rest[index + 1], usage);
-        index += 1;
-        continue;
-      }
-      if (token === '--goal') {
-        goal = requireValue(parsed.rest[index + 1], usage);
-        index += 1;
-        continue;
-      }
-      if (token === '--schedule') {
-        schedule = requireValue(parsed.rest[index + 1], usage);
-        index += 1;
-        continue;
-      }
-      if (token === '--mode') {
-        runtimeMode = parseRuntimeMode(requireValue(parsed.rest[index + 1], usage), usage);
-        index += 1;
-        continue;
-      }
-      if (token === '--start-time') {
-        startTime = requireValue(parsed.rest[index + 1], usage);
-        index += 1;
-        continue;
-      }
-      throw new Error(usage);
-    }
-    if (!title || !goal || !schedule) {
-      throw new Error(usage);
-    }
-    return apiPost(
-      '/api/work/mission/create',
-      {
-        title,
-        goal,
-        schedule,
-        runtimeMode,
-        ...(startTime ? { startTime } : {})
-      },
-      configPath,
-      parsed.options,
-      parsed.json
-    );
-  }
-
-  if (command === 'ops' && rest[1] === 'mission' && ['pause', 'resume', 'stop', 'run', 'archive', 'delete'].includes(rest[2] ?? '')) {
-    const action = rest[2] as 'pause' | 'resume' | 'stop' | 'run' | 'archive' | 'delete';
-    const usage = `Usage: moorline ops mission ${action} (--mission <id>|--space <id>) [--url <url>] [--token <token>] [--json] [--config <path>]`;
-    const parsed = parseConnectionOptions(rest.slice(3));
-    const routeByAction: Record<typeof action, string> = {
-      pause: '/api/work/mission/pause',
-      resume: '/api/work/mission/resume',
-      stop: '/api/work/mission/stop',
-      run: '/api/work/mission/run',
-      archive: '/api/work/mission/archive',
-      delete: '/api/work/mission/delete'
-    };
-    return apiPost(routeByAction[action], parseMissionTarget(parsed.rest, usage), configPath, parsed.options, parsed.json);
   }
 
   const configureCommand = parseConfigureCommand(rest, configPath);

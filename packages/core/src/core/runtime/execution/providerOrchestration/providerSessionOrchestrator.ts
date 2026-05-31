@@ -1,9 +1,8 @@
 import type { AppliedMoorlineConfig } from '../../../../types/config.js';
 import type { RuntimeMessagePayload } from '../../../../types/transport.js';
 import type { RuntimeProvider } from '../../../../types/provider.js';
-import type { RuntimeMissionRow, RuntimeSessionRow } from '../../../system/state/sqliteSessionStore.js';
+import type { RuntimeSessionRow } from '../../../system/state/sqliteSessionStore.js';
 import type { SessionRegistry } from '../../../domain/sessions/sessionState.js';
-import type { MissionRegistry } from '../../../domain/missions/missionRegistry.js';
 import type { ProviderConnectionStore } from '../providerProjectionTypes.js';
 import type { ProviderGuardPort, ProviderModelPort } from './ports.js';
 import { ProviderSessionCoordinator } from '../providerCoordination/providerSessionCoordinator.js';
@@ -14,7 +13,6 @@ export interface ProviderSessionOrchestratorDeps extends ProviderGuardPort, Prov
   provider: RuntimeProvider;
   connections: ProviderConnectionStore;
   sessions: SessionRegistry;
-  missions: MissionRegistry;
   now(): string;
   upsertSession(session: RuntimeSessionRow): void;
   setProviderAutoStartDefault(enabled: boolean): void;
@@ -124,17 +122,6 @@ export class ProviderSessionOrchestrator {
         activeTurnId: null,
         updatedAt: this.deps.now(),
         lastError: null
-      });
-    }
-  }
-
-  async recoverMissionProviders(missionAsSession: (mission: RuntimeMissionRow) => RuntimeSessionRow): Promise<void> {
-    for (const mission of this.deps.missions.list()) {
-      if (mission.archivedAt || (mission.lifecycleStatus !== 'active' && mission.lifecycleStatus !== 'waiting_on_user')) {
-        continue;
-      }
-      await this.ensureSession(missionAsSession(mission), 'runtime:provider/recover-mission', {
-        persistSessionState: false
       });
     }
   }

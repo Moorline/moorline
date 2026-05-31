@@ -1,6 +1,5 @@
 import { EventEmitter } from 'node:events';
 import { join } from 'node:path';
-import { MissionRegistry } from '../../../core/domain/missions/missionRegistry.js';
 import { SkillRegistry } from '../../../core/extension/skills/skillRegistry.js';
 import { loadInstallationState, runtimePaths } from '../../../core/system/config/configStore.js';
 import { ManagementReadModelService } from '../../../core/system/projection/managementReadModelService.js';
@@ -162,7 +161,6 @@ export class ControlApiStateService {
     const store = new SqliteSessionStore(paths.sqlitePath);
     try {
       const snapshots = new RuntimeSnapshotQuery(store, store.database());
-      const missions = new MissionRegistry(store, paths.workspacesDir);
       const skills = new SkillRegistry([join(config.runtimeRoot, 'packages', 'skills')]);
       const provider = new SnapshotRuntimeProvider(store);
       const sidecars = new SidecarManager({
@@ -178,7 +176,6 @@ export class ControlApiStateService {
         runtimeRoot: config.runtimeRoot,
         config,
         snapshots,
-        missions,
         skills,
         provider,
         sidecars,

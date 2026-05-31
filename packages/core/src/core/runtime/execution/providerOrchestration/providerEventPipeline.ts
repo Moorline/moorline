@@ -1,6 +1,6 @@
 import type { ProviderRuntimeEvent } from '../../../../types/runtime.js';
 import type { RuntimePluginContext } from '../../../../types/plugin.js';
-import type { RuntimeMissionRow, RuntimeSessionRow } from '../../../system/state/sqliteSessionStore.js';
+import type { RuntimeSessionRow } from '../../../system/state/sqliteSessionStore.js';
 import type { RuntimeIngestion } from '../runtimeIngestion.js';
 import type { CanonicalEventLogStore } from '../../../system/state/canonicalEventLogStore.js';
 import type { RuntimeReceiptBus } from '../runtimeReceiptBus.js';
@@ -8,7 +8,6 @@ import type { PluginHost } from '../../../extension/plugins/pluginHost.js';
 import { domainEventsFromProviderEvent } from '../runtimeDomain.js';
 import type { ProviderAttachmentResolver } from './providerAttachmentResolver.js';
 import type { ProviderCompactionPolicy } from './providerCompactionPolicy.js';
-import type { ProviderMissionEventProjector } from './providerMissionEventProjector.js';
 import type { ProviderRequestProjector } from './providerRequestProjector.js';
 import type { ProviderTurnBroker } from './providerTurnBroker.js';
 import type { ProviderProjectionPort } from './ports.js';
@@ -21,11 +20,9 @@ export interface ProviderEventPipelineDeps extends ProviderProjectionPort {
   requests: ProviderRequestProjector;
   turns: ProviderTurnBroker;
   attachments: ProviderAttachmentResolver;
-  missions: ProviderMissionEventProjector;
   getPluginHost(): PluginHost;
   createPluginContext(actorId: string): RuntimePluginContext;
   getSessionByThreadId(threadId: string): RuntimeSessionRow | null;
-  getMissionByThreadId(threadId: string): RuntimeMissionRow | null;
 }
 
 export class ProviderEventPipeline {
@@ -33,8 +30,7 @@ export class ProviderEventPipeline {
 
   async handleProviderEvent(event: ProviderRuntimeEvent): Promise<void> {
     const session = this.deps.getSessionByThreadId(event.threadId);
-    const mission = this.deps.getMissionByThreadId(event.threadId);
-    const spaceId = session?.spaceId ?? mission?.spaceId ?? (event.threadId.startsWith('chat:') ? event.threadId.slice(5) : null);
+    const spaceId = session?.spaceId ?? (event.threadId.startsWith('chat:') ? event.threadId.slice(5) : null);
 
     const canonicalPersistence = this.deps.canonicalEvents.append(event, spaceId);
     if (!canonicalPersistence.inserted && this.deps.canonicalEvents.isProviderEventProcessed(event.eventId)) {
@@ -87,8 +83,6 @@ export class ProviderEventPipeline {
     if (event.type === 'turn.aborted') {
       this.deps.turns.onTurnAborted(event);
     }
-
-    this.deps.missions.apply(mission, event);
 
     const latestSession = this.deps.getSessionByThreadId(event.threadId);
     const domainEvents = domainEventsFromProviderEvent({

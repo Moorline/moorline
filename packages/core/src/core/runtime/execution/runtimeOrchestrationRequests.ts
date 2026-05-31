@@ -3,7 +3,6 @@ import type { RuntimeModeName } from '../../../types/runtime.js';
 import type { SessionOwnerLink } from '../../../types/plugin.js';
 import type { RuntimeReloadMode } from '../supervision/runtimeControl.js';
 import type {
-  RuntimeMissionRow,
   RuntimeOrchestrationRequestRow,
   RuntimeOrchestrationRequestType,
   SqliteSessionStore
@@ -45,19 +44,6 @@ export interface PostMessageOrchestrationPayload {
   }>;
 }
 
-export interface CreateMissionOrchestrationPayload {
-  title: string;
-  goal: string;
-  schedule: string;
-  startTime?: string;
-  runtimeMode: RuntimeModeName;
-}
-
-export interface MissionLifecycleOrchestrationPayload {
-  missionId?: string;
-  spaceId: string;
-}
-
 export interface ResolvePendingRequestOrchestrationPayload {
   requestId: string;
   decision: 'accept' | 'decline' | 'cancel';
@@ -91,8 +77,6 @@ export type RuntimeOrchestrationPayload =
   | ArchiveSessionOrchestrationPayload
   | DeleteSessionOrchestrationPayload
   | PostMessageOrchestrationPayload
-  | CreateMissionOrchestrationPayload
-  | MissionLifecycleOrchestrationPayload
   | RuntimeSetAcceptingOrchestrationPayload
   | RuntimeReloadOrchestrationPayload
   | ProviderTestOrchestrationPayload
@@ -100,24 +84,12 @@ export type RuntimeOrchestrationPayload =
   | ResolvePendingRequestOrchestrationPayload
   | AnswerPendingRequestOrchestrationPayload;
 
-export interface CreatedMissionResult {
-  mission: RuntimeMissionRow;
-  spaceId: string;
-}
-
 type RuntimeOrchestrationPayloadByType = {
   create_session: CreateSessionOrchestrationPayload;
   direct_session: DirectSessionOrchestrationPayload;
   archive_session: ArchiveSessionOrchestrationPayload;
   delete_session: DeleteSessionOrchestrationPayload;
   post_message: PostMessageOrchestrationPayload;
-  create_mission: CreateMissionOrchestrationPayload;
-  pause_mission: MissionLifecycleOrchestrationPayload;
-  resume_mission: MissionLifecycleOrchestrationPayload;
-  stop_mission: MissionLifecycleOrchestrationPayload;
-  run_mission: MissionLifecycleOrchestrationPayload;
-  archive_mission: MissionLifecycleOrchestrationPayload;
-  delete_mission: MissionLifecycleOrchestrationPayload;
   runtime_set_accepting: RuntimeSetAcceptingOrchestrationPayload;
   runtime_reload: RuntimeReloadOrchestrationPayload;
   provider_test: ProviderTestOrchestrationPayload;
@@ -194,16 +166,12 @@ function validatePayloadByType(
       const ownerRecord = record.owner === undefined ? null : asObject(record.owner);
       let owner: SessionOwnerLink | undefined;
       if (ownerRecord) {
-        const kind = ownerRecord.kind;
+        const kind = readTrimmedString(ownerRecord, 'kind');
         const id = readTrimmedString(ownerRecord, 'id');
-        if (
-          (kind !== 'mission' && kind !== 'run' && kind !== 'parent_session' && kind !== 'orchestrator') ||
-          !id
-        ) {
+        if (!kind || !id) {
           return {
             code: 'ORCH_CREATE_SESSION_OWNER_INVALID',
-            message:
-              'create_session payload owner must include kind=mission|run|parent_session|orchestrator and non-empty id.'
+            message: 'create_session payload owner must include non-empty kind and id.'
           };
         }
         const label = readOptionalTrimmedString(ownerRecord, 'label');
@@ -333,51 +301,6 @@ function validatePayloadByType(
         spaceId,
         ...(content ? { content } : {}),
         ...(files ? { files } : {})
-      };
-    }
-    case 'create_mission': {
-      const title = readTrimmedString(record, 'title');
-      const goal = readTrimmedString(record, 'goal');
-      const schedule = readTrimmedString(record, 'schedule');
-      const runtimeMode = parseRuntimeMode(record.runtimeMode);
-      if (!title || !goal || !schedule) {
-        return {
-          code: 'ORCH_CREATE_MISSION_FIELDS_REQUIRED',
-          message: 'create_mission payload requires non-empty title, goal, and schedule.'
-        };
-      }
-      if (!runtimeMode) {
-        return {
-          code: 'ORCH_CREATE_MISSION_MODE_INVALID',
-          message: 'create_mission payload runtimeMode must be full-access or approval-required.'
-        };
-      }
-      const startTime = readOptionalTrimmedString(record, 'startTime');
-      return {
-        title,
-        goal,
-        schedule,
-        runtimeMode,
-        ...(startTime ? { startTime } : {})
-      };
-    }
-    case 'pause_mission':
-    case 'resume_mission':
-    case 'stop_mission':
-    case 'run_mission':
-    case 'archive_mission':
-    case 'delete_mission': {
-      const spaceId = readTrimmedString(record, 'spaceId');
-      if (!spaceId) {
-        return {
-          code: 'ORCH_MISSION_SPACE_REQUIRED',
-          message: `${type} payload requires non-empty spaceId.`
-        };
-      }
-      const missionId = readOptionalTrimmedString(record, 'missionId');
-      return {
-        spaceId,
-        ...(missionId ? { missionId } : {})
       };
     }
     case 'runtime_set_accepting': {

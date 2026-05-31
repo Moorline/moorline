@@ -231,34 +231,6 @@ export class ControlPlane {
     return this.actions.deleteArchivedSession(input);
   }
 
-  createMission(input: Parameters<ControlApiActionsService['createMission']>[0]) {
-    return this.actions.createMission(input);
-  }
-
-  pauseMission(input: Parameters<ControlApiActionsService['pauseMission']>[0]) {
-    return this.actions.pauseMission(input);
-  }
-
-  resumeMission(input: Parameters<ControlApiActionsService['resumeMission']>[0]) {
-    return this.actions.resumeMission(input);
-  }
-
-  stopMission(input: Parameters<ControlApiActionsService['stopMission']>[0]) {
-    return this.actions.stopMission(input);
-  }
-
-  runMissionNow(input: Parameters<ControlApiActionsService['runMissionNow']>[0]) {
-    return this.actions.runMissionNow(input);
-  }
-
-  archiveMission(input: Parameters<ControlApiActionsService['archiveMission']>[0]) {
-    return this.actions.archiveMission(input);
-  }
-
-  deleteArchivedMission(input: Parameters<ControlApiActionsService['deleteArchivedMission']>[0]) {
-    return this.actions.deleteArchivedMission(input);
-  }
-
   setAcceptingNewWork(accepting: boolean) {
     return this.actions.setAcceptingNewWork(accepting);
   }

@@ -106,7 +106,7 @@ Backup runtime state (excludes workspaces by default):
 bun run moorline configure backup --token <api-token> --out ~/moorline-backup.tgz
 ```
 
-Include mission/session workspaces in the archive:
+Include session workspaces in the archive:
 
 ```bash
 bun run moorline configure backup --token <api-token> --out ~/moorline-backup-full.tgz --include-workspaces
@@ -176,15 +176,6 @@ Moorline 0.0.x operator-facing session modes:
 - `approval-required`: protected provider actions request approval before they continue.
 
 Both modes run locally on the operator machine. `approval-required` adds operator review, not host isolation.
-
-### Mission schedules and hooks
-Mission schedules support:
-- interval schedules (`every 2 hours`, `hourly`, `daily`)
-- cron (`cron */15 9-17 * * mon-fri` or bare 5-field cron expressions)
-- one-shot absolute timestamps (`once 2026-05-20T09:30:00Z`)
-- repeat-cycle alias (`repeat every 2 hours`)
-
-Mission hook triggers are generic string keys. Plugins and runtime tools can bind hooks to missions and emit hook events to trigger mission runs without requiring a hard-coded trigger list in core.
 
 ## Local State And Local History
 

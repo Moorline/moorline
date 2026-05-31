@@ -1,15 +1,13 @@
 import type { AppliedMoorlineConfig, RuntimeSurfaceState } from '../../../types/config.js';
-import { parseMissionSchedule, parseMissionStartTime } from '../missions/missionSchedule.js';
 import type { CommandReactor } from '../../runtime/execution/commandReactor.js';
 import type { RuntimeSnapshotQuery } from '../../system/projection/runtimeSnapshotQuery.js';
 import { RuntimeActionGuard } from '../../system/policy/runtimeActionGuard.js';
 import type { RuntimeProvider } from '../../../types/provider.js';
-import type { MissionRegistry } from '../missions/missionRegistry.js';
 import type { SessionOwnerLink, ArchivedSpaceTarget } from '../../../types/plugin.js';
 import type { ProviderSessionDirectory } from '../../runtime/execution/providerSessionDirectory.js';
 import type { RuntimeModeName } from '../../../types/runtime.js';
 import type { SidecarScopeKind } from '../../runtime/supervision/managedSidecar.js';
-import type { RuntimeMissionRow, RuntimeSessionRow } from '../../system/state/sqliteSessionStore.js';
+import type { RuntimeSessionRow } from '../../system/state/sqliteSessionStore.js';
 import type { RuntimeMessagePayload, RuntimeSpaceRecord, RuntimeTransport } from '../../../types/transport.js';
 import { isManagedWorkerSession } from './managedWorkerSessions.js';
 import type { SessionRegistry } from './sessionState.js';
@@ -25,7 +23,6 @@ interface RuntimeWorkManagementServiceDeps {
   getGuard(): RuntimeActionGuard;
   requireNamespaceState(): RuntimeSurfaceState;
   sessionRegistry: SessionRegistry;
-  missionRegistry: MissionRegistry;
   snapshots: RuntimeSnapshotQuery;
   reactor: CommandReactor;
   providerService: RuntimeProvider;
@@ -45,10 +42,6 @@ interface RuntimeWorkManagementServiceDeps {
 export class RuntimeWorkManagementService {
   constructor(private readonly deps: RuntimeWorkManagementServiceDeps) {}
 
-  resolveMission(input: { spaceId: string; missionId?: string }): RuntimeMissionRow | null {
-    return (input.missionId ? this.deps.missionRegistry.getById(input.missionId) : null) ?? this.deps.missionRegistry.getBySpaceId(input.spaceId);
-  }
-
   async createManagedSession(input: {
     actorId: string;
     requestedName: string;
@@ -60,8 +53,7 @@ export class RuntimeWorkManagementService {
   }): Promise<{ session: RuntimeSessionRow; spaceId: string }> {
     const namespace = this.deps.requireNamespaceState();
     const owner = input.owner ?? this.deps.defaultSessionOwner(input.actorId);
-    const ownerMission = owner.kind === 'mission' ? this.deps.missionRegistry.getByThreadId(owner.id) : null;
-    const objective = input.objective ?? ownerMission?.goal ?? null;
+    const objective = input.objective ?? null;
     enforceManagedSessionLimit(this.deps.snapshots, owner);
     const spaceName = slugifySpaceName('session', input.requestedName);
     await this.deps.getGuard().run({
@@ -303,234 +295,6 @@ export class RuntimeWorkManagementService {
     return deleted;
   }
 
-  async createMission(input: {
-    actorId: string;
-    title: string;
-    goal: string;
-    schedule: string;
-    startTime?: string;
-    runtimeMode: RuntimeModeName;
-  }): Promise<{ mission: RuntimeMissionRow; spaceId: string }> {
-    const namespace = this.deps.requireNamespaceState();
-    const spaceName = slugifySpaceName('mission', input.title);
-    parseMissionSchedule(input.schedule);
-    parseMissionStartTime(input.startTime, this.deps.now());
-    await this.deps.getGuard().run({
-      action: 'mission.create',
-      actor: input.actorId,
-      target: `${this.deps.config.transport.scopeId}:${spaceName}`,
-      payload: { runtimeMode: input.runtimeMode, schedule: input.schedule, startTime: input.startTime ?? null },
-      execute: async () => undefined
-    });
-    const space = await this.deps.getGuard().run({
-      action: 'transport.space.create',
-      actor: input.actorId,
-      target: `${this.deps.config.transport.scopeId}:${spaceName}`,
-      execute: async () => await this.createRuntimeSpace(spaceName, namespace.missionsCategoryId)
-    });
-    let mission: RuntimeMissionRow;
-    try {
-      mission = this.deps.missionRegistry.create({
-        scopeId: this.deps.config.transport.scopeId,
-        spaceId: space.id,
-        spaceName: space.name,
-        title: input.title,
-        goal: input.goal,
-        schedule: input.schedule,
-        ...(input.startTime ? { startTime: input.startTime } : {}),
-        runtimeMode: input.runtimeMode,
-        nowIso: this.deps.now()
-      });
-    } catch (error) {
-      await this.deleteRuntimeSpace(space.id, 'best-effort');
-      throw error;
-    }
-    this.deps.appendAuditEvent('mission.created', {
-      missionId: mission.missionId,
-      spaceId: mission.spaceId,
-      runtimeMode: mission.runtimeMode,
-      actorId: input.actorId
-    });
-    return { mission, spaceId: space.id };
-  }
-
-  async adoptMissionChannel(input: {
-    actorId: string;
-    spaceId: string;
-    spaceName: string;
-  }): Promise<RuntimeMissionRow> {
-    await this.deps.getGuard().run({
-      action: 'mission.create',
-      actor: input.actorId,
-      target: `${this.deps.config.transport.scopeId}:${input.spaceName}`,
-      execute: async () => undefined
-    });
-    const mission = this.deps.missionRegistry.createDraft({
-      scopeId: this.deps.config.transport.scopeId,
-      spaceId: input.spaceId,
-      spaceName: input.spaceName,
-      title: input.spaceName,
-      runtimeMode: this.deps.config.defaults.runtimeMode,
-      nowIso: this.deps.now()
-    });
-    this.deps.appendAuditEvent('mission.adopted_from_transport', {
-      missionId: mission.missionId,
-      spaceId: mission.spaceId,
-      actorId: input.actorId
-    });
-    return mission;
-  }
-
-  async configureDraftMission(input: {
-    actorId: string;
-    spaceId: string;
-    missionId?: string;
-    goal: string;
-    schedule: string;
-    startTime?: string;
-    runtimeMode?: RuntimeModeName;
-  }): Promise<RuntimeMissionRow> {
-    const mission = this.resolveMission({ spaceId: input.spaceId, missionId: input.missionId });
-    if (!mission) {
-      throw new Error('No matching mission found.');
-    }
-    if (mission.lifecycleStatus !== 'draft') {
-      throw new Error(`Mission ${mission.missionId} is not waiting for initial setup.`);
-    }
-    const goal = input.goal.trim();
-    const schedule = input.schedule.trim();
-    if (!goal) {
-      throw new Error('goal is required');
-    }
-    if (!schedule) {
-      throw new Error('schedule is required');
-    }
-    await this.deps.getGuard().run({
-      action: 'mission.create',
-      actor: input.actorId,
-      target: mission.missionId,
-      payload: {
-        schedule,
-        startTime: input.startTime ?? null,
-        runtimeMode: input.runtimeMode ?? mission.runtimeMode
-      },
-      execute: async () => undefined
-    });
-    const configured = this.deps.missionRegistry.configureDraftMission({
-      missionId: mission.missionId,
-      goal,
-      schedule,
-      ...(input.startTime ? { startTime: input.startTime } : {}),
-      ...(input.runtimeMode ? { runtimeMode: input.runtimeMode } : {}),
-      nowIso: this.deps.now()
-    });
-    this.deps.appendAuditEvent('mission.configured', {
-      missionId: configured.missionId,
-      spaceId: configured.spaceId,
-      actorId: input.actorId,
-      schedule: configured.scheduleText,
-      runtimeMode: configured.runtimeMode
-    });
-    return configured;
-  }
-
-  async archiveMission(input: {
-    actorId: string;
-    spaceId: string;
-    missionId?: string;
-  }): Promise<RuntimeMissionRow | null> {
-    const mission = this.resolveMission({ spaceId: input.spaceId, missionId: input.missionId });
-    if (!mission) {
-      return null;
-    }
-    const currentMission = this.deps.missionRegistry.getById(mission.missionId);
-    if (!currentMission) {
-      return null;
-    }
-    if (currentMission.archivedAt) {
-      return currentMission;
-    }
-    const namespace = this.deps.requireNamespaceState();
-    await this.deps.getGuard().run({
-      action: 'mission.archive',
-      actor: input.actorId,
-      target: currentMission.missionId,
-      execute: async () => undefined
-    });
-    await this.deps.getGuard().run({
-      action: 'transport.space.update',
-      actor: input.actorId,
-      target: currentMission.spaceId,
-      execute: async () =>
-        this.deps.getTransport().updateSpace?.({
-          scopeId: this.deps.config.transport.scopeId,
-          spaceId: currentMission.spaceId,
-          parentId: namespace.archiveCategoryId
-        })
-    });
-    this.deps.providerService.stopSession(currentMission.threadId);
-    this.deps.providerDirectory.delete(currentMission.threadId);
-    this.deps.rejectTurnWaitersForThread(currentMission.threadId, `Mission ${currentMission.missionId} was archived.`);
-    const archivedAt = this.deps.now();
-    const archived = this.deps.missionRegistry.update({
-      ...currentMission,
-      lifecycleStatus: 'stopped',
-      pausedAt: null,
-      nextRunAt: null,
-      stoppedAt: currentMission.stoppedAt ?? archivedAt,
-      archivedAt,
-      updatedAt: archivedAt
-    });
-    this.deps.appendAuditEvent('mission.archived', {
-      missionId: archived.missionId,
-      spaceId: archived.spaceId,
-      actorId: input.actorId
-    });
-    return archived;
-  }
-
-  async deleteArchivedMission(input: {
-    actorId: string;
-    spaceId: string;
-    missionId?: string;
-  }): Promise<RuntimeMissionRow | null> {
-    const mission = this.resolveMission({ spaceId: input.spaceId, missionId: input.missionId });
-    if (!mission || !mission.archivedAt) {
-      return null;
-    }
-    return await this.deps.queue(`mission:${mission.missionId}`, async () => {
-      const currentMission = this.deps.missionRegistry.getById(mission.missionId);
-      if (!currentMission || !currentMission.archivedAt) {
-        return null;
-      }
-      await this.deps.getGuard().run({
-        action: 'mission.delete',
-        actor: input.actorId,
-        target: currentMission.missionId,
-        execute: async () => undefined
-      });
-      await this.deps.getGuard().run({
-        action: 'transport.space.delete',
-        actor: input.actorId,
-        target: currentMission.spaceId,
-        execute: async () => await this.deleteRuntimeSpace(currentMission.spaceId, 'strict')
-      });
-      this.deps.providerService.stopSession(currentMission.threadId);
-      this.deps.providerDirectory.delete(currentMission.threadId);
-      this.deps.rejectTurnWaitersForThread(currentMission.threadId, `Mission ${currentMission.missionId} was deleted.`);
-      const deleted = this.deps.missionRegistry.deleteArchived(currentMission.spaceId);
-      if (deleted) {
-        this.deps.appendAuditEvent('mission.deleted', {
-          missionId: deleted.missionId,
-          spaceId: deleted.spaceId,
-          workspacePath: deleted.workspacePath,
-          actorId: input.actorId
-        });
-      }
-      return deleted;
-    });
-  }
-
   async archiveChannelTarget(input: { actorId: string; spaceId: string }): Promise<ArchivedSpaceTarget | null> {
     const target = this.resolveArchivableChannelTarget(input.spaceId);
     if (!target) {
@@ -544,12 +308,7 @@ export class RuntimeWorkManagementService {
       });
       return session ? { kind: 'session', session } : null;
     }
-    const mission = await this.archiveMission({
-      actorId: input.actorId,
-      spaceId: target.mission.spaceId,
-      missionId: target.mission.missionId
-    });
-    return mission ? { kind: 'mission', mission } : null;
+    return null;
   }
 
   async deleteArchivedChannelTarget(input: { actorId: string; spaceId: string }): Promise<ArchivedSpaceTarget | null> {
@@ -565,74 +324,7 @@ export class RuntimeWorkManagementService {
       });
       return session ? { kind: 'session', session } : null;
     }
-    const mission = await this.deleteArchivedMission({
-      actorId: input.actorId,
-      spaceId: target.mission.spaceId,
-      missionId: target.mission.missionId
-    });
-    return mission ? { kind: 'mission', mission } : null;
-  }
-
-  async updateMissionLifecycle(
-    actorId: string,
-    input: { spaceId: string; missionId?: string },
-    action: 'pause' | 'resume' | 'stop'
-  ): Promise<RuntimeMissionRow | null> {
-    const mission = this.resolveMission(input);
-    if (!mission) {
-      return null;
-    }
-    await this.deps.getGuard().run({
-      action: 'mission.control',
-      actor: actorId,
-      target: mission.missionId,
-      execute: async () => undefined
-    });
-    const nowIso = this.deps.now();
-    if (mission.lifecycleStatus === 'draft') {
-      throw new Error(`Mission ${mission.missionId} still needs goal and schedule setup before lifecycle controls are available.`);
-    }
-    if (action === 'pause') {
-      if (mission.archivedAt) {
-        throw new Error(`Mission ${mission.missionId} is archived and cannot be paused.`);
-      }
-      if (mission.lifecycleStatus === 'active' || mission.lifecycleStatus === 'waiting_on_user') {
-        throw new Error(`Mission ${mission.missionId} is busy. Stop it before pausing.`);
-      }
-      return this.deps.missionRegistry.update({
-        ...mission,
-        pausedAt: nowIso,
-        lifecycleStatus: 'sleeping',
-        updatedAt: nowIso
-      });
-    }
-    if (mission.archivedAt) {
-      throw new Error(`Mission ${mission.missionId} is archived and cannot be resumed.`);
-    }
-    if (action === 'resume') {
-      if (mission.lifecycleStatus === 'stopped' && mission.stoppedAt) {
-        throw new Error(`Mission ${mission.missionId} is stopped and cannot be resumed.`);
-      }
-      const resumedNextRunAt = this.deps.missionRegistry.runAtOrAfter(mission, nowIso);
-      const resumedOneShotComplete = this.deps.missionRegistry.isOneShotSchedule(mission) && !resumedNextRunAt;
-      return this.deps.missionRegistry.update({
-        ...mission,
-        pausedAt: null,
-        lifecycleStatus: resumedOneShotComplete ? 'completed' : 'sleeping',
-        nextRunAt: resumedNextRunAt,
-        completedAt: resumedOneShotComplete ? nowIso : mission.completedAt,
-        updatedAt: nowIso
-      });
-    }
-    this.deps.providerService.stopSession(mission.threadId);
-    return this.deps.missionRegistry.update({
-      ...mission,
-      pausedAt: null,
-      lifecycleStatus: 'stopped',
-      stoppedAt: nowIso,
-      nextRunAt: null,
-      updatedAt: nowIso
-    });
+    return null;
   }
 
   private resolveSession(input: { spaceId?: string; sessionId?: string }): RuntimeSessionRow | null {
@@ -651,10 +343,6 @@ export class RuntimeWorkManagementService {
     const session = this.resolveManagedWorkerSession({ spaceId });
     if (session) {
       return { kind: 'session', session };
-    }
-    const mission = this.deps.missionRegistry.getBySpaceId(spaceId);
-    if (mission) {
-      return { kind: 'mission', mission };
     }
     return null;
   }
@@ -703,7 +391,7 @@ export class RuntimeWorkManagementService {
     const transport = this.deps.getTransport();
     if (!transport.capabilities().spaces.create || !transport.createSpace) {
       throw new Error(
-        'Managed space creation requires transport support for spaces.create. Configure a transport with managed space creation or disable managed sessions/missions.'
+        'Managed space creation requires transport support for spaces.create. Configure a transport with managed space creation or disable managed sessions.'
       );
     }
     return await transport.createSpace({

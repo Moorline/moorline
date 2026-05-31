@@ -136,7 +136,6 @@ function renderHelp(output: OutputWriter): void {
   output.write('  moorline ops reload <graceful|force> [--url <url>] [--token <token>] [--json]');
   output.write('  moorline ops provider <start|stop> [--thread <id>] [--url <url>] [--token <token>] [--json]');
   output.write('  moorline ops session create ...');
-  output.write('  moorline ops mission create ...');
   output.write('');
   output.write('Configure:');
   output.write('  moorline package <search|info|install> ...');
