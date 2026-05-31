@@ -12,6 +12,7 @@ import {
   defaultMoorlineRuntimeRoot,
   type MoorlineConfig
 } from '@moorline/core/types/config.js';
+import { validateApiAdapterPackageManifest, type ApiAdapterPackageManifest } from '@moorline/contracts';
 import { ApiBootstrapResolver, clearControlApiBootstrapRecord, readControlApiBootstrapRecord } from '@moorline/control-api/bootstrap.js';
 import { parseCliArgs, type CliCommand, type ControlApiConnectionOptions } from './cliCommands.js';
 import { OperatorPackageService } from '@moorline/core/app/bootstrap/operatorPackageService.js';
@@ -183,9 +184,7 @@ function initialMoorlineConfig(configPath: string, explicitConfigPath?: string):
       apiAdapter: {
         activePackageId: null,
         config: {},
-        configByPackageId: {
-          'official/http': { ...defaultHttpApiAdapterConfig() }
-        }
+        configByPackageId: {}
       },
       transport: {
         activePackageId: null,
@@ -209,20 +208,33 @@ function initialMoorlineConfig(configPath: string, explicitConfigPath?: string):
   };
 }
 
-function findBundledHttpPackageDir(): string | null {
+function readApiAdapterPackageId(packageDir: string): string | null {
+  try {
+    const manifest = validateApiAdapterPackageManifest(
+      JSON.parse(readFileSync(join(packageDir, 'manifest.json'), 'utf8')) as ApiAdapterPackageManifest
+    );
+    return manifest.id;
+  } catch {
+    return null;
+  }
+}
+
+function findBundledApiAdapterPackage(): { packageDir: string; packageId: string } | null {
   let current = dirname(fileURLToPath(import.meta.url));
   while (true) {
-    const sourceCheckout = join(current, 'packages', 'http');
-    if (existsSync(join(sourceCheckout, 'manifest.json'))) {
-      return sourceCheckout;
-    }
-    const siblingHttp = join(current, '..', 'http');
-    if (existsSync(join(siblingHttp, 'manifest.json'))) {
-      return siblingHttp;
-    }
-    const nodeModulesHttp = join(current, 'node_modules', '@moorline', 'http');
-    if (existsSync(join(nodeModulesHttp, 'manifest.json'))) {
-      return nodeModulesHttp;
+    const candidates = [
+      join(current, 'packages', 'http'),
+      join(current, '..', 'http'),
+      join(current, 'node_modules', '@moorline', 'http')
+    ];
+    for (const packageDir of candidates) {
+      if (!existsSync(join(packageDir, 'manifest.json'))) {
+        continue;
+      }
+      const packageId = readApiAdapterPackageId(packageDir);
+      if (packageId) {
+        return { packageDir, packageId };
+      }
     }
     const parent = dirname(current);
     if (parent === current) {
@@ -251,20 +263,26 @@ async function runInit(command: Extract<CliCommand, { kind: 'init' }>, deps: Cli
   saveMoorlineConfig(config, configPath);
   const packageService = new OperatorPackageService(config, configPath);
   packageService.ensureInitialized();
-  const httpPackageDir = findBundledHttpPackageDir();
-  if (httpPackageDir) {
+  const bundledApiAdapter = findBundledApiAdapterPackage();
+  if (bundledApiAdapter) {
+    config.surfaces.apiAdapter.configByPackageId ??= {};
+    config.surfaces.apiAdapter.configByPackageId[bundledApiAdapter.packageId] = { ...defaultHttpApiAdapterConfig() };
     await packageService.installPackage({
       kind: 'api-adapter',
       source: {
         kind: 'local_dir',
-        path: httpPackageDir
+        path: bundledApiAdapter.packageDir
       }
     });
-    packageService.setSelectedPackage('api-adapter', 'official/http');
+    packageService.setSelectedPackage('api-adapter', bundledApiAdapter.packageId);
   }
   deps.output.write(`Moorline config: ${configPath}`);
   deps.output.write(`Moorline runtime root: ${config.runtimeRoot}`);
-  deps.output.write(httpPackageDir ? 'Installed and selected bundled official/http API adapter.' : 'No bundled API adapter found; install one before starting the Control API.');
+  deps.output.write(
+    bundledApiAdapter
+      ? `Installed and selected bundled API adapter ${bundledApiAdapter.packageId}.`
+      : 'No bundled API adapter found; install one before starting the Control API.'
+  );
   deps.output.write('Core runtime scaffold initialized. Run moorline run to open the Control API.');
   return 0;
 }

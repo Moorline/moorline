@@ -92,6 +92,24 @@ describe('host repository split contract', () => {
     expect(source).toContain('adapterPackage.createAdapter');
     expect(source).not.toContain('new ControlApiServer');
     expect(source).not.toContain("adapterPackageId: 'official/http'");
+    expect(source).not.toContain("selectedPackageId === 'official/http'");
+    expect(source).not.toContain('@moorline/http');
+  });
+
+  it('keeps production host code free of first-party package special cases', () => {
+    const productionSource = [
+      readSourceTree(join(root, 'packages', 'core', 'src')),
+      readSourceTree(join(root, 'packages', 'cli', 'src')),
+      readSourceTree(join(root, 'packages', 'control-api', 'src')),
+      readSourceTree(join(root, 'packages', 'http', 'src'))
+    ].join('\n');
+    const staticPolicy = readFileSync(join(root, 'packages', 'core', 'resources', 'policies', 'default-secure.json'), 'utf8');
+    expect(staticPolicy).not.toContain('plugin:official/');
+    expect(productionSource).not.toContain('plugin:official/');
+    expect(productionSource).not.toContain("selectedPackageId === 'official/http'");
+    expect(productionSource).not.toContain("activePackageId !== 'official/http'");
+    expect(productionSource).not.toContain("input.packageId === 'official/http'");
+    expect(productionSource).not.toContain("packageId: 'official/http'");
   });
 
   it('keeps release automation manual and non-publishing', () => {
@@ -207,7 +225,7 @@ describe('host repository split contract', () => {
     const source = readFileSync(join(root, 'packages', 'core', 'src', 'core', 'system', 'projection', 'managementReadModelService.ts'), 'utf8');
     expect(source).toContain("input.surface === 'api-adapter'");
     expect(source).toContain('input.config.surfaces.apiAdapter.config');
-    expect(source).toContain("input.packageId === 'official/http'");
+    expect(source).not.toContain("input.packageId === 'official/http'");
     expect(source).not.toContain("packageId: 'official/http'");
     expect(source).toContain('this.deps.config.surfaces.apiAdapter.activePackageId === entry.packageId');
   });

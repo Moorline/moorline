@@ -10,7 +10,7 @@ describe('default actor policy boundaries', () => {
   it('does not grant removed local-management capabilities or third-party plugin actors', async () => {
     const policyPath = join(root, 'packages', 'core', 'resources', 'policies', 'default-secure.json');
     const rawPolicy = readFileSync(policyPath, 'utf8');
-    expect(rawPolicy).not.toContain('plugin:official/local-management');
+    expect(rawPolicy).not.toContain('plugin:official/');
 
     const profile = loadPolicyProfile(policyPath);
     const hook = createActorRulePolicyHook({ rules: profile.actorRules });
@@ -30,13 +30,47 @@ describe('default actor policy boundaries', () => {
         action: 'session.create'
       })
     ).resolves.toMatchObject({
-      allowed: true
+      allowed: false
     });
 
     await expect(
       hook({
         actor: 'plugin:acme/session-orchestration',
         action: 'session.create'
+      })
+    ).resolves.toMatchObject({
+      allowed: false
+    });
+  });
+
+  it('allows active plugin actors only through manifest-derived capability rules', async () => {
+    const policyPath = join(root, 'packages', 'core', 'resources', 'policies', 'default-secure.json');
+    const profile = loadPolicyProfile(policyPath);
+    const hook = createActorRulePolicyHook({
+      rules: [
+        ...profile.actorRules,
+        {
+          actorPrefix: 'plugin:official/session-orchestration',
+          allowCapabilities: ['session.create'],
+          denyCapabilities: [],
+          targetPrefixes: []
+        }
+      ]
+    });
+
+    await expect(
+      hook({
+        actor: 'plugin:official/session-orchestration',
+        action: 'session.create'
+      })
+    ).resolves.toMatchObject({
+      allowed: true
+    });
+
+    await expect(
+      hook({
+        actor: 'plugin:official/session-orchestration',
+        action: 'session.delete'
       })
     ).resolves.toMatchObject({
       allowed: false

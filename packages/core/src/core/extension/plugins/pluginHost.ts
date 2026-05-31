@@ -2,6 +2,7 @@ import type { RuntimeActionDefinition, RuntimeTransportEvent } from '../../../ty
 import type {
   AfterAgentResponseInput,
   BeforeAgentPromptInput,
+  PluginManifest,
   RuntimeActionDispatchResult,
   RuntimeManagementContribution,
   RuntimePlugin,
@@ -101,6 +102,10 @@ export class PluginHost {
             `durationMs=${failure.durationMs} error=${failure.error}`
         );
       });
+  }
+
+  listPluginManifests(): PluginManifest[] {
+    return this.plugins.map((plugin) => plugin.manifest);
   }
 
   listActions(contextFactory: (pluginId: string) => RuntimePluginContext): RuntimeActionDefinition[] {
