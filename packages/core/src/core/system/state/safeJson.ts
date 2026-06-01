@@ -1,4 +1,4 @@
-export interface SafeJsonReadResult<T> {
+interface SafeJsonReadResult<T> {
   value: T | undefined;
   malformed: boolean;
 }

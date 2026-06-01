@@ -22,7 +22,7 @@ export interface OutputWriter {
   write(line: string): void;
 }
 
-export interface PromptOption<T extends string> {
+interface PromptOption<T extends string> {
   label: string;
   value: T;
   description: string;

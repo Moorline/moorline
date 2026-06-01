@@ -7,7 +7,7 @@ import type { ProviderConnectionStore } from '../providerProjectionTypes.js';
 import type { ProviderGuardPort, ProviderModelPort } from './ports.js';
 import { ProviderSessionCoordinator } from '../providerCoordination/providerSessionCoordinator.js';
 
-export interface ProviderSessionOrchestratorDeps extends ProviderGuardPort, ProviderModelPort {
+interface ProviderSessionOrchestratorDeps extends ProviderGuardPort, ProviderModelPort {
   config: AppliedMoorlineConfig;
   runtimeRoot: string;
   provider: RuntimeProvider;

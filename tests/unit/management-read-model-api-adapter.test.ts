@@ -9,6 +9,7 @@ import {
   defaultNamespaceNames,
   type MoorlineConfig
 } from '../../packages/core/src/types/config.js';
+import type { PackageInstallRecord } from '../../packages/core/src/types/package.js';
 import { createTempRoot } from '../helpers/temp.js';
 
 function freshInitConfig(runtimeRoot: string): MoorlineConfig {
@@ -64,6 +65,85 @@ function freshInitConfig(runtimeRoot: string): MoorlineConfig {
   };
 }
 
+function buildReadModel(input: {
+  root: string;
+  runtimeRoot: string;
+  config: MoorlineConfig;
+  sidecars?: unknown[];
+}) {
+  return new ManagementReadModelService({
+    homeRoot: input.root,
+    runtimeRoot: input.runtimeRoot,
+    config: input.config,
+    snapshots: {
+      listSessions: () => [],
+      overview: () => ({ openRequests: [] }),
+      listRecentActivities: () => []
+    } as never,
+    skills: {
+      list: () => []
+    } as never,
+    provider: {
+      listSessions: () => [],
+      getDiagnostics: () => ({
+        accountLabel: null,
+        availableModels: [],
+        connectedSessions: 0,
+        statusCounts: {},
+        capabilityMetadata: {}
+      })
+    } as never,
+    sidecars: {
+      listSidecars: () => input.sidecars ?? []
+    } as never,
+    now: () => '2026-05-20T00:00:00.000Z',
+    getRuntimeControlStatus: () => ({
+      acceptingNewWork: true,
+      supervised: false
+    }),
+    getRuntimeStatus: () => ({
+      status: 'stopped',
+      startedAt: null,
+      activeSessions: 0
+    }) as never,
+    getNamespaceState: () => null,
+    getManagementSurface: () => ({
+      enabled: true,
+      host: '127.0.0.1',
+      port: 45173,
+      url: null
+    })
+  }).build();
+}
+
+function installedPackage(input: {
+  runtimeRoot: string;
+  kind: PackageInstallRecord['kind'];
+  packageId: string;
+  trustLevel: PackageInstallRecord['trustLevel'];
+  installPath?: string;
+  publisher?: string;
+}): PackageInstallRecord {
+  const family = input.kind === 'api-adapter' ? 'api-adapters' : input.kind === 'bundle' ? 'bundles' : `${input.kind}s`;
+  const installPath = input.installPath ?? join(input.runtimeRoot, 'packages', family, ...input.packageId.split('/'));
+  return {
+    family,
+    kind: input.kind,
+    surface: input.kind,
+    packageId: input.packageId,
+    name: input.packageId,
+    version: '1.0.0',
+    installedAt: '2026-05-20T00:00:00.000Z',
+    installPath,
+    source: { kind: 'local_dir', path: installPath },
+    trustLevel: input.trustLevel,
+    ...(input.publisher ? { publisher: input.publisher } : {}),
+    manifestPath: join(installPath, 'manifest.json'),
+    manifestHash: `${input.packageId}-hash`,
+    dependencies: []
+  };
+}
+
 describe('management read model api-adapter config', () => {
   it('projects fresh-init official/http config for configure state', () => {
     const root = createTempRoot('moorline-read-model-http-config-');
@@ -105,6 +185,7 @@ describe('management read model api-adapter config', () => {
         installedAt: '2026-05-20T00:00:00.000Z',
         installPath: httpInstallPath,
         source: { kind: 'local_dir', path: httpInstallPath },
+        trustLevel: 'local',
         manifestPath: join(httpInstallPath, 'manifest.json'),
         manifestHash: 'official-http-hash',
         dependencies: []
@@ -112,49 +193,7 @@ describe('management read model api-adapter config', () => {
       applied: { activated: [] }
     });
     const config = freshInitConfig(runtimeRoot);
-    const readModel = new ManagementReadModelService({
-      homeRoot: root,
-      runtimeRoot,
-      config,
-      snapshots: {
-        listSessions: () => [],
-        overview: () => ({ openRequests: [] }),
-        listRecentActivities: () => []
-      } as never,
-      skills: {
-        list: () => []
-      } as never,
-      provider: {
-        listSessions: () => [],
-        getDiagnostics: () => ({
-          accountLabel: null,
-          availableModels: [],
-          connectedSessions: 0,
-          statusCounts: {},
-          capabilityMetadata: {}
-        })
-      } as never,
-      sidecars: {
-        listSidecars: () => []
-      } as never,
-      now: () => '2026-05-20T00:00:00.000Z',
-      getRuntimeControlStatus: () => ({
-        acceptingNewWork: true,
-        supervised: false
-      }),
-      getRuntimeStatus: () => ({
-        status: 'stopped',
-        startedAt: null,
-        activeSessions: 0
-      }) as never,
-      getNamespaceState: () => null,
-      getManagementSurface: () => ({
-        enabled: true,
-        host: '127.0.0.1',
-        port: 45173,
-        url: null
-      })
-    }).build();
+    const readModel = buildReadModel({ root, runtimeRoot, config });
 
     const record = readModel.packages.config.find((entry) => entry.surface === 'api-adapter' && entry.packageId === 'official/http');
     expect(record).toMatchObject({
@@ -174,6 +213,87 @@ describe('management read model api-adapter config', () => {
         configured: true,
         value: 'remote'
       }
+    });
+  });
+
+  it('projects package trust from inventory instead of official-looking ids or paths', () => {
+    const root = createTempRoot('moorline-read-model-trust-');
+    const runtimeRoot = join(root, 'runtime');
+    const config = freshInitConfig(runtimeRoot);
+    config.surfaces.transport.activePackageId = 'official/transportish';
+    config.surfaces.provider.activePackageId = 'acme/provider';
+    config.surfaces.plugins.enabledPackageIds = ['official/status'];
+
+    const pluginPath = join(runtimeRoot, 'packages', 'plugins', 'official', 'status');
+    mkdirSync(pluginPath, { recursive: true });
+    writeFileSync(
+      join(pluginPath, 'manifest.json'),
+      JSON.stringify(
+        {
+          id: 'official/status',
+          name: 'Status',
+          version: '1.0.0',
+          type: 'plugin',
+          capabilities: ['session.inspect']
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+
+    new PackageInventoryStore(runtimeRoot).save({
+      version: 1,
+      installed: [
+        installedPackage({ runtimeRoot, kind: 'transport', packageId: 'official/transportish', trustLevel: 'community', publisher: 'Community Publisher' }),
+        installedPackage({ runtimeRoot, kind: 'provider', packageId: 'acme/provider', trustLevel: 'official', publisher: 'Moorline' }),
+        installedPackage({ runtimeRoot, kind: 'plugin', packageId: 'official/status', trustLevel: 'community', installPath: pluginPath, publisher: 'Community Publisher' })
+      ],
+      applied: { activated: [] }
+    });
+
+    const readModel = buildReadModel({
+      root,
+      runtimeRoot,
+      config,
+      sidecars: [{
+        sidecarId: 'sidecar-1',
+        pluginId: 'official/status',
+        name: 'Status sidecar',
+        status: 'running',
+        scopeKind: 'global',
+        scopeKey: 'global',
+        command: 'node',
+        args: [],
+        restartPolicy: 'never',
+        restartCount: 0,
+        pid: 123,
+        startedAt: '2026-05-20T00:00:00.000Z',
+        readyAt: null,
+        stoppedAt: null,
+        lastError: null,
+        updatedAt: '2026-05-20T00:00:00.000Z'
+      }]
+    });
+
+    expect(readModel.objects.services.find((entry) => entry.id === 'transport-official/transportish')?.trust).toMatchObject({
+      level: 'community',
+      source: 'Community Publisher'
+    });
+    expect(readModel.objects.services.find((entry) => entry.id === 'provider-acme/provider')?.trust).toMatchObject({
+      level: 'official',
+      source: 'Moorline'
+    });
+    expect(readModel.objects.plugins.find((entry) => entry.pluginId === 'official/status')).toMatchObject({
+      packageTrustLevel: 'community',
+      trust: {
+        level: 'community',
+        source: 'Community Publisher'
+      }
+    });
+    expect(readModel.objects.sidecars[0]?.trust).toMatchObject({
+      level: 'community',
+      source: 'Community Publisher'
     });
   });
 });

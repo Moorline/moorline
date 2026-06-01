@@ -59,7 +59,7 @@ function ageMs(nowMs: number, iso: string): number {
   return Math.max(0, nowMs - parsed);
 }
 
-export function summarizeActiveTurnHealth(
+function summarizeActiveTurnHealth(
   sessions: Array<{ activeTurnId: string | null; updatedAt: string }>,
   input: { nowMs?: number; staleActiveTurnThresholdMs?: number } = {}
 ): RuntimeActiveTurnHealth {

@@ -22,7 +22,6 @@ import type {
   CandidateDoc,
   HybridRetrievalDocument,
   RetrievalChunkRow,
-  RetrievalDocument,
   RetrievalFileRow,
   RetrievalIndexStateRow,
   RetrievalOptions,
@@ -378,15 +377,6 @@ function loadIndexedDocs(db: DatabaseSync, scope: NormalizedRetrievalScope): Can
     contentHash: row.contentHash,
     metadataTokens: safeParseStringArray(row.metadataTokens)
   }));
-}
-
-export function retrieveWithProvenance(query: string, docs: RetrievalDocument[]): RetrievalDocument[] {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) {
-    return [];
-  }
-
-  return docs.filter((doc) => doc.content.toLowerCase().includes(normalized));
 }
 
 export async function refreshMemoryIndex(repoPath: string, scope: RetrievalScope, sqlitePath: string): Promise<void> {

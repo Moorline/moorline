@@ -1,10 +1,10 @@
-export interface PackageRegistryBlocklistEntry {
+interface PackageRegistryBlocklistEntry {
   packageId?: string;
   npmName?: string;
   reason: string;
 }
 
-export const PACKAGE_REGISTRY_BLOCKLIST: PackageRegistryBlocklistEntry[] = [];
+const PACKAGE_REGISTRY_BLOCKLIST: PackageRegistryBlocklistEntry[] = [];
 
 export function findPackageRegistryBlock(input: {
   packageId?: string;

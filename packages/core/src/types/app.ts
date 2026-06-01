@@ -14,7 +14,7 @@ export interface RuntimeControlStatus {
 export type SidecarScopeKind = 'global' | 'session' | 'ephemeral';
 export type SidecarRestartPolicy = 'never' | 'on-failure';
 
-export type ManagedObjectKind =
+type ManagedObjectKind =
   | 'session'
   | 'plugin'
   | 'skill'
@@ -23,9 +23,16 @@ export type ManagedObjectKind =
   | 'provider_thread'
   | 'sidecar';
 
-export type ManagedObjectTrustLevel = 'official' | 'local' | 'operator';
+export type ManagedObjectTrustLevel =
+  | 'official'
+  | 'verified'
+  | 'curated'
+  | 'community'
+  | 'local'
+  | 'direct_url'
+  | 'operator';
 
-export interface ManagedObjectMutability {
+interface ManagedObjectMutability {
   editable: boolean;
   installable: boolean;
   removable: boolean;
@@ -36,19 +43,19 @@ export interface ManagedObjectTrust {
   source: string;
 }
 
-export interface ManagedObjectSourceOfTruth {
+interface ManagedObjectSourceOfTruth {
   kind: 'sqlite' | 'filesystem' | 'runtime' | 'provider' | 'transport';
   label: string;
   path?: string;
 }
 
-export interface ManagedObjectRuntimeState {
+interface ManagedObjectRuntimeState {
   status: string;
   updatedAt: string | null;
   details?: Record<string, unknown>;
 }
 
-export interface ManagedObjectBase {
+interface ManagedObjectBase {
   id: string;
   kind: ManagedObjectKind;
   name: string;
@@ -95,7 +102,7 @@ export interface ManagedPluginRecord extends ManagedObjectBase {
   capabilities: string[];
   hooks: string[];
   commands: string[];
-  packageGroup: 'official' | 'local';
+  packageTrustLevel: ManagedObjectTrustLevel;
 }
 
 export interface ManagedSkillRecord extends ManagedObjectBase {
@@ -180,21 +187,21 @@ export interface ManagementSettingsContract {
   };
 }
 
-export interface ManagementApiTrustContract {
+interface ManagementApiTrustContract {
   authMode: 'bearer-token';
   loopbackOnly: boolean;
   tokenSource: 'local-connection-record' | 'operator-provided';
   restartBehavior: 'adapter-restart-required';
 }
 
-export interface ManagementApiDeliveryTrack {
+interface ManagementApiDeliveryTrack {
   id: 'install' | 'onboarding' | 'lifecycle' | 'trust' | 'updates' | 'app_shell';
   title: string;
   summary: string;
   status: 'implemented' | 'defined';
 }
 
-export interface ManagementApiRecoveryAction {
+interface ManagementApiRecoveryAction {
   need: string;
   localAction: string;
   fallback: string;

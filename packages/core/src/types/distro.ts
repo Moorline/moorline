@@ -1,5 +1,4 @@
 export {
   validateMoorlineDistroMetadata,
-  type MoorlineDistroMetadata,
-  type ResolvedMoorlineDistroMetadata
+  type MoorlineDistroMetadata
 } from '@moorline/contracts';

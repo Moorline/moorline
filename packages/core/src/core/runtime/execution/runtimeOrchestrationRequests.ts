@@ -71,7 +71,7 @@ export interface ProviderTestOrchestrationPayload {
   prompt?: string;
 }
 
-export type RuntimeOrchestrationPayload =
+type RuntimeOrchestrationPayload =
   | CreateSessionOrchestrationPayload
   | DirectSessionOrchestrationPayload
   | ArchiveSessionOrchestrationPayload

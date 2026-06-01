@@ -12,7 +12,7 @@ import type { ProviderRequestProjector } from './providerRequestProjector.js';
 import type { ProviderTurnBroker } from './providerTurnBroker.js';
 import type { ProviderProjectionPort } from './ports.js';
 
-export interface ProviderEventPipelineDeps extends ProviderProjectionPort {
+interface ProviderEventPipelineDeps extends ProviderProjectionPort {
   canonicalEvents: CanonicalEventLogStore;
   ingestion: RuntimeIngestion;
   receiptBus: RuntimeReceiptBus;

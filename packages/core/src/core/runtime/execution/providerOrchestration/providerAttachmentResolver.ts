@@ -5,7 +5,7 @@ import type { RuntimeSessionRow } from '../../../system/state/sqliteSessionStore
 import { assertCanonicalExistingPathWithinRoot } from '../../../shared/fs/canonicalPathContainment.js';
 import type { ProviderAuditPort } from './ports.js';
 
-export interface ProviderAttachmentResolverDeps extends ProviderAuditPort {
+interface ProviderAttachmentResolverDeps extends ProviderAuditPort {
   runtimeRoot: string;
   now(): string;
   getSessionByThreadId(threadId: string): RuntimeSessionRow | null;

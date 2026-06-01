@@ -138,7 +138,7 @@ async function importApiAdapterPackage(
   };
 }
 
-export async function loadApiAdapterPackageById(input: {
+async function loadApiAdapterPackageById(input: {
   runtimeRoot: string;
   packageId: string;
   context: RuntimeApiAdapterContext;

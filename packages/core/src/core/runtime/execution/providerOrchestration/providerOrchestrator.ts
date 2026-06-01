@@ -8,7 +8,7 @@ import type { ProviderEventPipeline } from './providerEventPipeline.js';
 import type { ProviderSessionOrchestrator } from './providerSessionOrchestrator.js';
 import type { ProviderTurnBroker, RuntimeProviderTurnInput } from './providerTurnBroker.js';
 
-export interface ProviderOrchestratorDeps {
+interface ProviderOrchestratorDeps {
   provider: RuntimeProvider;
   connections: ProviderConnectionStore;
   sessions: ProviderSessionOrchestrator;

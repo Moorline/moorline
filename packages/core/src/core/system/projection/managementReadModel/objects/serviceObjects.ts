@@ -1,6 +1,8 @@
 import { join } from 'node:path';
 import type { ManagedServiceRecord } from '../../../../../types/app.js';
+import type { PackageInstallRecord } from '../../../../../types/package.js';
 import type { ManagementReadModelServiceDeps } from '../deps.js';
+import { managedTrustForPackage } from '../packageTrust.js';
 
 function selectedPackageName(deps: ManagementReadModelServiceDeps, surface: 'transport' | 'provider', fallback: string): string {
   const packageId = deps.config.surfaces[surface].activePackageId;
@@ -11,13 +13,23 @@ function selectedPackageId(deps: ManagementReadModelServiceDeps, surface: 'trans
   return deps.config.surfaces[surface].activePackageId ?? deps.config[surface]?.packageId ?? deps.config[surface]?.kind ?? 'unselected';
 }
 
-export function buildServiceObjects(deps: ManagementReadModelServiceDeps): ManagedServiceRecord[] {
+function installedPackage(
+  installed: PackageInstallRecord[],
+  surface: 'transport' | 'provider',
+  packageId: string
+): PackageInstallRecord | null {
+  return installed.find((entry) => entry.kind === surface && entry.packageId === packageId) ?? null;
+}
+
+export function buildServiceObjects(deps: ManagementReadModelServiceDeps, installed: PackageInstallRecord[]): ManagedServiceRecord[] {
   const managementSurface = deps.getManagementSurface();
   const providerDiagnostics = deps.provider.getDiagnostics();
   const runtimeStatus = deps.getRuntimeStatus();
   const runtimeControl = deps.getRuntimeControlStatus();
   const transportPackageId = selectedPackageId(deps, 'transport');
   const providerPackageId = selectedPackageId(deps, 'provider');
+  const transportPackage = installedPackage(installed, 'transport', transportPackageId);
+  const providerPackage = installedPackage(installed, 'provider', providerPackageId);
 
   return [
     {
@@ -43,7 +55,7 @@ export function buildServiceObjects(deps: ManagementReadModelServiceDeps): Manag
       summary: 'Selected transport surface and namespace host.',
       controls: ['inspect'],
       mutability: { editable: false, installable: false, removable: false },
-      trust: { level: transportPackageId.startsWith('official/') ? 'official' : 'local', source: transportPackageId },
+      trust: managedTrustForPackage(transportPackage, transportPackageId),
       sourceOfTruth: { kind: 'transport', label: 'selected transport config' },
       runtimeState: {
         status: deps.getNamespaceState() ? 'running' : 'not_bootstrapped',
@@ -62,7 +74,7 @@ export function buildServiceObjects(deps: ManagementReadModelServiceDeps): Manag
       summary: 'Provider session lifecycle and thread execution service.',
       controls: ['provider_start_all', 'provider_stop_all'],
       mutability: { editable: false, installable: false, removable: false },
-      trust: { level: providerPackageId.startsWith('official/') ? 'official' : 'local', source: providerPackageId },
+      trust: managedTrustForPackage(providerPackage, providerPackageId),
       sourceOfTruth: { kind: 'provider', label: 'selected provider runtime' },
       runtimeState: {
         status: providerDiagnostics.connectedSessions > 0 ? 'connected' : 'idle',

@@ -2,7 +2,7 @@ import type { PendingRuntimeRequestRecord, ProviderRuntimeEvent } from '../../..
 import { ProviderRequestAttributionService } from '../providerCoordination/providerRequestAttributionService.js';
 import type { PendingRequestPort, ProviderRequestMessagePort } from './ports.js';
 
-export interface ProviderRequestProjectorDeps extends ProviderRequestMessagePort {
+interface ProviderRequestProjectorDeps extends ProviderRequestMessagePort {
   pending: PendingRequestPort;
   attribution: ProviderRequestAttributionService;
 }

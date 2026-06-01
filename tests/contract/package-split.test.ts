@@ -110,6 +110,9 @@ describe('host repository split contract', () => {
     expect(productionSource).not.toContain("activePackageId !== 'official/http'");
     expect(productionSource).not.toContain("input.packageId === 'official/http'");
     expect(productionSource).not.toContain("packageId: 'official/http'");
+    expect(productionSource).not.toContain('isOfficialPluginId');
+    expect(productionSource).not.toContain("packageGroup === 'official'");
+    expect(productionSource).not.toContain("segments[packagesIndex + 2] === 'official'");
   });
 
   it('keeps release automation manual and non-publishing', () => {

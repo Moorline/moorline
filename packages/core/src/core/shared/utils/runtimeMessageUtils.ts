@@ -8,27 +8,6 @@ import type {
 import { validateRemoteUrlTarget } from './remoteNetworkPolicy.js';
 import { assertCanonicalExistingPathWithinRoot } from '../fs/canonicalPathContainment.js';
 
-export function splitRuntimeText(text: string, maxLength: number): string[] {
-  const normalized = text.trim();
-  if (normalized.length <= maxLength) {
-    return [normalized];
-  }
-
-  const chunks: string[] = [];
-  let remaining = normalized;
-  while (remaining.length > maxLength) {
-    const window = remaining.slice(0, maxLength + 1);
-    const splitAt = Math.max(window.lastIndexOf('\n\n'), window.lastIndexOf('\n'), window.lastIndexOf(' '));
-    const index = splitAt > 0 ? splitAt : maxLength;
-    chunks.push(remaining.slice(0, index).trim());
-    remaining = remaining.slice(index).trim();
-  }
-  if (remaining.length > 0) {
-    chunks.push(remaining);
-  }
-  return chunks;
-}
-
 export function validateLocalRuntimeFiles(
   files: RuntimeAttachmentPayload[] | undefined,
   allowlistedRoots: string[] = []

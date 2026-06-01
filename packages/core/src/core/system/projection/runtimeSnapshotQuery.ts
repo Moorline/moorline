@@ -13,7 +13,7 @@ import type { RuntimeProviderConnectionSnapshot } from '../../../types/plugin.js
 import type { SessionQueryFilter } from '../../../types/plugin.js';
 import { isManagedWorkerSession } from '../../domain/sessions/managedWorkerSessions.js';
 
-export interface RuntimeSessionSnapshot {
+interface RuntimeSessionSnapshot {
   session: RuntimeSessionRow;
   receipt: RuntimeReceiptRecord | null;
   provider: RuntimeProviderConnectionSnapshot | null;
@@ -21,7 +21,7 @@ export interface RuntimeSessionSnapshot {
   recentActivities: RuntimeActivityRecord[];
 }
 
-export interface RuntimeOverviewSnapshot {
+interface RuntimeOverviewSnapshot {
   sessions: RuntimeSessionSnapshot[];
   receipts: RuntimeReceiptRecord[];
   providers: RuntimeProviderConnectionSnapshot[];

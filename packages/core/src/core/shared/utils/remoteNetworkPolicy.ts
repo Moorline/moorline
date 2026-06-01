@@ -3,14 +3,6 @@ import { isIP } from 'node:net';
 
 let dnsLookup: typeof lookup = lookup;
 
-export function setDnsLookupForTests(fn: typeof lookup): void {
-  dnsLookup = fn;
-}
-
-export function resetDnsLookupForTests(): void {
-  dnsLookup = lookup;
-}
-
 function parseIPv4Octets(host: string): [number, number, number, number] | null {
   const segments = host.split('.').map((segment) => Number(segment));
   if (segments.length !== 4 || segments.some((segment) => !Number.isInteger(segment) || segment < 0 || segment > 255)) {
@@ -95,7 +87,7 @@ function isPrivateOrLoopbackIPv6(host: string): boolean {
   return false;
 }
 
-export function isPrivateOrLoopbackAddress(host: string): boolean {
+function isPrivateOrLoopbackAddress(host: string): boolean {
   const ipVersion = isIP(host);
   if (ipVersion === 4) {
     return isPrivateOrLoopbackIPv4(host);

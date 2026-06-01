@@ -7,7 +7,7 @@ import type { RuntimeProvider } from '../../../../types/provider.js';
 const THREAD_COMPACTION_USAGE_THRESHOLD = 0.85;
 const THREAD_COMPACTION_LATCH_TIMEOUT_MS = 30_000;
 
-export interface ProviderCompactionPolicyDeps extends ProviderAuditPort, ProviderGuardPort, ProviderModelPort {
+interface ProviderCompactionPolicyDeps extends ProviderAuditPort, ProviderGuardPort, ProviderModelPort {
   provider: RuntimeProvider;
   now(): string;
   getSessionByThreadId(threadId: string): RuntimeSessionRow | null;

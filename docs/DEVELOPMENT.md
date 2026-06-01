@@ -53,7 +53,7 @@ CLI commands can use a local connection record or explicit remote options:
 
 Current config version is `4`.
 
-Default config selects `official/http` as `surfaces.apiAdapter.activePackageId`. HTTP settings live in the `official/http` package config, not under a top-level API object.
+Fresh config starts without a selected API adapter. `moorline init` discovers the bundled API adapter by manifest, installs it, and selects its package id. HTTP settings live in that package config, not under a top-level API object.
 
 ## Package Resources
 

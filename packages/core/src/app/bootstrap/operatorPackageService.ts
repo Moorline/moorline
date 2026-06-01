@@ -2,7 +2,15 @@ import { copyFileSync, existsSync, readFileSync, rmSync, writeFileSync } from 'n
 import { join } from 'node:path';
 import { homeRootForRuntime, type MoorlineConfig } from '../../types/config.js';
 import type { MoorlineShareBundle } from '../../types/config.js';
-import type { JsonSchemaLike, PackageApplyPlan, PackageMetadataEntry, PackageKind, PackageSourceDescriptor, PackageSurface } from '../../types/package.js';
+import type {
+  JsonSchemaLike,
+  PackageApplyPlan,
+  PackageInstallTrustLevel,
+  PackageMetadataEntry,
+  PackageKind,
+  PackageSourceDescriptor,
+  PackageSurface
+} from '../../types/package.js';
 import { createPackageApplyPlan } from '../../core/extension/packages/packageApplyPlanner.js';
 import { findDependentRecords, findDependents } from '../../core/extension/packages/packageDependencyResolver.js';
 import { resolvePackageConfigSchema } from '../../core/extension/packages/packageConfigSchema.js';
@@ -377,6 +385,42 @@ export class OperatorPackageService {
     };
   }
 
+  private trustForEntry(entry: { trustLevel?: unknown; publisher?: unknown } | null | undefined): {
+    trustLevel?: PackageInstallTrustLevel;
+    publisher?: string;
+  } {
+    const trustLevel =
+      entry?.trustLevel === 'official' ||
+      entry?.trustLevel === 'verified' ||
+      entry?.trustLevel === 'curated' ||
+      entry?.trustLevel === 'community' ||
+      entry?.trustLevel === 'local' ||
+      entry?.trustLevel === 'direct_url'
+        ? entry.trustLevel
+        : undefined;
+    return {
+      ...(trustLevel ? { trustLevel } : {}),
+      ...(typeof entry?.publisher === 'string' && entry.publisher.trim() ? { publisher: entry.publisher } : {})
+    };
+  }
+
+  private packageMetadataForEntry(entry: PackageRegistryEntry | PackageMetadataEntry): PackageMetadataEntry {
+    return {
+      kind: entry.kind,
+      surface: entry.surface,
+      packageId: entry.packageId,
+      name: entry.name,
+      description: entry.description,
+      ...(entry.version ? { version: entry.version } : {}),
+      tags: [...entry.tags],
+      source: entry.source,
+      ...this.trustForEntry(entry),
+      requires: [...entry.requires],
+      ...(entry.members ? { members: [...entry.members] } : {}),
+      ...('suggestedAfterInstall' in entry && entry.suggestedAfterInstall ? { suggestedAfterInstall: [...entry.suggestedAfterInstall] } : {})
+    };
+  }
+
   private embeddedBundleMemberEntries(input: {
     bundleInstallPath: string;
     members: NonNullable<PackageMetadataEntry['members']>;
@@ -400,6 +444,7 @@ export class OperatorPackageService {
           kind: 'local_dir',
           path: packageDir
         },
+        trustLevel: 'local',
         requires: ('dependencies' in loaded.manifest ? loaded.manifest.dependencies ?? [] : []).map((dependency) => dependency.packageId)
       });
     }
@@ -429,6 +474,7 @@ export class OperatorPackageService {
     const record = await this.installer.install({
       surface: kind,
       source,
+      ...this.trustForEntry(registryEntry),
       ...(registryEntry ? { expectedPackage: this.expectedPackageForEntry(registryEntry) } : {})
     });
     this.checkpoint({
@@ -518,11 +564,12 @@ export class OperatorPackageService {
     const record = await this.installer.install({
       surface: 'bundle',
       source: input.source,
+      ...this.trustForEntry(input.registryEntry),
       ...(input.registryEntry ? { expectedPackage: this.expectedPackageForEntry(input.registryEntry) } : {})
     });
-    const bundle = input.registryEntry
+    const bundle: PackageMetadataEntry = input.registryEntry
       ? {
-          ...input.registryEntry,
+          ...this.packageMetadataForEntry(input.registryEntry),
           members: input.registryEntry.members && input.registryEntry.members.length > 0 ? input.registryEntry.members : record.members ?? []
         }
       : {
@@ -546,8 +593,8 @@ export class OperatorPackageService {
       });
       const embeddedKeys = new Set(embeddedMemberEntries.map((entry) => `${entry.kind}:${entry.packageId}`));
       const externalMembers = requestedMembers.filter((member) => !embeddedKeys.has(`${member.kind}:${member.packageId}`));
-      const sourceMemberEntries = externalMembers
-        .filter((member) => member.source)
+      const sourceMemberEntries: PackageMetadataEntry[] = externalMembers
+        .filter((member): member is typeof member & { source: PackageSourceDescriptor } => Boolean(member.source))
         .map((member) => ({
           kind: member.kind,
           surface: member.kind,
@@ -557,6 +604,7 @@ export class OperatorPackageService {
           version: member.version === '*' || member.version === 'latest' || member.version === 'stable' ? undefined : member.version,
           tags: ['member-source'],
           source: member.source!,
+          trustLevel: member.source.kind === 'remote_archive' ? 'direct_url' : 'local',
           requires: []
         }));
       const npmMembers = externalMembers.filter((member) => !member.source);
@@ -567,7 +615,7 @@ export class OperatorPackageService {
         entries: [
           ...embeddedMemberEntries,
           ...sourceMemberEntries,
-          ...memberEntries
+          ...memberEntries.map((entry) => this.packageMetadataForEntry(entry))
         ],
         bundle
       });
@@ -590,6 +638,7 @@ export class OperatorPackageService {
             surface: resolved.packageEntry.kind,
             source: resolved.packageEntry.source,
             installedByPackageId: record.packageId,
+            ...this.trustForEntry(resolved.packageEntry),
             expectedPackage: this.expectedPackageForEntry(resolved.packageEntry)
           });
         } else {
@@ -615,6 +664,7 @@ export class OperatorPackageService {
               surface: resolved.packageEntry.kind,
               source: resolved.packageEntry.source,
               installedByPackageId: record.packageId,
+              ...this.trustForEntry(resolved.packageEntry),
               expectedPackage: this.expectedPackageForEntry(resolved.packageEntry)
             });
           } else if (existing.installedByPackageIds && existing.installedByPackageIds.length > 0) {

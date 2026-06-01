@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 
-export interface SkillCatalogEntry {
+interface SkillCatalogEntry {
   name: string;
   description: string;
   path: string;
@@ -9,7 +9,7 @@ export interface SkillCatalogEntry {
   metadata: Record<string, string | string[]>;
 }
 
-export interface LoadedSkill extends SkillCatalogEntry {
+interface LoadedSkill extends SkillCatalogEntry {
   content: string;
   resourcePaths: string[];
 }
