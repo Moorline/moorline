@@ -4,11 +4,8 @@ export type {
   RuntimeProvider,
   RuntimeProviderDiagnostics,
   RuntimeProviderFactory,
-  RuntimeProviderFactoryContext,
   RuntimeProviderPackage,
-  RuntimeProviderPackageContext,
-  RuntimeProviderSessionInput,
-  RuntimeProviderTestResult
+  RuntimeProviderPackageContext
 } from '@moorline/contracts';
 
 export {

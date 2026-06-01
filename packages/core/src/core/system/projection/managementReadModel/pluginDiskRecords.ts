@@ -5,7 +5,6 @@ import { validatePluginManifest } from '../../../extension/plugins/pluginManifes
 
 interface PluginDiskRecord {
   pluginPath: string;
-  packageGroup: 'official' | 'local';
   manifest?: PluginManifest;
   error?: string;
   pluginId: string;
@@ -30,29 +29,19 @@ export function listPluginRecords(rootDir: string): PluginDiskRecord[] {
 
     const manifestPath = join(current, 'manifest.json');
     if (existsSync(manifestPath)) {
-      const segments = current.split(/[\\/]/u).filter(Boolean);
-      const packagesIndex = segments.lastIndexOf('packages');
-      const packageGroup =
-        packagesIndex >= 0 &&
-        segments[packagesIndex + 1] === 'plugins' &&
-        segments[packagesIndex + 2] === 'official'
-          ? 'official'
-          : 'local';
       try {
         const raw = JSON.parse(readFileSync(manifestPath, 'utf8')) as PluginManifest;
         const manifest = validatePluginManifest(raw);
         records.push({
           manifest,
           pluginId: manifest.id,
-          pluginPath: current,
-          packageGroup
+          pluginPath: current
         });
       } catch (error) {
         const normalized = current.replaceAll('\\', '/');
         records.push({
           pluginId: `invalid:${normalized.split('/').filter(Boolean).at(-1) ?? 'plugin'}`,
           pluginPath: current,
-          packageGroup,
           error: error instanceof Error ? error.message : String(error)
         });
       }

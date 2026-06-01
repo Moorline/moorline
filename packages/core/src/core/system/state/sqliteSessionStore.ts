@@ -32,7 +32,6 @@ export type {
   RuntimeOrchestrationRequestRow,
   RuntimeOrchestrationRequestType,
   RuntimePackageJobRow,
-  RuntimePackageStateRow,
   RuntimeSessionRow
 } from './sqlite/types.js';
 

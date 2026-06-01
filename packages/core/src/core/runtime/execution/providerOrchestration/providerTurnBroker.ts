@@ -129,7 +129,7 @@ export interface RuntimeProviderTurnInput {
   };
 }
 
-export interface ProviderTurnBrokerDeps extends ProviderAuditPort, ProviderGuardPort, ProviderModelPort {
+interface ProviderTurnBrokerDeps extends ProviderAuditPort, ProviderGuardPort, ProviderModelPort {
   provider: RuntimeProvider;
   sessions: ProviderSessionOrchestrator;
   typing: ProviderTypingPort;

@@ -29,7 +29,7 @@ moorline init
 - `~/.moorline/.git`
 - empty managed install roots for API adapters, providers, transports, plugins, and skills
 
-It installs and selects the bundled `official/http` API adapter by default so local and remote CLI clients have a control endpoint. It does not install or select provider, transport, plugin, or skill packages.
+It installs and selects the bundled HTTP API adapter by manifest so local and remote CLI clients have a control endpoint. It does not install or select provider, transport, plugin, or skill packages.
 
 ## Complete Setup
 
@@ -47,7 +47,7 @@ A complete setup requires:
 - valid package config
 - an explicit apply
 
-Fresh `moorline init` installs and selects the bundled `official/http` API adapter. Install the transport, provider, plugin, skill, or bundle packages your runtime needs. Optional bundles do not block setup readiness.
+Fresh `moorline init` installs and selects the bundled HTTP API adapter. Install the transport, provider, plugin, skill, or bundle packages your runtime needs. Optional bundles do not block setup readiness.
 
 Package families:
 - installables: API adapters, providers, transports, plugins

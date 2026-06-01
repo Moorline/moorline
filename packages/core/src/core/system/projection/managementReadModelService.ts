@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { createPackageApplyPlan } from '../../extension/packages/packageApplyPlanner.js';
 import { desiredPackageRefsFromConfig, isPackageActivated, packageActivationUniqueKey } from '../../extension/packages/packageActivation.js';
 import { resolvePackageConfigSchema } from '../../extension/packages/packageConfigSchema.js';
@@ -15,11 +15,12 @@ import { readConfigMigrationWarning, runtimePaths } from '../config/configStore.
 import { readRecentAuditEvents } from './managementReadModel/auditEvents.js';
 import type { ManagementReadModelServiceDeps } from './managementReadModel/deps.js';
 import { buildServiceObjects } from './managementReadModel/objects/serviceObjects.js';
+import { editableFromPackage, managedTrustForPackage, removableFromPackage } from './managementReadModel/packageTrust.js';
 import { listPluginRecords } from './managementReadModel/pluginDiskRecords.js';
 import { buildProviderAlignment } from './managementReadModel/providerAlignment.js';
 import { summarize } from './managementReadModel/text.js';
 import { readRuntimeOrchestrationHealth } from '../../runtime/execution/orchestrationHealth.js';
-import { isOfficialPluginId, toPluginPackageId } from '../../extension/plugins/pluginId.js';
+import { toPluginPackageId } from '../../extension/plugins/pluginId.js';
 import { parsePendingRequestQuestions } from './pendingRequestQuestions.js';
 import type {
   ManagementInstalledPackageRecord,
@@ -123,6 +124,11 @@ function configValueIsSet(value: unknown): boolean {
   return value !== undefined && value !== null && !(typeof value === 'string' && value.trim().length === 0);
 }
 
+function pathContains(rootPath: string, candidatePath: string): boolean {
+  const relativePath = relative(resolve(rootPath), resolve(candidatePath));
+  return relativePath === '' || (!relativePath.startsWith('..') && !relativePath.startsWith('/') && !relativePath.startsWith('\\'));
+}
+
 function schemaFieldType(property: ConfigSchemaProperty): 'string' | 'boolean' | 'number' {
   return property.type ?? 'string';
 }
@@ -143,10 +149,10 @@ export class ManagementReadModelService {
     const sessions = this.buildSessions();
     const plugins = this.buildPlugins(inventory);
     const skills = this.buildSkills(inventory);
-    const services = this.buildServices();
+    const services = this.buildServices(inventory.installed);
     const pendingRequests = this.buildPendingRequests();
     const providerThreads = this.buildProviderThreads();
-    const sidecars = this.buildSidecars();
+    const sidecars = this.buildSidecars(inventory.installed);
     const managementContributions = this.buildManagementContributions();
     const managementSurface = this.deps.getManagementSurface();
     const providerDiagnostics = this.deps.provider.getDiagnostics();
@@ -475,9 +481,15 @@ export class ManagementReadModelService {
 
   private buildPlugins(inventory: ReturnType<PackageInventoryStore['load']>): ManagedPluginRecord[] {
     const enabledPluginIds = new Set(this.deps.config.surfaces.plugins.enabledPackageIds);
-    const installedPluginIds = new Set(inventory.installed.filter((entry) => entry.kind === 'plugin').map((entry) => entry.packageId));
+    const installedPlugins = inventory.installed.filter((entry) => entry.kind === 'plugin');
+    const installedPluginIds = new Set(installedPlugins.map((entry) => entry.packageId));
     const pluginsRoot = join(this.deps.runtimeRoot, 'packages', 'plugins');
     return listPluginRecords(pluginsRoot).map((record) => {
+      const normalizedPluginId = record.manifest ? toPluginPackageId(record.manifest.id) : null;
+      const installedPlugin = normalizedPluginId
+        ? installedPlugins.find((entry) => entry.packageId === normalizedPluginId) ?? null
+        : installedPlugins.find((entry) => pathContains(entry.installPath, record.pluginPath)) ?? null;
+      const trust = managedTrustForPackage(installedPlugin, record.pluginPath);
       if (!record.manifest) {
         return {
           id: record.pluginId,
@@ -486,14 +498,11 @@ export class ManagementReadModelService {
           summary: summarize(record.error ?? 'Malformed plugin manifest'),
           controls: ['inspect'],
           mutability: {
-            editable: record.packageGroup === 'local',
+            editable: editableFromPackage(installedPlugin),
             installable: true,
-            removable: record.packageGroup === 'local'
+            removable: removableFromPackage(installedPlugin)
           },
-          trust: {
-            level: record.packageGroup === 'official' ? 'official' : 'local',
-            source: record.packageGroup === 'official' ? 'bundled official runtime package' : 'runtime plugin directory'
-          },
+          trust,
           sourceOfTruth: {
             kind: 'filesystem',
             label: 'plugin manifest',
@@ -512,11 +521,11 @@ export class ManagementReadModelService {
           capabilities: [],
           hooks: [],
           commands: [],
-          packageGroup: record.packageGroup
+          packageTrustLevel: trust.level
         };
       }
 
-      const normalizedPluginId = toPluginPackageId(record.manifest.id);
+      const pluginPackageId = toPluginPackageId(record.manifest.id);
       return {
         id: record.manifest.id,
         kind: 'plugin',
@@ -524,22 +533,19 @@ export class ManagementReadModelService {
         summary: summarize(record.manifest.description ?? null),
         controls: ['inspect'],
         mutability: {
-          editable: record.packageGroup === 'local',
+          editable: editableFromPackage(installedPlugin),
           installable: true,
-          removable: record.packageGroup === 'local'
+          removable: removableFromPackage(installedPlugin)
         },
-        trust: {
-          level: record.packageGroup === 'official' ? 'official' : 'local',
-          source: record.packageGroup === 'official' ? 'bundled official runtime package' : 'runtime plugin directory'
-        },
+        trust,
         sourceOfTruth: {
           kind: 'filesystem',
           label: 'plugin manifest',
           path: record.pluginPath
         },
         runtimeState: {
-          status: installedPluginIds.has(normalizedPluginId)
-            ? enabledPluginIds.has(normalizedPluginId)
+          status: installedPluginIds.has(pluginPackageId)
+            ? enabledPluginIds.has(pluginPackageId)
               ? 'enabled'
               : 'disabled'
             : 'available',
@@ -557,7 +563,7 @@ export class ManagementReadModelService {
         capabilities: [...record.manifest.capabilities],
         hooks: [...(record.manifest.hooks ?? [])],
         commands: [],
-        packageGroup: record.packageGroup
+        packageTrustLevel: trust.level
       };
     });
   }
@@ -609,8 +615,8 @@ export class ManagementReadModelService {
     });
   }
 
-  private buildServices(): ManagedServiceRecord[] {
-    return buildServiceObjects(this.deps);
+  private buildServices(installed: PackageInstallRecord[]): ManagedServiceRecord[] {
+    return buildServiceObjects(this.deps, installed);
   }
 
   private buildPendingRequests(): ManagedPendingRequestRecord[] {
@@ -695,7 +701,8 @@ export class ManagementReadModelService {
     });
   }
 
-  private buildSidecars(): ManagedSidecarSummary[] {
+  private buildSidecars(installed: PackageInstallRecord[]): ManagedSidecarSummary[] {
+    const installedPlugins = installed.filter((entry) => entry.kind === 'plugin');
     return this.deps.sidecars.listSidecars().map((sidecar) => ({
       id: sidecar.sidecarId,
       kind: 'sidecar',
@@ -707,10 +714,10 @@ export class ManagementReadModelService {
         installable: false,
         removable: false
       },
-      trust: {
-        level: isOfficialPluginId(sidecar.pluginId) ? 'official' : 'local',
-        source: sidecar.pluginId
-      },
+      trust: managedTrustForPackage(
+        installedPlugins.find((entry) => entry.packageId === toPluginPackageId(sidecar.pluginId)) ?? null,
+        sidecar.pluginId
+      ),
       sourceOfTruth: {
         kind: 'sqlite',
         label: 'managed_sidecars'

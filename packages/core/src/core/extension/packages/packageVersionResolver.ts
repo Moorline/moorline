@@ -1,7 +1,7 @@
 import semver from 'semver';
 import type { PackageBundleMember, PackageMetadataEntry, PackageKind } from '../../../types/package.js';
 
-export interface ResolvedBundleMember {
+interface ResolvedBundleMember {
   member: PackageBundleMember;
   packageEntry: PackageMetadataEntry;
 }
@@ -49,7 +49,7 @@ export function packageVersionSatisfiesRange(input: {
   return semver.satisfies(version, input.range);
 }
 
-export function resolvePackageMetadata(input: {
+function resolvePackageMetadata(input: {
   entries: PackageMetadataEntry[];
   kind: PackageKind;
   packageId: string;

@@ -176,7 +176,7 @@ interface MoorlineRuntimeBuilderCallbacks {
   rejectTurnWaitersForThread(threadId: string, reason: string): void;
 }
 
-export interface RuntimeStateGraph {
+interface RuntimeStateGraph {
   store: SqliteSessionStore;
   sessionRegistry: SessionRegistry;
   sessionLifecycle: SessionLifecycleService;
@@ -195,7 +195,7 @@ export interface RuntimeStateGraph {
   projectionService: RuntimeProjectionService;
 }
 
-export interface RuntimeExtensionGraph {
+interface RuntimeExtensionGraph {
   pluginHostRef: { current: PluginHost };
   pluginHost: PluginHost;
   skillRegistry: SkillRegistry;
@@ -203,20 +203,20 @@ export interface RuntimeExtensionGraph {
   pluginContexts: RuntimePluginContextService;
 }
 
-export interface RuntimeTransportGraph {
+interface RuntimeTransportGraph {
   managedSpaceLifecycle: ManagedSpaceLifecycleService;
   interactions: RuntimeInteractionService;
   transportSurface: RuntimeTransportSurfaceService;
   hostingService: RuntimeHostingService;
 }
 
-export interface RuntimeProviderGraph {
+interface RuntimeProviderGraph {
   providerService: RuntimeProvider;
   providerDirectory: ProviderSessionDirectory;
   providerOrchestrator: ProviderOrchestrator;
 }
 
-export interface RuntimeManagementGraph {
+interface RuntimeManagementGraph {
   managementReadModel: ManagementReadModelService;
   runtimeControl: RuntimeControlService;
   workManagement: RuntimeWorkManagementService;
@@ -227,7 +227,7 @@ export interface RuntimeManagementGraph {
   packageJobScheduler: PackageJobSchedulerService;
 }
 
-export interface MoorlineRuntimeServiceGraph
+interface MoorlineRuntimeServiceGraph
   extends RuntimeStateGraph,
     RuntimeExtensionGraph,
     RuntimeTransportGraph,

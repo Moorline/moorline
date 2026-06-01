@@ -10,7 +10,7 @@ function isResolvedPathWithinRoot(rootPath: string, candidatePath: string): bool
   );
 }
 
-export function canonicalizeExistingPath(path: string, label: string): string {
+function canonicalizeExistingPath(path: string, label: string): string {
   const resolved = resolve(path);
   try {
     return realpathSync(resolved);
@@ -19,12 +19,6 @@ export function canonicalizeExistingPath(path: string, label: string): string {
       `${label} does not exist or cannot be resolved: ${path}. ${error instanceof Error ? error.message : String(error)}`
     );
   }
-}
-
-export function isCanonicalExistingPathWithinRoot(rootPath: string, candidatePath: string): boolean {
-  const canonicalRoot = canonicalizeExistingPath(rootPath, 'Root path');
-  const canonicalCandidate = canonicalizeExistingPath(candidatePath, 'Candidate path');
-  return isResolvedPathWithinRoot(canonicalRoot, canonicalCandidate);
 }
 
 export function assertCanonicalExistingPathWithinRoot(input: {

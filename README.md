@@ -4,7 +4,7 @@ Moorline 0.0.x is a local-first coding operator with a small core plus package-m
 
 The shipped operator surfaces are:
 - `moorline` for setup, package management, runtime control, local history, and Control API access
-- `official/http`, the default HTTP API adapter used by local and remote CLI clients
+- the bundled HTTP API adapter package used by local and remote CLI clients
 
 Moorline does not require a hosted relay. Execution, state, secrets, and workspaces stay on the operator machine.
 

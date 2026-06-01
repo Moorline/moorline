@@ -483,7 +483,7 @@ export function parsePackageScheduleStartTime(input: string | undefined, nowIso:
   );
 }
 
-export function computePackageJobRunAtOrAfter(anchorIso: string, cadenceMinutes: number, referenceIso: string): string {
+function computePackageJobRunAtOrAfter(anchorIso: string, cadenceMinutes: number, referenceIso: string): string {
   const anchorMs = Date.parse(anchorIso);
   const referenceMs = Date.parse(referenceIso);
   if (Number.isNaN(anchorMs) || Number.isNaN(referenceMs)) {
@@ -497,10 +497,6 @@ export function computePackageJobRunAtOrAfter(anchorIso: string, cadenceMinutes:
   const elapsedMs = referenceMs - anchorMs;
   const intervals = Math.ceil(elapsedMs / cadenceMs);
   return new Date(anchorMs + intervals * cadenceMs).toISOString();
-}
-
-export function computeNextPackageJobRunAt(anchorIso: string, cadenceMinutes: number, afterIso: string): string {
-  return computePackageJobRunAtOrAfter(anchorIso, cadenceMinutes, new Date(Date.parse(afterIso) + 1).toISOString());
 }
 
 export function computePackageJobRunAtOrAfterWithMeta(

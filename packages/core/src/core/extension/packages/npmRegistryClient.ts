@@ -13,7 +13,7 @@ const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_SEARCH_RESULTS = 20;
 const MOORLINE_KEYWORD = 'moorline-package';
 
-export interface NpmRegistryClientOptions {
+interface NpmRegistryClientOptions {
   registryUrl?: string;
   fetchTimeoutMs?: number;
   maxSearchResults?: number;

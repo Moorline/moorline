@@ -110,7 +110,7 @@ function copyRuntimeRoot(input: {
   });
 }
 
-export function isPathWithinDirectory(
+function isPathWithinDirectory(
   rootPath: string,
   candidatePath: string,
   pathOps: Pick<typeof path, 'resolve' | 'relative' | 'isAbsolute'> = path

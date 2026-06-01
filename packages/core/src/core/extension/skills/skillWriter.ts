@@ -36,7 +36,7 @@ interface WriteSkillInput {
   resourceFiles?: SkillResourceFileInput[];
 }
 
-export interface WrittenSkillResult {
+interface WrittenSkillResult {
   skillDir: string;
   skillPath: string;
   resourcePaths: string[];

@@ -86,12 +86,6 @@ export interface RetrievalScope {
   projectKey?: string;
 }
 
-export interface RetrievalDocument {
-  id: string;
-  content: string;
-  sourceRefs: string[];
-}
-
 export const VECTOR_DIMENSIONS = 96;
 export const EMBEDDING_VERSION = 2;
 export const CHUNK_TARGET_CHARS = 1200;

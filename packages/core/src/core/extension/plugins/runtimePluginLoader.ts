@@ -139,14 +139,6 @@ async function importPlugin(record: RuntimePluginImportRecord): Promise<RuntimeP
   };
 }
 
-export async function loadRuntimePlugins(runtimeRoot: string): Promise<RuntimePlugin[]> {
-  const result = await loadRuntimePluginsWithDiagnostics(runtimeRoot);
-  if (result.failures.length > 0) {
-    throw new Error(result.failures.map((entry) => `${entry.packageId}: ${entry.detail}`).join('; '));
-  }
-  return result.plugins;
-}
-
 export async function loadRuntimePluginsWithDiagnostics(
   runtimeRoot: string,
   phase: RuntimePackageLoadFailure['phase'] = 'startup',

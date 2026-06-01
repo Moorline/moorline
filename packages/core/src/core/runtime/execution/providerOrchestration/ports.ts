@@ -1,7 +1,5 @@
-import type { RuntimeProvider } from '../../../../types/provider.js';
 import type { PendingRuntimeRequestRecord } from '../../../../types/runtime.js';
 import type { RuntimeActivityRecord } from '../../../system/projection/runtimeActivityStore.js';
-import type { RuntimeSnapshotQuery } from '../../../system/projection/runtimeSnapshotQuery.js';
 import type { RuntimeDomainEvent } from '../runtimeDomain.js';
 
 export interface ProviderAuditPort {
@@ -43,16 +41,6 @@ export interface ProviderModelPort {
   providerPolicyTarget(threadId: string, suffix: string): string;
 }
 
-export interface ProviderRuntimePorts extends ProviderAuditPort, ProviderGuardPort, ProviderModelPort {
-  provider: RuntimeProvider;
-  snapshots: RuntimeSnapshotQuery;
-  now(): string;
-}
-
 export type ProviderTurnSurface = 'main_chat' | 'session';
-
-export interface TurnBufferAttachment {
-  path: string;
-}
 
 export type TurnCompletionState = 'completed' | 'failed' | 'cancelled' | 'interrupted';
