@@ -8,7 +8,7 @@ interface SessionLifecycleConfig {
 interface SessionTransition {
   sessionId: string;
   threadId: string;
-  spaceId: string;
+  transportResourceId: string;
   from: RuntimeSessionRow['lifecycleStatus'];
   to: RuntimeSessionRow['lifecycleStatus'];
   at: string;
@@ -43,7 +43,7 @@ export class SessionLifecycleService {
     return {
       sessionId: session.sessionId,
       threadId: session.threadId,
-      spaceId: session.spaceId,
+      transportResourceId: session.transportResourceId,
       from: session.lifecycleStatus,
       to: 'hot',
       at: nowIso
@@ -55,7 +55,7 @@ export class SessionLifecycleService {
     const transitions: SessionTransition[] = [];
 
     for (const session of this.store.listSessions()) {
-      if (session.sessionId.startsWith('chat-') || session.threadId.startsWith('chat:')) {
+      if (session.sessionId.startsWith('coordination-') || session.threadId.startsWith('coordination:')) {
         continue;
       }
       const idleMs = nowMs - Date.parse(session.lastActivityAt);
@@ -66,7 +66,7 @@ export class SessionLifecycleService {
         transitions.push({
           sessionId: session.sessionId,
           threadId: session.threadId,
-          spaceId: session.spaceId,
+          transportResourceId: session.transportResourceId,
           from: session.lifecycleStatus,
           to: 'archived',
           at: nowIso
@@ -83,7 +83,7 @@ export class SessionLifecycleService {
         transitions.push({
           sessionId: session.sessionId,
           threadId: session.threadId,
-          spaceId: session.spaceId,
+          transportResourceId: session.transportResourceId,
           from: 'hot',
           to: 'cool',
           at: nowIso

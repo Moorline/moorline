@@ -170,7 +170,7 @@ export class ControlApiStateService {
         appendAuditEvent: () => undefined
       });
       const startedAtIso = store.getMetadata<string>('runtime.started_at') ?? null;
-      const namespaceState = loadInstallationState(paths.installationPath);
+      const surfaceState = loadInstallationState(paths.installationPath);
       const service = new ManagementReadModelService({
         homeRoot: homeRootForRuntime(config.runtimeRoot),
         runtimeRoot: config.runtimeRoot,
@@ -187,7 +187,7 @@ export class ControlApiStateService {
             startedAtIso,
             now
           }),
-        getNamespaceState: () => namespaceState,
+        getSurfaceState: () => surfaceState,
         getManagementSurface: () => this.input.getManagementSurface(),
         presentation: controlApiPresentation()
       });

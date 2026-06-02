@@ -9,7 +9,7 @@ export function buildIndexTargets(repoPath: string, scope: NormalizedRetrievalSc
       rootPath: resolveContainedPath(repoPath, ['memory', 'projects', scope.projectKey], 'Project retrieval root'),
       projectKey: scope.projectKey,
       scopeId: null,
-      spaceId: null,
+      transportResourceId: null,
       threadId: null
     },
     {
@@ -17,22 +17,22 @@ export function buildIndexTargets(repoPath: string, scope: NormalizedRetrievalSc
       rootPath: resolveContainedPath(repoPath, ['memory', 'server', `g${scope.scopeId}`], 'Server retrieval root'),
       projectKey: null,
       scopeId: scope.scopeId,
-      spaceId: null,
+      transportResourceId: null,
       threadId: null
     }
   ];
 
-  if (scope.spaceId) {
+  if (scope.transportResourceId) {
     targets.push({
       layer: 'session',
       rootPath: resolveContainedPath(
         repoPath,
-        ['memory', 'sessions', `g${scope.scopeId}`, `c${scope.spaceId}`, scope.threadId ?? 'root'],
+        ['memory', 'sessions', `g${scope.scopeId}`, `c${scope.transportResourceId}`, scope.threadId ?? 'root'],
         'Session retrieval root'
       ),
       projectKey: null,
       scopeId: scope.scopeId,
-      spaceId: scope.spaceId,
+      transportResourceId: scope.transportResourceId,
       threadId: scope.threadId ?? 'root'
     });
   } else {
@@ -41,7 +41,7 @@ export function buildIndexTargets(repoPath: string, scope: NormalizedRetrievalSc
       rootPath: resolveContainedPath(repoPath, ['memory', 'sessions', `g${scope.scopeId}`], 'Session retrieval root'),
       projectKey: null,
       scopeId: scope.scopeId,
-      spaceId: null,
+      transportResourceId: null,
       threadId: null
     });
   }

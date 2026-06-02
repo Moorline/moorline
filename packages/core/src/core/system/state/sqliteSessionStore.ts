@@ -101,8 +101,8 @@ export class SqliteSessionStore {
     return this.sessions.getSession(sessionId);
   }
 
-  getSessionBySpaceId(spaceId: string | null | undefined): RuntimeSessionRow | null {
-    return this.sessions.getSessionBySpaceId(spaceId);
+  getSessionByTransportResourceId(transportResourceId: string | null | undefined): RuntimeSessionRow | null {
+    return this.sessions.getSessionByTransportResourceId(transportResourceId);
   }
 
   getSessionByThreadId(threadId: string): RuntimeSessionRow | null {
@@ -270,8 +270,8 @@ export class SqliteSessionStore {
     return this.orchestration.listOpenOrchestrationRequests();
   }
 
-  appendRuntimeEvent(event: ProviderRuntimeEvent, spaceId: string | null): EventPersistenceResult {
-    return this.providerEvents.appendRuntimeEvent(event, spaceId);
+  appendRuntimeEvent(event: ProviderRuntimeEvent, transportResourceId: string | null): EventPersistenceResult {
+    return this.providerEvents.appendRuntimeEvent(event, transportResourceId);
   }
 
   listRuntimeEvents(threadId: string): RuntimeEventRow[] {
@@ -294,16 +294,16 @@ export class SqliteSessionStore {
     return this.pendingRequests.getPendingRequest(requestId);
   }
 
-  listPendingRequestsBySpace(spaceId: string | null | undefined): PendingRuntimeRequestRecord[] {
-    return this.pendingRequests.listPendingRequestsBySpace(spaceId);
+  listPendingRequestsByTransportResource(transportResourceId: string | null | undefined): PendingRuntimeRequestRecord[] {
+    return this.pendingRequests.listPendingRequestsByTransportResource(transportResourceId);
   }
 
   listOpenPendingRequests(): PendingRuntimeRequestRecord[] {
     return this.pendingRequests.listOpenPendingRequests();
   }
 
-  listOpenPendingRequestsBySpace(spaceId: string | null | undefined): PendingRuntimeRequestRecord[] {
-    return this.pendingRequests.listOpenPendingRequestsBySpace(spaceId);
+  listOpenPendingRequestsByTransportResource(transportResourceId: string | null | undefined): PendingRuntimeRequestRecord[] {
+    return this.pendingRequests.listOpenPendingRequestsByTransportResource(transportResourceId);
   }
 
   listOpenPendingRequestsByThread(threadId: string | null | undefined): PendingRuntimeRequestRecord[] {

@@ -51,7 +51,7 @@ import { ManagementReadModelService } from '../system/projection/managementReadM
 import { RuntimeControlService } from './supervision/runtimeControlService.js';
 import type { RuntimeManagementSurfaceHandle } from './hosting/runtimeManagementPort.js';
 import { RuntimeWorkManagementService } from '../domain/sessions/runtimeWorkManagementService.js';
-import { ManagedSpaceLifecycleService } from './lifecycle/managedSpaceLifecycleService.js';
+import { ManagedTransportResourceLifecycleService } from './lifecycle/managedTransportResourceLifecycleService.js';
 import { RuntimeInteractionService } from './execution/runtimeInteractionService.js';
 import { RuntimeTransportSurfaceService } from './hosting/runtimeTransportSurfaceService.js';
 import { ProviderOrchestrator } from './execution/providerOrchestration/providerOrchestrator.js';
@@ -107,7 +107,7 @@ export class MoorlineRuntime {
   private readonly managementReadModel: ManagementReadModelService;
   private readonly runtimeControl: RuntimeControlService;
   private readonly workManagement: RuntimeWorkManagementService;
-  private readonly managedSpaceLifecycle: ManagedSpaceLifecycleService;
+  private readonly managedTransportResourceLifecycle: ManagedTransportResourceLifecycleService;
   private readonly interactions: RuntimeInteractionService;
   private readonly transportSurface: RuntimeTransportSurfaceService;
   private readonly providerOrchestrator: ProviderOrchestrator;
@@ -126,11 +126,11 @@ export class MoorlineRuntime {
   private readonly transportQueue: KeyedDrainableWorker;
   private stoppingReason: string | null = null;
   private acceptingNewWork = true;
-  private readonly chatWorkspacePath: string;
+  private readonly coordinationWorkspacePath: string;
   private readonly runtimePolicyPath: string;
   private guard: RuntimeActionGuard | null = null;
   private startedAtIso: string | null = null;
-  private namespaceState: RuntimeSurfaceState | null = null;
+  private surfaceState: RuntimeSurfaceState | null = null;
   private providerAutoStartDefault = true;
 
   private configuredProviderModel(): string | undefined {
@@ -154,13 +154,13 @@ export class MoorlineRuntime {
       createPluginContext: (actorId) => this.createPluginContext(actorId),
       cleanupScopedSidecars: async (scopeKind, scopeKey, reason) => await this.cleanupScopedSidecars(scopeKind, scopeKey, reason),
       runOrchestrationTurn: async (session, actorId, content) => await this.runOrchestrationTurn(session, actorId, content),
-      ensureChatSession: async (spaceId, cwd) => await this.ensureChatSession(spaceId, cwd),
+      ensureCoordinationSession: async (transportResourceId, cwd) => await this.ensureCoordinationSession(transportResourceId, cwd),
       isAdminActor: (input) => this.isAdminActor(input),
-      postTransportMessage: async (actor, spaceId, payload) => await this.postTransportMessage(actor, spaceId, payload),
+      postTransportMessage: async (actor, transportResourceId, payload) => await this.postTransportMessage(actor, transportResourceId, payload),
       sendStatusUpdate: async (payload) => await this.sendStatusUpdate(payload),
       runGuardedAction: async (input) => await this.runGuardedAction(input),
-      requireNamespaceState: () => this.requireNamespaceState(),
-      getNamespaceState: () => this.namespaceState,
+      requireSurfaceState: () => this.requireSurfaceState(),
+      getSurfaceState: () => this.surfaceState,
       getRuntimeStatus: () => this.getRuntimeStatus(),
       getRuntimeControlStatus: () => this.getRuntimeControlStatus(),
       appendAuditEvent: (event, payload) => {
@@ -182,7 +182,7 @@ export class MoorlineRuntime {
     });
     this.deps = graph.deps;
     this.paths = graph.paths;
-    this.chatWorkspacePath = graph.chatWorkspacePath;
+    this.coordinationWorkspacePath = graph.coordinationWorkspacePath;
     this.runtimePolicyPath = graph.runtimePolicyPath;
     this.store = graph.store;
     this.sessionRegistry = graph.sessionRegistry;
@@ -208,7 +208,7 @@ export class MoorlineRuntime {
     this.managementReadModel = graph.managementReadModel;
     this.runtimeControl = graph.runtimeControl;
     this.workManagement = graph.workManagement;
-    this.managedSpaceLifecycle = graph.managedSpaceLifecycle;
+    this.managedTransportResourceLifecycle = graph.managedTransportResourceLifecycle;
     this.interactions = graph.interactions;
     this.transportSurface = graph.transportSurface;
     this.providerOrchestrator = graph.providerOrchestrator;
@@ -249,11 +249,11 @@ export class MoorlineRuntime {
     });
     this.pluginHostRef.current = this.pluginHost;
     this.initializePolicyGuard();
-    this.namespaceState = await this.hostingService.start({
+    this.surfaceState = await this.hostingService.start({
       actions: this.pluginHost.listActions((pluginId) => this.createPluginContext(`plugin:${pluginId}`)),
       onTransportEvent: async (event) => {
         if (event.type === 'resource.lifecycle') {
-          await this.managedSpaceLifecycle.handleEvent(event);
+          await this.managedTransportResourceLifecycle.handleEvent(event);
         }
         await this.interactions.handleTransportEvent(event);
       }
@@ -274,7 +274,7 @@ export class MoorlineRuntime {
           this.recordRuntimeActivity({
             threadId: event.threadId,
             sessionId: null,
-            spaceId: null,
+            transportResourceId: null,
             sourceEventId: randomUUID(),
             kind: 'runtime.queue.reject',
             severity: 'warning',
@@ -383,7 +383,7 @@ export class MoorlineRuntime {
     this.recordRuntimeActivity({
       threadId: `plugin:${failure.pluginId}`,
       sessionId: null,
-      spaceId: null,
+      transportResourceId: null,
       sourceEventId: randomUUID(),
       kind: 'plugin.hook.failed',
       severity: 'warning',
@@ -447,7 +447,7 @@ export class MoorlineRuntime {
   private getEffectiveAdminConfig() {
     const adminConfig = this.deps.config.admin ?? defaultAdminConfig();
     const managedAccessGroupId =
-      adminConfig.managedRole.enabled === true ? this.namespaceState?.adminAccessGroupId ?? null : null;
+      adminConfig.managedRole.enabled === true ? this.surfaceState?.adminAccessGroupId ?? null : null;
     const accessGroupIds = managedAccessGroupId ? Array.from(new Set([...adminConfig.accessGroupIds, managedAccessGroupId])) : adminConfig.accessGroupIds;
 
     return {
@@ -475,7 +475,7 @@ export class MoorlineRuntime {
   ): Promise<RuntimeMessagePayload> {
     return await this.createPluginContext(actorId).runAgent({
       surface: 'session',
-      spaceId: session.spaceId,
+      transportResourceId: session.transportResourceId,
       actorId,
       actorLabel: 'Moorline Orchestrator',
       text: content,
@@ -487,16 +487,16 @@ export class MoorlineRuntime {
     });
   }
 
-  private async ensureChatSession(spaceId: string, cwd: string): Promise<RuntimeSessionRow> {
-    const existing = this.sessionRegistry.getBySpaceId(spaceId);
+  private async ensureCoordinationSession(transportResourceId: string, cwd: string): Promise<RuntimeSessionRow> {
+    const existing = this.sessionRegistry.getByTransportResourceId(transportResourceId);
     if (existing) {
       return existing;
     }
-    return this.reactor.createChatSession({
+    return this.reactor.createCoordinationSession({
       scopeId: this.deps.config.transport!.scopeId,
-      spaceId,
-      threadId: `chat:${spaceId}`,
-      spaceName: 'moorline-chat',
+      transportResourceId,
+      threadId: `coordination:${transportResourceId}`,
+      transportResourceName: 'moorline-coordination',
       workspacePath: cwd,
       runtimeMode: this.deps.config.defaults.runtimeMode,
       nowIso: this.now(),
@@ -532,8 +532,8 @@ export class MoorlineRuntime {
     await this.projectionService.handleDomainEvent(event);
   }
 
-  private async postRuntimeRequestMessage(spaceId: string, request: PendingRuntimeRequestRecord): Promise<void> {
-    await this.pendingRequestService.postRuntimeRequestMessage(spaceId, request);
+  private async postRuntimeRequestMessage(transportResourceId: string, request: PendingRuntimeRequestRecord): Promise<void> {
+    await this.pendingRequestService.postRuntimeRequestMessage(transportResourceId, request);
   }
 
   private async recoverOpenRequests(): Promise<void> {
@@ -544,8 +544,8 @@ export class MoorlineRuntime {
     this.projectionService.reconcileRecoveredState();
   }
 
-  private async postTransportMessage(actor: string, spaceId: string, payload: RuntimeMessagePayload): Promise<{ id: string }> {
-    return await this.transportSurface.postMessage(actor, spaceId, payload);
+  private async postTransportMessage(actor: string, transportResourceId: string, payload: RuntimeMessagePayload): Promise<{ id: string }> {
+    return await this.transportSurface.postMessage(actor, transportResourceId, payload);
   }
 
   private async sendStatusUpdate(payload: RuntimeMessagePayload): Promise<void> {
@@ -657,7 +657,7 @@ export class MoorlineRuntime {
         this.recordRuntimeActivity({
           threadId: input.threadId ?? 'runtime',
           sessionId: this.sessionRegistry.getByThreadId(input.threadId ?? '')?.sessionId ?? null,
-          spaceId: this.sessionRegistry.getByThreadId(input.threadId ?? '')?.spaceId ?? null,
+          transportResourceId: this.sessionRegistry.getByThreadId(input.threadId ?? '')?.transportResourceId ?? null,
           sourceEventId: randomUUID(),
           kind: 'policy.denied',
           severity: 'error',
@@ -669,7 +669,7 @@ export class MoorlineRuntime {
         this.recordRuntimeActivity({
           threadId: input.threadId ?? 'runtime',
           sessionId: this.sessionRegistry.getByThreadId(input.threadId ?? '')?.sessionId ?? null,
-          spaceId: this.sessionRegistry.getByThreadId(input.threadId ?? '')?.spaceId ?? null,
+          transportResourceId: this.sessionRegistry.getByThreadId(input.threadId ?? '')?.transportResourceId ?? null,
           sourceEventId: randomUUID(),
           kind: 'provider.operation.failed',
           severity: 'error',
@@ -691,11 +691,11 @@ export class MoorlineRuntime {
     void this.pluginHost.onRuntimeActivity(activity, (pluginId) => this.createPluginContext(`plugin:${pluginId}`));
   }
 
-  private requireNamespaceState(): RuntimeSurfaceState {
-    if (!this.namespaceState) {
-      throw new Error('Managed namespace is not available before runtime start');
+  private requireSurfaceState(): RuntimeSurfaceState {
+    if (!this.surfaceState) {
+      throw new Error('Managed surface is not available before runtime start');
     }
-    return this.namespaceState;
+    return this.surfaceState;
   }
 
   private appendAuditEvent(event: string, payload: Record<string, unknown>): void {

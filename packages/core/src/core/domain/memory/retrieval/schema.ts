@@ -32,7 +32,7 @@ function createRetrievalTables(db: DatabaseSync): void {
       layer TEXT NOT NULL,
       project_key TEXT,
       scope_id TEXT,
-      space_id TEXT,
+      transport_resource_id TEXT,
       thread_id TEXT,
       file_path TEXT NOT NULL,
       file_mtime_ms INTEGER NOT NULL,
@@ -53,7 +53,7 @@ function createRetrievalTables(db: DatabaseSync): void {
       layer TEXT NOT NULL,
       project_key TEXT,
       scope_id TEXT,
-      space_id TEXT,
+      transport_resource_id TEXT,
       thread_id TEXT,
       file_mtime_ms INTEGER NOT NULL,
       file_size INTEGER NOT NULL,
@@ -72,31 +72,31 @@ function createRetrievalTables(db: DatabaseSync): void {
 function ensureScopedIndexes(db: DatabaseSync): void {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_retrieval_chunks_scope
-      ON retrieval_chunks (layer, project_key, scope_id, space_id, thread_id);
+      ON retrieval_chunks (layer, project_key, scope_id, transport_resource_id, thread_id);
 
     CREATE INDEX IF NOT EXISTS idx_retrieval_chunks_file
       ON retrieval_chunks (scope_key, file_path);
 
     CREATE INDEX IF NOT EXISTS idx_retrieval_files_scope
-      ON retrieval_files (layer, project_key, scope_id, space_id, thread_id);
+      ON retrieval_files (layer, project_key, scope_id, transport_resource_id, thread_id);
   `);
 }
 
 function isLegacyChunkSchema(columns: TableColumnInfo[]): boolean {
   // These names are only accepted as old retrieval-index fingerprints. Active
-  // storage uses scope_id/space_id and asks operators to rebuild stale indexes.
+  // storage uses scope_id/transport_resource_id and asks operators to rebuild stale indexes.
   return (
     columns.length > 0 &&
-    (!hasColumn(columns, 'scope_key') || hasColumn(columns, 'guild_id') || hasColumn(columns, 'channel_id') || !hasColumn(columns, 'layer'))
+    (!hasColumn(columns, 'scope_key') || !hasColumn(columns, 'layer'))
   );
 }
 
 function isLegacyFileSchema(columns: TableColumnInfo[]): boolean {
   // These names are only accepted as old retrieval-index fingerprints. Active
-  // storage uses scope_id/space_id and asks operators to rebuild stale indexes.
+  // storage uses scope_id/transport_resource_id and asks operators to rebuild stale indexes.
   return (
     columns.length > 0 &&
-    (!hasColumn(columns, 'scope_key') || hasColumn(columns, 'guild_id') || hasColumn(columns, 'channel_id') || !hasColumn(columns, 'layer'))
+    (!hasColumn(columns, 'scope_key') || !hasColumn(columns, 'layer'))
   );
 }
 

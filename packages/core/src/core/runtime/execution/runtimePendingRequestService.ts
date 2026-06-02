@@ -57,7 +57,7 @@ interface RuntimePendingRequestServiceDeps {
   providerId: string;
   isAdminActor(input: RuntimeActorIdentity): boolean;
   now(): string;
-  postTransportMessage(actor: string, spaceId: string, payload: RuntimeMessagePayload): Promise<{ id: string }>;
+  postTransportMessage(actor: string, transportResourceId: string, payload: RuntimeMessagePayload): Promise<{ id: string }>;
   runGuardedAction<T>(input: {
     action: Parameters<RuntimeActionGuard['run']>[0]['action'];
     actor: string;
@@ -92,14 +92,14 @@ export class RuntimePendingRequestService {
     return `provider:${this.deps.providerId}:${threadId}:${suffix}`;
   }
 
-  async postRuntimeRequestMessage(spaceId: string, request: PendingRuntimeRequestRecord): Promise<void> {
-    const openRequests = this.deps.snapshots.listOpenRequestsBySpace(spaceId);
+  async postRuntimeRequestMessage(transportResourceId: string, request: PendingRuntimeRequestRecord): Promise<void> {
+    const openRequests = this.deps.snapshots.listOpenRequestsByTransportResource(transportResourceId);
     const parsedQuestions = request.questionsJson ? formatPendingRequestQuestions(request.questionsJson) : null;
     if (parsedQuestions?.malformed) {
       this.deps.recordRuntimeActivity({
         threadId: request.threadId,
         sessionId: this.deps.snapshots.getSessionByThreadId(request.threadId)?.session.sessionId ?? null,
-        spaceId,
+        transportResourceId,
         sourceEventId: randomUUID(),
         kind: 'pending_request.payload.invalid',
         severity: 'warning',
@@ -138,7 +138,7 @@ export class RuntimePendingRequestService {
           ? `User input is needed for request ${request.requestId}. Resolve it through a management action.`
           : request.requesterUserId
             ? 'Only the original requester can resolve this request.'
-            : 'Only an Moorline operator can resolve this request.',
+            : 'Only a Moorline operator can resolve this request.',
       ...(request.requestType !== 'tool_user_input'
         ? {
             actions: [
@@ -164,7 +164,7 @@ export class RuntimePendingRequestService {
           }
         : {})
     };
-    const receipt = await this.deps.postTransportMessage('runtime:status', spaceId, payload);
+    const receipt = await this.deps.postTransportMessage('runtime:status', transportResourceId, payload);
     this.deps.store.upsertPendingRequest({
       ...request,
       messageId: receipt.id
@@ -172,7 +172,7 @@ export class RuntimePendingRequestService {
     this.deps.recordRuntimeActivity({
       threadId: request.threadId,
       sessionId: this.deps.snapshots.getSessionByThreadId(request.threadId)?.session.sessionId ?? null,
-      spaceId,
+      transportResourceId,
       sourceEventId: request.requestId,
       kind: 'pending_request.opened',
       severity: 'warning',
@@ -204,7 +204,7 @@ export class RuntimePendingRequestService {
       this.deps.recordRuntimeActivity({
         threadId,
         sessionId: this.deps.snapshots.getSessionByThreadId(threadId)?.session.sessionId ?? null,
-        spaceId: pending?.spaceId ?? null,
+        transportResourceId: pending?.transportResourceId ?? null,
         sourceEventId: requestId,
         kind: decision === 'cancel' ? 'pending_request.cancelled' : 'pending_request.resolved',
         severity: 'info',
@@ -268,7 +268,7 @@ export class RuntimePendingRequestService {
       this.deps.recordRuntimeActivity({
         threadId,
         sessionId: this.deps.snapshots.getSessionByThreadId(threadId)?.session.sessionId ?? null,
-        spaceId: pending?.spaceId ?? null,
+        transportResourceId: pending?.transportResourceId ?? null,
         sourceEventId: requestId,
         kind: 'pending_request.cancelled',
         severity: 'info',
@@ -372,7 +372,7 @@ export class RuntimePendingRequestService {
     this.deps.recordRuntimeActivity({
       threadId,
       sessionId: snapshot?.session.sessionId ?? null,
-      spaceId: snapshot?.session.spaceId ?? null,
+      transportResourceId: snapshot?.session.transportResourceId ?? null,
       sourceEventId: randomUUID(),
       kind: 'request.orphaned',
       severity: 'warning',
@@ -405,7 +405,7 @@ export class RuntimePendingRequestService {
     if (!isOperator) {
       throw new PendingRequestActionError(
         'REQUEST_FORBIDDEN',
-        'Only an Moorline operator can resolve this request.'
+        'Only a Moorline operator can resolve this request.'
       );
     }
     return request;

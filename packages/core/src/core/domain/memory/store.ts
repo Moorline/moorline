@@ -4,7 +4,7 @@ import { resolveContainedPath, sanitizePathSegment } from './pathSafety.js';
 
 interface SessionRecordInput {
   scopeId: string;
-  spaceId: string;
+  transportResourceId: string;
   threadId: string | null;
   kind: 'log' | 'summary' | 'facts' | 'tasks';
   content: string;
@@ -25,10 +25,10 @@ export class MemoryStore {
   async writeSessionRecord(input: SessionRecordInput): Promise<void> {
     const thread = input.threadId ? sanitizePathSegment(input.threadId, 'threadId') : 'root';
     const scopeId = sanitizePathSegment(input.scopeId, 'scopeId');
-    const spaceId = sanitizePathSegment(input.spaceId, 'spaceId');
+    const transportResourceId = sanitizePathSegment(input.transportResourceId, 'transportResourceId');
     const path = resolveContainedPath(
       this.rootDir,
-      ['memory', 'sessions', `g${scopeId}`, `c${spaceId}`, thread, `${input.kind}.md`],
+      ['memory', 'sessions', `g${scopeId}`, `c${transportResourceId}`, thread, `${input.kind}.md`],
       'Session memory path'
     );
 

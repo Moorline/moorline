@@ -9,7 +9,7 @@ export class SessionRepository {
     this.db
       .prepare(`
         INSERT INTO runtime_sessions (
-          session_id, scope_id, space_id, thread_id, space_name, workspace_path,
+          session_id, scope_id, transport_resource_id, thread_id, transport_resource_name, workspace_path,
           runtime_mode, lifecycle_status, summary, provider, provider_thread_id, resume_thread_id,
           provider_status, provider_auto_start_enabled, active_turn_id, created_at, updated_at, last_activity_at, archived_at, last_error,
           owner_kind, owner_id, owner_label, objective, tags_json, created_by, last_directed_at, last_directed_by
@@ -17,9 +17,9 @@ export class SessionRepository {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(session_id) DO UPDATE SET
           scope_id = excluded.scope_id,
-          space_id = excluded.space_id,
+          transport_resource_id = excluded.transport_resource_id,
           thread_id = excluded.thread_id,
-          space_name = excluded.space_name,
+          transport_resource_name = excluded.transport_resource_name,
           workspace_path = excluded.workspace_path,
           runtime_mode = excluded.runtime_mode,
           lifecycle_status = excluded.lifecycle_status,
@@ -47,9 +47,9 @@ export class SessionRepository {
       .run(
         row.sessionId,
         row.scopeId,
-        row.spaceId,
+        row.transportResourceId,
         row.threadId,
-        row.spaceName,
+        row.transportResourceName,
         row.workspacePath,
         row.runtimeMode,
         row.lifecycleStatus,
@@ -82,12 +82,12 @@ export class SessionRepository {
     );
   }
 
-  getSessionBySpaceId(spaceId: string | null | undefined): RuntimeSessionRow | null {
-    if (typeof spaceId !== 'string' || spaceId.trim().length === 0) {
+  getSessionByTransportResourceId(transportResourceId: string | null | undefined): RuntimeSessionRow | null {
+    if (typeof transportResourceId !== 'string' || transportResourceId.trim().length === 0) {
       return null;
     }
     return hydrateSession(
-      this.db.prepare(`${RUNTIME_SESSION_SELECT} WHERE space_id = ?`).get(spaceId) as RuntimeSessionDbRow | undefined
+      this.db.prepare(`${RUNTIME_SESSION_SELECT} WHERE transport_resource_id = ?`).get(transportResourceId) as RuntimeSessionDbRow | undefined
     );
   }
 

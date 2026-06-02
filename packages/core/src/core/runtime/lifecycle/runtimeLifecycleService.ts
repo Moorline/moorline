@@ -15,7 +15,7 @@ interface RuntimeLifecycleServiceDeps {
   sessionLifecycle: SessionLifecycleService;
   sessionRegistry: SessionRegistry;
   requireGuard(): RuntimeActionGuard;
-  getNamespaceState(): RuntimeSurfaceState | null;
+  getSurfaceState(): RuntimeSurfaceState | null;
   now(): string;
   sendStatusUpdate(payload: RuntimeMessagePayload): Promise<void>;
   appendAuditEvent(event: string, payload: Record<string, unknown>): void;
@@ -78,7 +78,7 @@ export class RuntimeLifecycleService {
         buildLifecycleNotification({
           state: transition.to,
           sessionId: transition.sessionId,
-          detail: `${session.spaceName} moved to ${lifecycleStatusLabel(transition.to)}.`,
+          detail: `${session.transportResourceName} moved to ${lifecycleStatusLabel(transition.to)}.`,
           nowIso: transition.at
         })
       );
@@ -90,7 +90,7 @@ export class RuntimeLifecycleService {
     transition: {
       sessionId: string;
       threadId: string;
-      spaceId: string;
+      transportResourceId: string;
       from: RuntimeSessionRow['lifecycleStatus'];
       to: RuntimeSessionRow['lifecycleStatus'];
       at: string;
@@ -101,17 +101,17 @@ export class RuntimeLifecycleService {
       return;
     }
 
-    const namespace = this.deps.getNamespaceState();
-    if (namespace) {
+    const surface = this.deps.getSurfaceState();
+    if (surface) {
       await this.deps.requireGuard().run({
-        action: 'transport.space.update',
+        action: 'transport.resource.update',
         actor: 'runtime:lifecycle/archive',
-        target: current.spaceId,
+        target: current.transportResourceId,
         execute: async () =>
-          this.deps.transport.updateSpace?.({
+          this.deps.transport.updateTransportResource?.({
             scopeId: this.deps.transportScopeId,
-            spaceId: current.spaceId,
-            parentId: namespace.archiveCategoryId
+            transportResourceId: current.transportResourceId,
+            parentId: surface.archiveCategoryId
           })
       });
     }
@@ -125,7 +125,7 @@ export class RuntimeLifecycleService {
     await this.deps.cleanupScopedSidecars('session', archived.sessionId, `session ${archived.sessionId} archived by lifecycle`);
     this.deps.appendAuditEvent('session.archived.lifecycle', {
       sessionId: archived.sessionId,
-      spaceId: archived.spaceId,
+      transportResourceId: archived.transportResourceId,
       previousState: transition.from,
       actorId: 'runtime:lifecycle/archive',
       sourceEventId: randomUUID()

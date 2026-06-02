@@ -29,7 +29,7 @@ import type {
 export interface RuntimeDomainEvent {
   eventId: string;
   threadId: string;
-  spaceId?: string | null;
+  transportResourceId?: string | null;
   sessionId?: string | null;
   sourceProviderEventId?: string | null;
   createdAt: string;
@@ -71,7 +71,7 @@ export type RuntimeEntityRecord = {
   id?: string;
   sessionId?: string;
   threadId?: string;
-  spaceId?: string;
+  transportResourceId?: string;
   name?: string;
   title?: string;
   status?: string;
@@ -85,8 +85,8 @@ export type RuntimeSessionRow = RuntimeEntityRecord & {
   sessionId: string;
   scopeId: string;
   threadId: string;
-  spaceId: string;
-  spaceName: string;
+  transportResourceId: string;
+  transportResourceName: string;
   workspacePath: string;
   summary: string | null;
   provider: string;
@@ -106,7 +106,7 @@ export type RuntimeSessionRow = RuntimeEntityRecord & {
 export interface RuntimeReceiptRecord {
   threadId: string;
   sessionId: string | null;
-  spaceId: string | null;
+  transportResourceId: string | null;
   state: string;
   updatedAt: string;
 }
@@ -226,11 +226,11 @@ export interface ManagedSidecarRecord {
   status: string;
 }
 
-export type AgentSurface = 'main_chat' | 'session';
+export type AgentSurface = 'coordination' | 'session';
 
 export interface BeforeAgentPromptInput {
   surface: AgentSurface;
-  spaceId: string;
+  transportResourceId: string;
   actorId: string;
   actorLabel: string;
   text: string;
@@ -244,10 +244,10 @@ export interface AfterAgentResponseInput extends BeforeAgentPromptInput {
 
 export interface CreatedSessionResult {
   session: RuntimeSessionRow;
-  spaceId: string;
+  transportResourceId: string;
 }
 
-export type ArchivedSpaceTarget = { kind: 'session'; session: RuntimeSessionRow };
+export type ArchivedTransportResourceTarget = { kind: 'session'; session: RuntimeSessionRow };
 
 export type SessionOwnerKind = string;
 
@@ -311,15 +311,15 @@ export interface RuntimePluginAdminConfig {
 }
 
 export type RuntimePluginConfig = object;
-export type RuntimePluginNamespaceState = RuntimeSurfaceState;
+export type RuntimePluginSurfaceState = RuntimeSurfaceState;
 
 export interface RuntimeToolContext {
   readonly actorId: string;
   readonly config: RuntimePluginConfig;
-  getCurrentSpaceId(): string;
+  getCurrentTransportResourceId(): string;
   getCurrentThreadId(): string;
   getCurrentWorkspacePath(): string;
-  getChatWorkspacePath(): string;
+  getCoordinationWorkspacePath(): string;
   listSkills(): SkillCatalogEntry[];
   loadSkill(name: string): Promise<LoadedSkill | null>;
   writeSkill(input: {
@@ -331,7 +331,7 @@ export interface RuntimeToolContext {
     resourceFiles?: Array<{ path: string; content: string }>;
   }): Promise<WrittenSkillResult>;
   listSessions(): RuntimeSessionRow[];
-  getSessionBySpaceId(spaceId: string): RuntimeSessionRow | null;
+  getSessionByTransportResourceId(transportResourceId: string): RuntimeSessionRow | null;
   getSessionById(sessionId: string): RuntimeSessionRow | null;
   getPackageState<T = unknown>(key: string): T | null;
   putPackageState<T = unknown>(key: string, value: T): Promise<void>;
@@ -425,16 +425,16 @@ export interface RuntimeToolContext {
   }): Promise<CreatedSessionResult>;
   directSession(input: {
     sessionId?: string;
-    spaceId?: string;
+    transportResourceId?: string;
     instruction: string;
     reason?: string;
   }): Promise<{
     session: RuntimeSessionRow;
     reply: RuntimeMessagePayload;
   }>;
-  archiveSession(input: { spaceId: string; sessionId?: string }): Promise<RuntimeSessionRow | null>;
-  deleteArchivedSession(input: { spaceId: string; sessionId?: string }): Promise<RuntimeSessionRow | null>;
-  sendMessage(spaceId: string, payload: RuntimeMessagePayload): Promise<void>;
+  archiveSession(input: { transportResourceId: string; sessionId?: string }): Promise<RuntimeSessionRow | null>;
+  deleteArchivedSession(input: { transportResourceId: string; sessionId?: string }): Promise<RuntimeSessionRow | null>;
+  sendMessage(transportResourceId: string, payload: RuntimeMessagePayload): Promise<void>;
   sendStatusUpdate(payload: RuntimeMessagePayload): Promise<void>;
   appendAuditEvent(event: string, payload: Record<string, unknown>): void;
   nowIso(): string;
@@ -443,15 +443,15 @@ export interface RuntimeToolContext {
 export interface RuntimePluginAdminCapability {
   getAdminConfig(): RuntimePluginAdminConfig;
   isAdminActor(input: RuntimeActorIdentity): boolean;
-  getNamespaceState(): RuntimePluginNamespaceState;
+  getSurfaceState(): RuntimePluginSurfaceState;
 }
 
 export interface RuntimePluginObservabilityCapability {
-  listPendingRequests(spaceId: string): PendingRuntimeRequestRecord[];
+  listPendingRequests(transportResourceId: string): PendingRuntimeRequestRecord[];
   listRuntimeReceipts(): RuntimeReceiptRecord[];
   listProviderConnections(): RuntimeProviderConnectionSnapshot[];
   listRuntimeActivities(threadId?: string): RuntimeActivityRecord[];
-  getSessionSnapshotBySpaceId(spaceId: string): RuntimeSessionSnapshot | null;
+  getSessionSnapshotByTransportResourceId(transportResourceId: string): RuntimeSessionSnapshot | null;
   getSessionSnapshotById(sessionId: string): RuntimeSessionSnapshot | null;
   getRuntimeOverview(): RuntimeOverviewSnapshot;
   listProjectionStates(): Array<{
@@ -479,21 +479,21 @@ export interface RuntimePluginObservabilityCapability {
   };
   listRuntimeEvents(threadId: string): ProviderRuntimeEvent[];
   listDomainEvents(threadId: string): RuntimeDomainEvent[];
-  updateSessionSummary(spaceId: string, summary: string, nowIso: string): Promise<void>;
+  updateSessionSummary(transportResourceId: string, summary: string, nowIso: string): Promise<void>;
 }
 
 export interface RuntimePluginMemoryCapability {
   retrieveMemory(input: {
     query: string;
     scopeId: string;
-    spaceId?: string;
+    transportResourceId?: string;
     threadId?: string | null;
     maxResults?: number;
     enableRerank?: boolean;
   }): Promise<RetrievedMemorySnippet[]>;
   writeSessionMemory(input: {
     scopeId: string;
-    spaceId: string;
+    transportResourceId: string;
     threadId?: string | null;
     kind: 'log' | 'summary' | 'facts' | 'tasks';
     content: string;
@@ -514,8 +514,8 @@ export interface RuntimePluginMemoryCapability {
 }
 
 export interface RuntimePluginWorkManagementCapability {
-  archiveSpaceTarget(input: { spaceId: string }): Promise<ArchivedSpaceTarget | null>;
-  deleteArchivedSpaceTarget(input: { spaceId: string }): Promise<ArchivedSpaceTarget | null>;
+  archiveTransportResourceTarget(input: { transportResourceId: string }): Promise<ArchivedTransportResourceTarget | null>;
+  deleteArchivedTransportResourceTarget(input: { transportResourceId: string }): Promise<ArchivedTransportResourceTarget | null>;
   respondToRuntimeRequest(input: {
     threadId: string;
     requestId: string;
@@ -564,7 +564,7 @@ export interface RuntimePluginSidecarCapability {
 export interface RuntimePluginAgentCapability {
   runAgent(input: {
     surface: AgentSurface;
-    spaceId: string;
+    transportResourceId: string;
     actorId: string;
     actorLabel: string;
     text: string;

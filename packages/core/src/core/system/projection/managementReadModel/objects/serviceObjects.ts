@@ -52,13 +52,13 @@ export function buildServiceObjects(deps: ManagementReadModelServiceDeps, instal
       id: `transport-${transportPackageId}`,
       kind: 'service',
       name: selectedPackageName(deps, 'transport', 'Transport Surface'),
-      summary: 'Selected transport surface and namespace host.',
+      summary: 'Selected transport surface and surface host.',
       controls: ['inspect'],
       mutability: { editable: false, installable: false, removable: false },
       trust: managedTrustForPackage(transportPackage, transportPackageId),
       sourceOfTruth: { kind: 'transport', label: 'selected transport config' },
       runtimeState: {
-        status: deps.getNamespaceState() ? 'running' : 'not_bootstrapped',
+        status: deps.getSurfaceState() ? 'running' : 'not_bootstrapped',
         updatedAt: deps.now(),
         details: {
           scopeId: deps.config.transport?.scopeId ?? deps.config.surfaces.transport.activePackageId ?? '',

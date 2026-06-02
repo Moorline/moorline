@@ -43,9 +43,9 @@ interface RuntimeInteractionServiceDeps {
   getPluginHost(): PluginHost;
   queue<T>(key: string, work: () => Promise<T>): Promise<T>;
   now(): string;
-  getNamespaceReady(): boolean;
+  getSurfaceReady(): boolean;
   getAcceptingNewWork(): boolean;
-  postTransportMessage(actor: string, spaceId: string, payload: RuntimeMessagePayload): Promise<void>;
+  postTransportMessage(actor: string, transportResourceId: string, payload: RuntimeMessagePayload): Promise<void>;
   appendAuditEvent(event: string, payload: Record<string, unknown>): void;
   upsertExternalResource(resource: RuntimeExternalResourceRef): void;
   createPluginContext(actorId: string): RuntimePluginContext;
@@ -72,7 +72,7 @@ export class RuntimeInteractionService {
   constructor(private readonly deps: RuntimeInteractionServiceDeps) {}
 
   async handleTransportEvent(event: RuntimeTransportEvent): Promise<void> {
-    if (event.scopeId !== this.deps.config.transport.scopeId || !this.deps.getNamespaceReady()) {
+    if (event.scopeId !== this.deps.config.transport.scopeId || !this.deps.getSurfaceReady()) {
       return;
     }
     if (event.type === 'message.received') {
@@ -84,7 +84,7 @@ export class RuntimeInteractionService {
         await this.handleAction(event);
         return;
       }
-      const queueKey = event.spaceId ?? `actor:${event.actor.actorId}`;
+      const queueKey = event.transportResourceId ?? `actor:${event.actor.actorId}`;
       await this.deps.queue(queueKey, async () => {
         await this.handleAction(event);
       });
@@ -103,23 +103,23 @@ export class RuntimeInteractionService {
   }
 
   private async handleMessage(event: RuntimeMessageReceivedEvent): Promise<void> {
-    await this.deps.queue(event.spaceId, async () => {
+    await this.deps.queue(event.transportResourceId, async () => {
       if (!this.deps.getAcceptingNewWork()) {
-        await this.deps.postTransportMessage('runtime:status', event.spaceId, {
+        await this.deps.postTransportMessage('runtime:status', event.transportResourceId, {
           text: 'Moorline is currently draining work and is not accepting new messages.'
         });
         return;
       }
 
-      const session = this.deps.sessionRegistry.getBySpaceId(event.spaceId);
+      const session = this.deps.sessionRegistry.getByTransportResourceId(event.transportResourceId);
       if (session) {
         if (session.lifecycleStatus === 'archived') {
-          await this.deps.postTransportMessage('runtime:archived-session', event.spaceId, {
+          await this.deps.postTransportMessage('runtime:archived-session', event.transportResourceId, {
             text: ARCHIVED_SESSION_MESSAGE
           });
           this.deps.appendAuditEvent('session.archived.message_ignored', {
             sessionId: session.sessionId,
-            spaceId: session.spaceId,
+            transportResourceId: session.transportResourceId,
             actorId: event.actor.actorId
           });
           return;
@@ -131,7 +131,7 @@ export class RuntimeInteractionService {
         this.deps.createPluginContext(`plugin:${pluginId}`)
       );
       if (result.reply) {
-        await this.deps.postTransportMessage('runtime:plugin/action', event.spaceId, result.reply);
+        await this.deps.postTransportMessage('runtime:plugin/action', event.transportResourceId, result.reply);
       }
       if (result.audit) {
         this.deps.appendAuditEvent(result.audit.event, result.audit.payload ?? {});
@@ -152,8 +152,8 @@ export class RuntimeInteractionService {
     const result = await this.deps.getPluginHost().handleTransportEvent(event, (pluginId) =>
       this.deps.createPluginContext(`plugin:${pluginId}`)
     );
-    if (result.reply && event.spaceId) {
-      await this.deps.postTransportMessage('runtime:plugin/action', event.spaceId, result.reply);
+    if (result.reply && event.transportResourceId) {
+      await this.deps.postTransportMessage('runtime:plugin/action', event.transportResourceId, result.reply);
     }
     if (result.audit) {
       this.deps.appendAuditEvent(result.audit.event, result.audit.payload ?? {});
@@ -183,8 +183,8 @@ export class RuntimeInteractionService {
       });
       return;
     }
-    if (event.spaceId) {
-      await this.deps.postTransportMessage('runtime:status', event.spaceId, {
+    if (event.transportResourceId) {
+      await this.deps.postTransportMessage('runtime:status', event.transportResourceId, {
         text: message
       });
     }

@@ -20,7 +20,7 @@ const MAX_SEALED_TURN_KEYS = 2_048;
 interface Waiter {
   threadId: string;
   turnId: string;
-  spaceId: string;
+  transportResourceId: string;
   surface: ProviderTurnSurface;
   promptContent: string;
   session: RuntimeSessionRow | null;
@@ -117,7 +117,7 @@ function resolveTurnBufferContent(buffer: TurnBuffer): string {
 export interface RuntimeProviderTurnInput {
   actorId: string;
   session: RuntimeSessionRow;
-  spaceId: string;
+  transportResourceId: string;
   surface: ProviderTurnSurface;
   promptContent: string;
   promptSource?: string;
@@ -187,7 +187,7 @@ export class ProviderTurnBroker {
 
     const waiterKey = `${input.session.threadId}:${turnId}`;
     this.sealedTurnKeys.delete(waiterKey);
-    const stopTyping = this.deps.typing.startTypingLoop(input.actorId, input.spaceId);
+    const stopTyping = this.deps.typing.startTypingLoop(input.actorId, input.transportResourceId);
     try {
       return await new Promise<RuntimeMessagePayload>((resolve, reject) => {
         const timeout = globalThis.setTimeout(() => {
@@ -199,7 +199,7 @@ export class ProviderTurnBroker {
           this.deps.recordRuntimeActivity({
             threadId: input.session.threadId,
             sessionId: input.session.sessionId,
-            spaceId: input.spaceId,
+            transportResourceId: input.transportResourceId,
             sourceEventId: randomUUID(),
             kind: 'provider.turn.timeout',
             severity: 'warning',
@@ -210,7 +210,7 @@ export class ProviderTurnBroker {
           this.deps.appendAuditEvent('provider.turn.timeout', {
             threadId: input.session.threadId,
             sessionId: input.session.sessionId,
-            spaceId: input.spaceId,
+            transportResourceId: input.transportResourceId,
             turnId,
             timeoutMs: this.turnWaitTimeoutMs
           });
@@ -227,7 +227,7 @@ export class ProviderTurnBroker {
               this.deps.appendAuditEvent('provider.turn.timeout.interrupt_sent', {
                 threadId: input.session.threadId,
                 sessionId: input.session.sessionId,
-                spaceId: input.spaceId,
+                transportResourceId: input.transportResourceId,
                 turnId
               });
             })
@@ -235,7 +235,7 @@ export class ProviderTurnBroker {
               this.deps.appendAuditEvent('provider.turn.timeout.interrupt_failed', {
                 threadId: input.session.threadId,
                 sessionId: input.session.sessionId,
-                spaceId: input.spaceId,
+                transportResourceId: input.transportResourceId,
                 turnId,
                 error: interruptError instanceof Error ? interruptError.message : String(interruptError)
               });
@@ -245,7 +245,7 @@ export class ProviderTurnBroker {
         this.turnWaiters.set(waiterKey, {
           threadId: input.session.threadId,
           turnId,
-          spaceId: input.spaceId,
+          transportResourceId: input.transportResourceId,
           surface: input.surface,
           promptContent: input.promptContent,
           session: input.session,

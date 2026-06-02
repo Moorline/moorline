@@ -30,9 +30,9 @@ export class ProviderEventPipeline {
 
   async handleProviderEvent(event: ProviderRuntimeEvent): Promise<void> {
     const session = this.deps.getSessionByThreadId(event.threadId);
-    const spaceId = session?.spaceId ?? (event.threadId.startsWith('chat:') ? event.threadId.slice(5) : null);
+    const transportResourceId = session?.transportResourceId ?? (event.threadId.startsWith('coordination:') ? event.threadId.slice(5) : null);
 
-    const canonicalPersistence = this.deps.canonicalEvents.append(event, spaceId);
+    const canonicalPersistence = this.deps.canonicalEvents.append(event, transportResourceId);
     if (!canonicalPersistence.inserted && this.deps.canonicalEvents.isProviderEventProcessed(event.eventId)) {
       return;
     }
@@ -55,7 +55,7 @@ export class ProviderEventPipeline {
     }
 
     const latestRequest = await this.deps.requests.project(event, {
-      spaceId,
+      transportResourceId,
       waiterAuthorId: null
     });
 
@@ -88,7 +88,7 @@ export class ProviderEventPipeline {
     const domainEvents = domainEventsFromProviderEvent({
       event,
       sessionId: latestSession?.sessionId ?? null,
-      spaceId,
+      transportResourceId,
       runtimeMode: latestSession?.runtimeMode ?? null,
       workspacePath: latestSession?.workspacePath ?? null,
       request: latestRequest

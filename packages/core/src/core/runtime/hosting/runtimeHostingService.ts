@@ -41,7 +41,7 @@ export class RuntimeHostingService {
       rollbackSteps.push(async () => {
         await this.deps.transport.stop();
       });
-      const namespaceState = await this.bootstrapNamespace();
+      const surfaceState = await this.bootstrapSurface();
       await this.deps.managementSurface.start();
       rollbackSteps.push(async () => {
         await this.deps.managementSurface.stop();
@@ -59,7 +59,7 @@ export class RuntimeHostingService {
       this.deps.transport.onEvent(async (event) => {
         await handlers.onTransportEvent(event);
       });
-      return namespaceState;
+      return surfaceState;
     } catch (error) {
       this.startupFailure = error instanceof Error ? error.message : String(error);
       await this.rollbackStartup(rollbackSteps);
@@ -101,7 +101,7 @@ export class RuntimeHostingService {
     }
   }
 
-  private async bootstrapNamespace(): Promise<RuntimeSurfaceState> {
+  private async bootstrapSurface(): Promise<RuntimeSurfaceState> {
     const existing = loadInstallationState(this.deps.installationPath);
     const transportConfig = this.deps.config.transport.config;
     if (this.deps.transport.reconcileRuntimeSurface) {
@@ -134,8 +134,8 @@ export class RuntimeHostingService {
     const defaultState: RuntimeSurfaceState = {
       scopeId: this.deps.config.transport.scopeId,
       mainCategoryId: this.deps.config.surface.mainCategoryName,
-      chatChannelId: this.deps.config.surface.chatChannelName,
-      statusChannelId: this.deps.config.surface.statusChannelName,
+      coordinationResourceId: this.deps.config.surface.coordinationResourceName,
+      statusResourceId: this.deps.config.surface.statusResourceName,
       sessionsCategoryId: this.deps.config.surface.sessionsGroupName,
       archiveCategoryId: this.deps.config.surface.archiveGroupName,
       createdAt: nowIso,

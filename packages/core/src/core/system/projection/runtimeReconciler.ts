@@ -32,7 +32,7 @@ export class RuntimeReconciler {
     }
 
     for (const snapshot of overview.sessions) {
-      if (snapshot.session.sessionId.startsWith('chat-') || snapshot.session.lifecycleStatus === 'archived') {
+      if (snapshot.session.sessionId.startsWith('coordination-') || snapshot.session.lifecycleStatus === 'archived') {
         continue;
       }
       if (!snapshot.provider) {
@@ -50,7 +50,7 @@ export class RuntimeReconciler {
           const rebuiltReceipt: RuntimeReceiptRecord = {
             threadId: request.threadId,
             sessionId: snapshot.session.sessionId,
-            spaceId: snapshot.session.spaceId,
+            transportResourceId: snapshot.session.transportResourceId,
             activeTurnId: request.turnId,
             state: request.requestType === 'tool_user_input' ? 'waiting_for_input' : 'waiting_for_approval',
             waitReason: request.requestType === 'tool_user_input' ? 'user_input' : 'approval',

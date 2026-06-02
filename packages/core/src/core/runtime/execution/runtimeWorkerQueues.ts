@@ -102,7 +102,7 @@ export function createRuntimeWorkerQueues(
       callbacks.recordRuntimeActivity({
         threadId: key,
         sessionId: null,
-        spaceId: null,
+        transportResourceId: null,
         sourceEventId: randomUUID(),
         kind: 'runtime.queue.reject',
         severity: 'warning',

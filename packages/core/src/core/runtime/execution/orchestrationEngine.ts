@@ -14,7 +14,7 @@ function makeActivity(input: {
   sourceEventId: string;
   threadId: string;
   sessionId: string | null;
-  spaceId: string | null;
+  transportResourceId: string | null;
   kind: string;
   severity: 'info' | 'warning' | 'error';
   title: string;
@@ -25,7 +25,7 @@ function makeActivity(input: {
     activityId: randomUUID(),
     threadId: input.threadId,
     sessionId: input.sessionId,
-    spaceId: input.spaceId,
+    transportResourceId: input.transportResourceId,
     sourceEventId: input.sourceEventId,
     kind: input.kind,
     severity: input.severity,
@@ -52,7 +52,7 @@ export class OrchestrationEngine {
             sourceEventId: event.eventId,
             threadId: event.threadId,
             sessionId: event.sessionId,
-            spaceId: event.spaceId,
+            transportResourceId: event.transportResourceId,
             kind: event.type,
             severity: 'info',
             title: event.type === 'session.created' ? 'Session created' : 'Session resumed',
@@ -73,7 +73,7 @@ export class OrchestrationEngine {
             sourceEventId: event.eventId,
             threadId: event.threadId,
             sessionId: event.sessionId,
-            spaceId: event.spaceId,
+            transportResourceId: event.transportResourceId,
             kind: event.type,
             severity:
               event.type === 'turn.failed' || event.type === 'turn.interrupted' ? 'error' : event.type.includes('waiting') ? 'warning' : 'info',
@@ -89,7 +89,7 @@ export class OrchestrationEngine {
             sourceEventId: event.eventId,
             threadId: event.threadId,
             sessionId: event.sessionId,
-            spaceId: event.spaceId,
+            transportResourceId: event.transportResourceId,
             kind: event.type,
             severity: 'warning',
             title: `Request opened: ${event.payload.requestType}`,
@@ -105,7 +105,7 @@ export class OrchestrationEngine {
             sourceEventId: event.eventId,
             threadId: event.threadId,
             sessionId: event.sessionId,
-            spaceId: event.spaceId,
+            transportResourceId: event.transportResourceId,
             kind: `item.${event.payload.itemType}.${event.payload.stage}`,
             severity: event.payload.itemType === 'error' ? 'error' : event.payload.itemType === 'reasoning' ? 'warning' : 'info',
             title: `${event.payload.itemType.replace(/_/g, ' ')} ${event.payload.stage}`,
@@ -126,7 +126,7 @@ export class OrchestrationEngine {
             sourceEventId: event.eventId,
             threadId: event.threadId,
             sessionId: event.sessionId,
-            spaceId: event.spaceId,
+            transportResourceId: event.transportResourceId,
             kind: event.type,
             severity: 'info',
             title: 'Thread token usage updated',
@@ -149,7 +149,7 @@ export class OrchestrationEngine {
             sourceEventId: event.eventId,
             threadId: event.threadId,
             sessionId: event.sessionId,
-            spaceId: event.spaceId,
+            transportResourceId: event.transportResourceId,
             kind: event.type,
             severity: 'warning',
             title: 'Thread compacted',
@@ -164,7 +164,7 @@ export class OrchestrationEngine {
             sourceEventId: event.eventId,
             threadId: event.threadId,
             sessionId: event.sessionId,
-            spaceId: event.spaceId,
+            transportResourceId: event.transportResourceId,
             kind: event.type,
             severity: 'info',
             title: `Request resolved: ${event.payload.requestType}`,
@@ -181,7 +181,7 @@ export class OrchestrationEngine {
             sourceEventId: event.eventId,
             threadId: event.threadId,
             sessionId: event.sessionId,
-            spaceId: event.spaceId,
+            transportResourceId: event.transportResourceId,
             kind: event.type,
             severity: 'error',
             title: event.type === 'runtime.error' ? 'Runtime error' : 'Provider closed',
@@ -196,7 +196,7 @@ export class OrchestrationEngine {
             sourceEventId: event.eventId,
             threadId: event.threadId,
             sessionId: event.sessionId,
-            spaceId: event.spaceId,
+            transportResourceId: event.transportResourceId,
             kind: event.type,
             severity: 'info',
             title: 'Provider metadata updated',

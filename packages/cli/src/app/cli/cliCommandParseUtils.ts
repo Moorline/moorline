@@ -97,9 +97,9 @@ export function parseEnableSurface(value: string, usage: string): 'plugin' | 'sk
   throw new Error(`Invalid surface "${value}". Usage: ${usage}`);
 }
 
-export function parseSessionTarget(tokens: string[], usage: string): { sessionId?: string; spaceId?: string } {
+export function parseSessionTarget(tokens: string[], usage: string): { sessionId?: string; transportResourceId?: string } {
   let sessionId: string | undefined;
-  let spaceId: string | undefined;
+  let transportResourceId: string | undefined;
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
     if (token === '--session') {
@@ -107,19 +107,19 @@ export function parseSessionTarget(tokens: string[], usage: string): { sessionId
       index += 1;
       continue;
     }
-    if (token === '--space') {
-      spaceId = requireValue(tokens[index + 1], `Missing space id. Usage: ${usage}`);
+    if (token === '--resource') {
+      transportResourceId = requireValue(tokens[index + 1], `Missing resource id. Usage: ${usage}`);
       index += 1;
       continue;
     }
     throw new Error(`Unknown option: ${token}. Usage: ${usage}`);
   }
-  if (!sessionId && !spaceId) {
-    throw new Error(`Either --session <id> or --space <id> is required. Usage: ${usage}`);
+  if (!sessionId && !transportResourceId) {
+    throw new Error(`Either --session <id> or --resource <id> is required. Usage: ${usage}`);
   }
   return {
     ...(sessionId ? { sessionId } : {}),
-    ...(spaceId ? { spaceId } : {})
+    ...(transportResourceId ? { transportResourceId } : {})
   };
 }
 

@@ -2,13 +2,13 @@
 
 This file tracks deferred product work that should stay visible after `0.0.1`.
 
-## GitHub Setup Sharing
+## Setup Sharing
 
 Status: deferred after `0.0.1`
 
 Desired behavior:
-- publish a shareable setup bundle to GitHub
-- import a setup bundle from a GitHub URL
+- publish a shareable setup bundle to an operator-chosen location
+- import a setup bundle from an operator-provided URL
 - optionally scaffold a repo for operator-controlled packages or policies
 
 Not included in `0.0.x`:
@@ -29,4 +29,4 @@ Desired behavior:
 Not included in `0.0.x`:
 - registry server
 - publish workflow
-- namespace or account management
+- surface or account management

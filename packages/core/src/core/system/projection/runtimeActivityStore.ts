@@ -6,7 +6,7 @@ export interface RuntimeActivityRecord {
   activityId: string;
   threadId: string;
   sessionId: string | null;
-  spaceId: string | null;
+  transportResourceId: string | null;
   sourceEventId: string;
   kind: string;
   severity: 'info' | 'warning' | 'error';
@@ -39,7 +39,7 @@ export class RuntimeActivityStore {
     this.db
       .prepare(`
         INSERT INTO runtime_activities (
-          activity_id, thread_id, session_id, space_id, source_event_id,
+          activity_id, thread_id, session_id, transport_resource_id, source_event_id,
           kind, severity, title, detail, created_at
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -48,7 +48,7 @@ export class RuntimeActivityStore {
         row.activityId,
         row.threadId,
         row.sessionId,
-        row.spaceId,
+        row.transportResourceId,
         row.sourceEventId,
         row.kind,
         row.severity,
@@ -66,7 +66,7 @@ export class RuntimeActivityStore {
           activity_id as activityId,
           thread_id as threadId,
           session_id as sessionId,
-          space_id as spaceId,
+          transport_resource_id as transportResourceId,
           source_event_id as sourceEventId,
           kind,
           severity,
@@ -89,7 +89,7 @@ export class RuntimeActivityStore {
           activity_id as activityId,
           thread_id as threadId,
           session_id as sessionId,
-          space_id as spaceId,
+          transport_resource_id as transportResourceId,
           source_event_id as sourceEventId,
           kind,
           severity,
@@ -118,7 +118,7 @@ export class RuntimeActivityStore {
           activityId,
           threadId,
           sessionId,
-          spaceId,
+          transportResourceId,
           sourceEventId,
           kind,
           severity,
@@ -130,7 +130,7 @@ export class RuntimeActivityStore {
             activity_id as activityId,
             thread_id as threadId,
             session_id as sessionId,
-            space_id as spaceId,
+            transport_resource_id as transportResourceId,
             source_event_id as sourceEventId,
             kind,
             severity,
@@ -173,7 +173,7 @@ export class RuntimeActivityStore {
           activity_id as activityId,
           thread_id as threadId,
           session_id as sessionId,
-          space_id as spaceId,
+          transport_resource_id as transportResourceId,
           source_event_id as sourceEventId,
           kind,
           severity,

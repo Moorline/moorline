@@ -2,15 +2,15 @@
 
 This is the fastest way to run Moorline 0.0.x locally.
 
-This guide is for local development. Product docs should not describe Moorline as local-first; the runtime is operator-controlled and may run locally or in another controlled environment.
+This guide is for local development. Product docs should describe Moorline as an operator-controlled runtime; the runtime is operator-controlled and may run locally or in another controlled environment.
 
 ## Prerequisites
 
 - Bun 1.3.11+
 - Node.js 22+
 - Git
-- `codex` installed on `PATH`
-- successful `codex login status`
+- a provider package available for the smoke path
+- provider credentials available when the selected provider requires them
 
 Docker is no longer the primary install path for Moorline 0.0.x.
 
@@ -89,17 +89,17 @@ export MOORLINE_HOME="$(mktemp -d /tmp/moorline-devflow-XXXXXX)"
 export MOORLINE_PACKAGES_REPO="../packages"
 
 bun run moorline init
-bun run moorline configure package install --kind bundle --source "$MOORLINE_PACKAGES_REPO/dist/installable-archives/bundles/moorline-bundle-discord-default-0.0.1.tar.gz"
-bun run moorline configure package install --kind bundle --source "$MOORLINE_PACKAGES_REPO/dist/installable-archives/bundles/moorline-bundle-codex-default-0.0.1.tar.gz"
-bun run moorline configure package config --surface provider --package official/codex --key command --value codex
-bun run moorline configure package config --surface transport --package official/discord --key authToken --value test-token
-bun run moorline configure package config --surface transport --package official/discord --key scopeId --value scope-123
+bun run moorline configure package install --kind bundle --source "$MOORLINE_PACKAGES_REPO/dist/installable-archives/bundles/<transport-bundle-archive>.tar.gz"
+bun run moorline configure package install --kind bundle --source "$MOORLINE_PACKAGES_REPO/dist/installable-archives/bundles/<provider-bundle-archive>.tar.gz"
+bun run moorline configure package config --surface provider --package <provider-package-id> --key command --value <provider-command>
+bun run moorline configure package config --surface transport --package <transport-package-id> --key authToken --value test-token
+bun run moorline configure package config --surface transport --package <transport-package-id> --key scopeId --value scope-123
 bun run moorline configure apply
 timeout 15s bun run moorline run || test $? -eq 124
 ```
 
 Notes:
-- with dummy Discord values, `moorline configure apply` may log token/auth failures while deriving bot metadata; use real Discord credentials when smoke-testing the full apply path
+- with dummy transport values, `moorline configure apply` may log token/auth failures while deriving transport metadata; use real transport credentials when smoke-testing the full apply path
 - published releases install official bundles from public package artifacts; local archives from `Moorline/packages` remain the stable path for unreleased branch work
 
 Clean up temp runtime state when done:
@@ -110,8 +110,8 @@ rm -rf "$MOORLINE_HOME"
 
 ## Common issues
 
-- `moorline configure` or provider startup fails on Codex auth:
-  Run `codex login status` and fix local auth first.
+- `moorline configure` or provider startup fails:
+  Check the selected provider package docs and repair its credentials first.
 - Setup does not finish:
   Run `bun run moorline configure state` and address `Startability blockers` or dependency errors.
 - Transport verification fails:

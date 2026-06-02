@@ -72,8 +72,8 @@ export type ControlApiPostPath =
   | '/api/management/default-model'
   | '/api/management/config-migration-warning/acknowledge';
 
-type SessionTargetPayload = { sessionId?: string; spaceId?: string };
-type SpaceSessionTargetPayload = { sessionId?: string; spaceId: string };
+type SessionTargetPayload = { sessionId?: string; transportResourceId?: string };
+type TransportResourceSessionTargetPayload = { sessionId?: string; transportResourceId: string };
 type RuntimeReloadMode = 'graceful' | 'force';
 
 export type ControlApiPayloadForPath<Path extends ControlApiPostPath> =
@@ -87,7 +87,7 @@ export type ControlApiPayloadForPath<Path extends ControlApiPostPath> =
   Path extends '/api/provider/start' | '/api/provider/stop' ? { threadId?: string } :
   Path extends '/api/work/session/create' ? { requestedName: string; runtimeMode: ReturnType<typeof parseControlApiRuntimeMode>; initialInstruction?: string; objective?: string } :
   Path extends '/api/work/session/direct' ? SessionTargetPayload & { instruction: string; reason?: string } :
-  Path extends '/api/work/session/archive' | '/api/work/session/delete' ? SpaceSessionTargetPayload :
+  Path extends '/api/work/session/archive' | '/api/work/session/delete' ? TransportResourceSessionTargetPayload :
   Path extends '/api/packages/install' ? { kind: PackageKind; surface?: PackageKind; packageId?: string; source?: string } :
   Path extends '/api/packages/remove' ? { kind: PackageKind; surface?: PackageKind; packageId: string; cascade?: boolean } :
   Path extends '/api/packages/enable' | '/api/packages/disable' ? { surface: 'plugin' | 'skill'; packageId: string } :
@@ -194,26 +194,26 @@ function parseSecretReplacements(value: unknown): Array<{ key: string; value: st
   });
 }
 
-function parseSessionTarget(body: Record<string, unknown>): { sessionId?: string; spaceId?: string } {
+function parseSessionTarget(body: Record<string, unknown>): { sessionId?: string; transportResourceId?: string } {
   const sessionId = optionalString(body, 'sessionId');
-  const spaceId = optionalString(body, 'spaceId');
-  if (!sessionId && !spaceId) {
-    throw new JsonBodyError(422, 'Either sessionId or spaceId is required.');
+  const transportResourceId = optionalString(body, 'transportResourceId');
+  if (!sessionId && !transportResourceId) {
+    throw new JsonBodyError(422, 'Either sessionId or transportResourceId is required.');
   }
   return {
     ...(sessionId ? { sessionId } : {}),
-    ...(spaceId ? { spaceId } : {})
+    ...(transportResourceId ? { transportResourceId } : {})
   };
 }
 
-function parseSpaceSessionTarget(body: Record<string, unknown>): SpaceSessionTargetPayload {
+function parseTransportResourceSessionTarget(body: Record<string, unknown>): TransportResourceSessionTargetPayload {
   const target = parseSessionTarget(body);
-  if (!target.spaceId) {
-    throw new JsonBodyError(422, 'spaceId is required.');
+  if (!target.transportResourceId) {
+    throw new JsonBodyError(422, 'transportResourceId is required.');
   }
   return {
     ...(target.sessionId ? { sessionId: target.sessionId } : {}),
-    spaceId: target.spaceId
+    transportResourceId: target.transportResourceId
   };
 }
 
@@ -445,14 +445,14 @@ export function parseControlApiPostRoute(pathname: string, rawBody: unknown): Co
       return {
         kind: 'api',
         path,
-        payload: parseSpaceSessionTarget(body)
+        payload: parseTransportResourceSessionTarget(body)
       };
 
     case '/api/work/session/delete':
       return {
         kind: 'api',
         path,
-        payload: parseSpaceSessionTarget(body)
+        payload: parseTransportResourceSessionTarget(body)
       };
 
     case '/api/packages/install': {

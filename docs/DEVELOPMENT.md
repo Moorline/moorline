@@ -28,7 +28,7 @@ The workspace root is private and exists for workspaces, scripts, and dev toolin
 
 ## Package Rules
 
-Official packages use short npm names like `@moorline/codex`, while Moorline package identity lives in metadata as `official/codex`.
+Official packages use short npm names like `@moorline/<package-name>`, while Moorline package identity lives in metadata as `official/<package-name>`.
 
 Runtime package kinds are:
 - `api-adapter`

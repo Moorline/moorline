@@ -56,7 +56,7 @@ import {
   type RuntimeManagementSurfaceHandle
 } from './hosting/runtimeManagementPort.js';
 import { RuntimeWorkManagementService } from '../domain/sessions/runtimeWorkManagementService.js';
-import { ManagedSpaceLifecycleService } from './lifecycle/managedSpaceLifecycleService.js';
+import { ManagedTransportResourceLifecycleService } from './lifecycle/managedTransportResourceLifecycleService.js';
 import { RuntimeInteractionService } from './execution/runtimeInteractionService.js';
 import { RuntimeTransportSurfaceService } from './hosting/runtimeTransportSurfaceService.js';
 import { ProviderRequestAttributionService } from './execution/providerCoordination/providerRequestAttributionService.js';
@@ -144,9 +144,9 @@ interface MoorlineRuntimeBuilderCallbacks {
   createPluginContext(actorId: string): RuntimePluginContext;
   cleanupScopedSidecars(scopeKind: SidecarScopeKind, scopeKey: string, reason: string): Promise<void>;
   runOrchestrationTurn(session: RuntimeSessionRow, actorId: string, content: string): Promise<RuntimeMessagePayload>;
-  ensureChatSession(spaceId: string, cwd: string): Promise<RuntimeSessionRow>;
+  ensureCoordinationSession(transportResourceId: string, cwd: string): Promise<RuntimeSessionRow>;
   isAdminActor(input: RuntimeActorIdentity): boolean;
-  postTransportMessage(actor: string, spaceId: string, payload: RuntimeMessagePayload): Promise<{ id: string }>;
+  postTransportMessage(actor: string, transportResourceId: string, payload: RuntimeMessagePayload): Promise<{ id: string }>;
   sendStatusUpdate(payload: RuntimeMessagePayload): Promise<void>;
   runGuardedAction<T>(input: {
     action: Parameters<RuntimeActionGuard['run']>[0]['action'];
@@ -157,8 +157,8 @@ interface MoorlineRuntimeBuilderCallbacks {
     title: string;
     execute: () => Promise<T>;
   }): Promise<T>;
-  requireNamespaceState(): import('../../types/config.js').RuntimeSurfaceState;
-  getNamespaceState(): import('../../types/config.js').RuntimeSurfaceState | null;
+  requireSurfaceState(): import('../../types/config.js').RuntimeSurfaceState;
+  getSurfaceState(): import('../../types/config.js').RuntimeSurfaceState | null;
   getRuntimeStatus(): {
     uptimeSeconds: number;
     openSessions: number;
@@ -204,7 +204,7 @@ interface RuntimeExtensionGraph {
 }
 
 interface RuntimeTransportGraph {
-  managedSpaceLifecycle: ManagedSpaceLifecycleService;
+  managedTransportResourceLifecycle: ManagedTransportResourceLifecycleService;
   interactions: RuntimeInteractionService;
   transportSurface: RuntimeTransportSurfaceService;
   hostingService: RuntimeHostingService;
@@ -235,7 +235,7 @@ interface MoorlineRuntimeServiceGraph
     RuntimeManagementGraph {
   deps: MoorlineRuntimeDeps;
   paths: ReturnType<typeof ensureRuntimePaths>;
-  chatWorkspacePath: string;
+  coordinationWorkspacePath: string;
   runtimePolicyPath: string;
   providerQueue: KeyedDrainableWorker;
   commandQueue: KeyedDrainableWorker;
@@ -260,7 +260,7 @@ export function buildMoorlineRuntimeServiceGraph(
     transport: deps.config.transport,
     provider: deps.config.provider,
     main: deps.config.main ?? defaultMainProcessConfig(),
-    namespace: deps.config.surface
+    surface: deps.config.surface
   };
   const normalizedDeps = { ...deps, transport, config: normalizedConfig };
   const paths = ensureRuntimePaths(normalizedConfig.runtimeRoot);
@@ -275,7 +275,7 @@ export function buildMoorlineRuntimeServiceGraph(
   };
   const MAINTENANCE_MIN_INTERVAL_MS = 15 * 60 * 1000;
   let lastMaintenanceRunMs = 0;
-  const chatWorkspacePath = join(paths.runtimeRoot, 'chat');
+  const coordinationWorkspacePath = join(paths.runtimeRoot, 'coordination');
   const runtimePolicyPath = resolveDefaultRuntimePolicyPath(paths.runtimeRoot, import.meta.url);
   runMigrations(paths.sqlitePath, resolveRuntimeMigrationsDir(import.meta.url));
   const store = new SqliteSessionStore(paths.sqlitePath);
@@ -363,7 +363,7 @@ export function buildMoorlineRuntimeServiceGraph(
     config: normalizedConfig,
     getTransport: () => transport,
     getGuard: callbacks.requireGuard,
-    requireNamespaceState: callbacks.requireNamespaceState,
+    requireSurfaceState: callbacks.requireSurfaceState,
     sessionRegistry,
     snapshots,
     reactor,
@@ -373,8 +373,8 @@ export function buildMoorlineRuntimeServiceGraph(
     defaultSessionOwner,
     queue: async (key, work) => await enqueueWithDiagnostics(commandQueue, key, 'work-management', work),
     now: callbacks.now,
-    postTransportMessage: async (actorId, spaceId, payload) => {
-      await callbacks.postTransportMessage(actorId, spaceId, payload);
+    postTransportMessage: async (actorId, transportResourceId, payload) => {
+      await callbacks.postTransportMessage(actorId, transportResourceId, payload);
     },
     sendStatusUpdate: async (payload) => await callbacks.sendStatusUpdate(payload),
     appendAuditEvent: callbacks.appendAuditEvent,
@@ -382,9 +382,9 @@ export function buildMoorlineRuntimeServiceGraph(
     rejectTurnWaitersForThread: callbacks.rejectTurnWaitersForThread,
     cleanupScopedSidecars: callbacks.cleanupScopedSidecars
   });
-  const managedSpaceLifecycle = new ManagedSpaceLifecycleService({
+  const managedTransportResourceLifecycle = new ManagedTransportResourceLifecycleService({
     config: normalizedConfig,
-    getNamespaceState: callbacks.getNamespaceState,
+    getSurfaceState: callbacks.getSurfaceState,
     sessionRegistry,
     providerService,
     providerDirectory,
@@ -392,8 +392,8 @@ export function buildMoorlineRuntimeServiceGraph(
     getProviderAutoStartDefault: callbacks.getProviderAutoStartDefault,
     queue: async (key, work) => await enqueueWithDiagnostics(commandQueue, key, 'managed-work-lifecycle', work),
     now: callbacks.now,
-    postTransportMessage: async (actor, spaceId, payload) => {
-      await callbacks.postTransportMessage(actor, spaceId, payload);
+    postTransportMessage: async (actor, transportResourceId, payload) => {
+      await callbacks.postTransportMessage(actor, transportResourceId, payload);
     },
     appendAuditEvent: callbacks.appendAuditEvent,
     recordRuntimeActivity: callbacks.recordRuntimeActivity,
@@ -408,10 +408,10 @@ export function buildMoorlineRuntimeServiceGraph(
     getPluginHost: () => pluginHostRef.current,
     queue: async (key, work) => await enqueueWithDiagnostics(commandQueue, key, 'runtime-interactions', work),
     now: callbacks.now,
-    getNamespaceReady: () => callbacks.getNamespaceState() !== null,
+    getSurfaceReady: () => callbacks.getSurfaceState() !== null,
     getAcceptingNewWork: () => callbacks.getRuntimeControlStatus().acceptingNewWork,
-    postTransportMessage: async (actor, spaceId, payload) => {
-      await callbacks.postTransportMessage(actor, spaceId, payload);
+    postTransportMessage: async (actor, transportResourceId, payload) => {
+      await callbacks.postTransportMessage(actor, transportResourceId, payload);
     },
     appendAuditEvent: callbacks.appendAuditEvent,
     upsertExternalResource: (resource) => {
@@ -438,7 +438,7 @@ export function buildMoorlineRuntimeServiceGraph(
     queue: async (key, work) => await enqueueWithDiagnostics(transportQueue, key, 'runtime-transport-surface', work),
     guard: callbacks.requireGuard,
     transport: () => transport,
-    getNamespaceState: callbacks.getNamespaceState
+    getSurfaceState: callbacks.getSurfaceState
   });
   const providerAttribution = new ProviderRequestAttributionService();
   const providerModelPorts = {
@@ -485,7 +485,7 @@ export function buildMoorlineRuntimeServiceGraph(
       getPendingRequest: (requestId) => snapshots.getOpenRequestById(requestId) ?? store.getPendingRequest(requestId)
     },
     attribution: providerAttribution,
-    postRuntimeRequestMessage: async (spaceId, request) => await pendingRequestService.postRuntimeRequestMessage(spaceId, request)
+    postRuntimeRequestMessage: async (transportResourceId, request) => await pendingRequestService.postRuntimeRequestMessage(transportResourceId, request)
   });
   const providerAttachmentResolver = new ProviderAttachmentResolver({
     runtimeRoot: paths.runtimeRoot,
@@ -536,7 +536,7 @@ export function buildMoorlineRuntimeServiceGraph(
     getPluginHost: () => pluginHostRef.current,
     createPluginContext: callbacks.createPluginContext,
     sendStatusUpdate: async (payload) => await callbacks.sendStatusUpdate(payload),
-    postRuntimeRequestMessage: async (spaceId, request) => await pendingRequestService.postRuntimeRequestMessage(spaceId, request),
+    postRuntimeRequestMessage: async (transportResourceId, request) => await pendingRequestService.postRuntimeRequestMessage(transportResourceId, request),
     recordRuntimeActivity: callbacks.recordRuntimeActivity
   });
   const orchestrationRequests = new RuntimeOrchestrationRequestService({
@@ -548,7 +548,7 @@ export function buildMoorlineRuntimeServiceGraph(
       files: RuntimeAttachmentPayload[] | undefined,
       input: { requestedByThreadId: string | null }
     ) => {
-      const allowlistedRoots = [join(paths.runtimeRoot, 'chat')];
+      const allowlistedRoots = [join(paths.runtimeRoot, 'coordination')];
       if (input.requestedByThreadId) {
         const session = sessionRegistry.getByThreadId(input.requestedByThreadId);
         if (session?.workspacePath) {
@@ -558,7 +558,7 @@ export function buildMoorlineRuntimeServiceGraph(
       }
       validateLocalRuntimeFiles(files, allowlistedRoots);
     },
-    postTransportMessage: async (actor, spaceId, payload) => await callbacks.postTransportMessage(actor, spaceId, payload),
+    postTransportMessage: async (actor, transportResourceId, payload) => await callbacks.postTransportMessage(actor, transportResourceId, payload),
     onForcedDrain: (signal) => {
       callbacks.appendAuditEvent('runtime.orchestration.drain_forced', {
         timeoutMs: signal.timeoutMs,
@@ -569,7 +569,7 @@ export function buildMoorlineRuntimeServiceGraph(
       callbacks.recordRuntimeActivity({
         threadId: 'runtime:orchestration',
         sessionId: null,
-        spaceId: null,
+        transportResourceId: null,
         sourceEventId: randomUUID(),
         kind: 'runtime.orchestration.forced_drain',
         severity: 'warning',
@@ -586,7 +586,7 @@ export function buildMoorlineRuntimeServiceGraph(
     sessionLifecycle,
     sessionRegistry,
     requireGuard: callbacks.requireGuard,
-    getNamespaceState: callbacks.getNamespaceState,
+    getSurfaceState: callbacks.getSurfaceState,
     now: callbacks.now,
     sendStatusUpdate: async (payload) => await callbacks.sendStatusUpdate(payload),
     appendAuditEvent: callbacks.appendAuditEvent,
@@ -646,7 +646,7 @@ export function buildMoorlineRuntimeServiceGraph(
         callbacks.recordRuntimeActivity({
           threadId: 'runtime:lifecycle',
           sessionId: null,
-          spaceId: null,
+          transportResourceId: null,
           sourceEventId: randomUUID(),
           kind: 'runtime.lifecycle.failed',
           severity: 'error',
@@ -678,7 +678,7 @@ export function buildMoorlineRuntimeServiceGraph(
     providerId: normalizedConfig.provider.packageId ?? normalizedConfig.provider.kind,
     isAdminActor: callbacks.isAdminActor,
     now: callbacks.now,
-    postTransportMessage: async (actor, spaceId, payload) => await callbacks.postTransportMessage(actor, spaceId, payload),
+    postTransportMessage: async (actor, transportResourceId, payload) => await callbacks.postTransportMessage(actor, transportResourceId, payload),
     runGuardedAction: callbacks.runGuardedAction,
     recordRuntimeActivity: callbacks.recordRuntimeActivity
   });
@@ -688,7 +688,7 @@ export function buildMoorlineRuntimeServiceGraph(
     runtimeRoot: paths.runtimeRoot,
     homeRoot,
     sqlitePath: paths.sqlitePath,
-    chatWorkspacePath,
+    coordinationWorkspacePath,
     commandRunner: normalizedDeps.commandRunner,
     store,
     sessionRegistry,
@@ -706,11 +706,11 @@ export function buildMoorlineRuntimeServiceGraph(
     getPluginHost: () => pluginHostRef.current,
     getAdminConfig: callbacks.getEffectiveAdminConfig,
     isAdminActor: callbacks.isAdminActor,
-    requireNamespaceState: callbacks.requireNamespaceState,
-    getNamespaceState: callbacks.getNamespaceState,
+    requireSurfaceState: callbacks.requireSurfaceState,
+    getSurfaceState: callbacks.getSurfaceState,
     getRuntimeStatus: callbacks.getRuntimeStatus,
     getRuntimeControlStatus: callbacks.getRuntimeControlStatus,
-    ensureChatSession: callbacks.ensureChatSession,
+    ensureCoordinationSession: callbacks.ensureCoordinationSession,
     prepareProviderImages: async (threadId, attachments) =>
       await prepareProviderImages({
         runtimeRoot: paths.runtimeRoot,
@@ -718,8 +718,8 @@ export function buildMoorlineRuntimeServiceGraph(
         attachments
       }),
     normalizeReply: (text) => normalizeRuntimeReply(text),
-    postTransportMessage: async (actor, spaceId, payload) => {
-      await callbacks.postTransportMessage(actor, spaceId, payload);
+    postTransportMessage: async (actor, transportResourceId, payload) => {
+      await callbacks.postTransportMessage(actor, transportResourceId, payload);
     },
     appendAuditEvent: callbacks.appendAuditEvent,
     recordRuntimeActivity: callbacks.recordRuntimeActivity,
@@ -749,7 +749,7 @@ export function buildMoorlineRuntimeServiceGraph(
     now: callbacks.now,
     getRuntimeControlStatus: callbacks.getRuntimeControlStatus,
     getRuntimeStatus: callbacks.getRuntimeStatus,
-    getNamespaceState: callbacks.getNamespaceState,
+    getSurfaceState: callbacks.getSurfaceState,
     getManagementSurface: () => managementSurface.getSurfaceState(),
     getPluginHost: () => pluginHostRef.current,
     createPluginContext: callbacks.createPluginContext,
@@ -784,12 +784,12 @@ export function buildMoorlineRuntimeServiceGraph(
   receiptBus.on('quiesced', (receipt) => {
     providerOrchestrator.flushThread(receipt.threadId);
   });
-  mkdirSync(chatWorkspacePath, { recursive: true });
+  mkdirSync(coordinationWorkspacePath, { recursive: true });
 
   return {
     deps: normalizedDeps,
     paths,
-    chatWorkspacePath,
+    coordinationWorkspacePath,
     runtimePolicyPath,
     store,
     sessionRegistry,
@@ -815,7 +815,7 @@ export function buildMoorlineRuntimeServiceGraph(
     managementReadModel,
     runtimeControl,
     workManagement,
-    managedSpaceLifecycle,
+    managedTransportResourceLifecycle,
     interactions,
     transportSurface,
     providerOrchestrator,

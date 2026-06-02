@@ -28,7 +28,7 @@ interface RuntimeProjectionServiceDeps {
   getPluginHost(): PluginHost;
   createPluginContext(actorId: string): RuntimePluginContext;
   sendStatusUpdate(payload: RuntimeMessagePayload): Promise<void>;
-  postRuntimeRequestMessage(spaceId: string, request: PendingRuntimeRequestRecord): Promise<void>;
+  postRuntimeRequestMessage(transportResourceId: string, request: PendingRuntimeRequestRecord): Promise<void>;
   recordRuntimeActivity(input: Omit<RuntimeActivityRecord, 'activityId'>): void;
 }
 
@@ -133,7 +133,7 @@ export class RuntimeProjectionService {
 
   async recoverOpenRequests(): Promise<void> {
     for (const request of this.deps.snapshots.overview().openRequests) {
-      const session = this.deps.snapshots.getSessionBySpaceId(request.spaceId)?.session;
+      const session = this.deps.snapshots.getSessionByTransportResourceId(request.transportResourceId)?.session;
       if (session?.lifecycleStatus === 'archived') {
         this.deps.store.upsertPendingRequest({
           ...request,
@@ -143,7 +143,7 @@ export class RuntimeProjectionService {
         });
         continue;
       }
-      await this.deps.postRuntimeRequestMessage(request.spaceId, {
+      await this.deps.postRuntimeRequestMessage(request.transportResourceId, {
         ...request,
         messageId: null
       });
@@ -180,7 +180,7 @@ export class RuntimeProjectionService {
         this.deps.recordRuntimeActivity({
           threadId: issue.threadId,
           sessionId: issue.sessionId,
-          spaceId: this.deps.snapshots.getSessionByThreadId(issue.threadId)?.session.spaceId ?? null,
+          transportResourceId: this.deps.snapshots.getSessionByThreadId(issue.threadId)?.session.transportResourceId ?? null,
           sourceEventId: randomUUID(),
           kind: `reconcile.${issue.kind}`,
           severity: issue.kind === 'missing-provider-binding' ? 'error' : 'warning',

@@ -132,7 +132,7 @@ export async function ensureRuntimeLayout(input: {
     join(input.runtimeRoot, 'memory', 'server'),
     join(input.runtimeRoot, 'memory', 'sessions'),
     join(input.runtimeRoot, 'memory', 'projects'),
-    join(input.runtimeRoot, 'chat'),
+    join(input.runtimeRoot, 'coordination'),
     join(input.runtimeRoot, 'packages', 'api-adapters'),
     join(input.runtimeRoot, 'packages', 'providers'),
     join(input.runtimeRoot, 'packages', 'transports'),

@@ -20,7 +20,7 @@ export interface ProviderGuardPort {
 }
 
 export interface ProviderTypingPort {
-  startTypingLoop(actor: string, spaceId: string): () => void;
+  startTypingLoop(actor: string, transportResourceId: string): () => void;
 }
 
 export interface PendingRequestPort {
@@ -33,7 +33,7 @@ export interface ProviderProjectionPort {
 }
 
 export interface ProviderRequestMessagePort {
-  postRuntimeRequestMessage(spaceId: string, request: PendingRuntimeRequestRecord): Promise<void>;
+  postRuntimeRequestMessage(transportResourceId: string, request: PendingRuntimeRequestRecord): Promise<void>;
 }
 
 export interface ProviderModelPort {
@@ -41,6 +41,6 @@ export interface ProviderModelPort {
   providerPolicyTarget(threadId: string, suffix: string): string;
 }
 
-export type ProviderTurnSurface = 'main_chat' | 'session';
+export type ProviderTurnSurface = 'coordination' | 'session';
 
 export type TurnCompletionState = 'completed' | 'failed' | 'cancelled' | 'interrupted';

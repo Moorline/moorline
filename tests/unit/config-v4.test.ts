@@ -5,14 +5,14 @@ import {
   configuredApiAdapterConfig,
   defaultAdminConfig,
   defaultMainProcessConfig,
-  defaultNamespaceNames,
+  defaultSurfaceNames,
   parseMoorlineConfig
 } from '../../packages/core/src/types/config.js';
 import { resolveSecretsPathForConfigPath, saveMoorlineConfig } from '../../packages/core/src/core/system/config/configStore.js';
 import { createTempRoot } from '../helpers/temp.js';
 
 function v4Config(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  const namespace = defaultNamespaceNames();
+  const surface = defaultSurfaceNames();
   return {
     version: 4,
     runtimeRoot: '/tmp/moorline-runtime',
@@ -22,7 +22,7 @@ function v4Config(overrides: Record<string, unknown> = {}): Record<string, unkno
       runtimeMode: 'full-access',
       model: 'latest'
     },
-    surface: namespace,
+    surface: surface,
     setup: {
       completed: false
     },
@@ -126,7 +126,7 @@ describe('config v4 api adapter state', () => {
     expect(() => parseMoorlineConfig(v4Config({ version: 3 }))).toThrow(/version must be 4/i);
     expect(() => parseMoorlineConfig(v4Config({ api: { enabled: true } }))).toThrow(/removed/i);
     expect(() => parseMoorlineConfig(v4Config({ clients: {} }))).toThrow(/removed/i);
-    expect(() => parseMoorlineConfig(v4Config({ namespace: defaultNamespaceNames() }))).toThrow(/namespace has been removed/i);
+    expect(() => parseMoorlineConfig(v4Config({ namespace: defaultSurfaceNames() }))).toThrow(/namespace has been removed/i);
   });
 
   it('enforces loopback-only HTTP config unless remote exposure is explicit', () => {

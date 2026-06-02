@@ -56,7 +56,7 @@ interface RuntimePluginContextServiceDeps {
   runtimeRoot: string;
   homeRoot: string;
   sqlitePath: string;
-  chatWorkspacePath: string;
+  coordinationWorkspacePath: string;
   commandRunner?: RuntimeCommandRunner;
   store: SqliteSessionStore;
   sessionRegistry: SessionRegistry;
@@ -74,14 +74,14 @@ interface RuntimePluginContextServiceDeps {
   getPluginHost(): PluginHost;
   getAdminConfig(): AdminConfig;
   isAdminActor(input: RuntimeActorIdentity): boolean;
-  requireNamespaceState(): RuntimeSurfaceState;
-  getNamespaceState(): RuntimeSurfaceState | null;
+  requireSurfaceState(): RuntimeSurfaceState;
+  getSurfaceState(): RuntimeSurfaceState | null;
   getRuntimeStatus(): RuntimePluginContext['getRuntimeStatus'] extends () => infer T ? T : never;
   getRuntimeControlStatus(): RuntimeControlStatus;
-  ensureChatSession(spaceId: string, cwd: string): Promise<RuntimeSessionRow>;
+  ensureCoordinationSession(transportResourceId: string, cwd: string): Promise<RuntimeSessionRow>;
   prepareProviderImages(threadId: string, attachments: RuntimeAttachmentPayload[] | undefined): Promise<Array<{ localPath: string } | { url: string }> | undefined>;
   normalizeReply(text: string): string;
-  postTransportMessage(actor: string, spaceId: string, payload: RuntimeMessagePayload): Promise<void>;
+  postTransportMessage(actor: string, transportResourceId: string, payload: RuntimeMessagePayload): Promise<void>;
   appendAuditEvent(event: string, payload: Record<string, unknown>): void;
   recordRuntimeActivity(input: Omit<RuntimeActivityRecord, 'activityId'>): void;
   now(): string;
@@ -248,16 +248,16 @@ export class RuntimePluginContextService {
   private activityTargetForSession(sessionId: string | null | undefined, fallbackThreadId: string): {
     threadId: string;
     sessionId: string | null;
-    spaceId: string | null;
+    transportResourceId: string | null;
   } {
     if (!sessionId) {
-      return { threadId: fallbackThreadId, sessionId: null, spaceId: null };
+      return { threadId: fallbackThreadId, sessionId: null, transportResourceId: null };
     }
     const session = this.deps.store.getSession(sessionId);
     return {
       threadId: session?.threadId ?? fallbackThreadId,
       sessionId,
-      spaceId: session?.spaceId ?? null
+      transportResourceId: session?.transportResourceId ?? null
     };
   }
 
@@ -282,16 +282,16 @@ export class RuntimePluginContextService {
       config: this.deps.config,
       getAdminConfig: () => capabilities.admin!.getAdminConfig(),
       isAdminActor: (input) => this.deps.isAdminActor(input),
-      getNamespaceState: () => this.deps.requireNamespaceState(),
-      getCurrentSpaceId: () => this.deps.getNamespaceState()?.chatChannelId ?? this.deps.config.transport.scopeId,
-      getCurrentThreadId: () => `chat:${this.deps.getNamespaceState()?.chatChannelId ?? this.deps.config.transport.scopeId}`,
-      getCurrentWorkspacePath: () => this.deps.chatWorkspacePath,
-      getChatWorkspacePath: () => this.deps.chatWorkspacePath,
+      getSurfaceState: () => this.deps.requireSurfaceState(),
+      getCurrentTransportResourceId: () => this.deps.getSurfaceState()?.coordinationResourceId ?? this.deps.config.transport.scopeId,
+      getCurrentThreadId: () => `coordination:${this.deps.getSurfaceState()?.coordinationResourceId ?? this.deps.config.transport.scopeId}`,
+      getCurrentWorkspacePath: () => this.deps.coordinationWorkspacePath,
+      getCoordinationWorkspacePath: () => this.deps.coordinationWorkspacePath,
       listSkills: () => capabilities.memory.listSkills(),
       loadSkill: async (name) => await capabilities.memory.loadSkill(name),
       writeSkill: async (input) => await capabilities.memory.writeSkill(input),
       listSessions: () => this.deps.snapshots.listSessions().map((entry) => entry.session),
-      getSessionBySpaceId: (spaceId) => this.deps.snapshots.getSessionBySpaceId(spaceId)?.session ?? null,
+      getSessionByTransportResourceId: (transportResourceId) => this.deps.snapshots.getSessionByTransportResourceId(transportResourceId)?.session ?? null,
       getSessionById: (sessionId) => this.deps.snapshots.getSessionById(sessionId)?.session ?? null,
       getPackageState: (key) => {
         const row = this.deps.store.getPackageState(this.contextPackageId(actorId), key);
@@ -454,7 +454,7 @@ export class RuntimePluginContextService {
             this.deps.recordRuntimeActivity({
               threadId: 'runtime:work',
               sessionId: null,
-              spaceId: null,
+              transportResourceId: null,
               sourceEventId: randomUUID(),
               kind: 'work_item.queued',
               severity: 'info',
@@ -622,13 +622,13 @@ export class RuntimePluginContextService {
         const ids = new Set(this.deps.store.listSessionIdsForExternalResource(resource));
         return this.deps.snapshots.listSessions().filter((snapshot) => ids.has(snapshot.session.sessionId));
       },
-      listPendingRequests: (spaceId) =>
-        this.deps.store.listPendingRequestsBySpace(spaceId).filter((request) => request.status === 'open'),
+      listPendingRequests: (transportResourceId) =>
+        this.deps.store.listPendingRequestsByTransportResource(transportResourceId).filter((request) => request.status === 'open'),
       listRuntimeReceipts: () => this.deps.snapshots.overview().receipts,
       listProviderConnections: () => this.deps.snapshots.overview().providers,
       listRuntimeActivities: (threadId) =>
         threadId ? this.deps.snapshots.getSessionByThreadId(threadId)?.recentActivities ?? [] : this.deps.activities.listRecent(25),
-      getSessionSnapshotBySpaceId: (spaceId) => this.deps.snapshots.getSessionBySpaceId(spaceId),
+      getSessionSnapshotByTransportResourceId: (transportResourceId) => this.deps.snapshots.getSessionByTransportResourceId(transportResourceId),
       getSessionSnapshotById: (sessionId) => this.deps.snapshots.getSessionById(sessionId),
       getRuntimeOverview: () => this.deps.snapshots.overview(),
       querySessions: (filter) => this.deps.snapshots.querySessions(filter),
@@ -674,43 +674,43 @@ export class RuntimePluginContextService {
         this.deps.store.listDomainEvents(threadId).map((row) => ({
           eventId: row.eventId,
           threadId: row.threadId,
-          spaceId: row.spaceId,
+          transportResourceId: row.transportResourceId,
           sessionId: row.sessionId,
           sourceProviderEventId: row.sourceProviderEventId,
           createdAt: row.createdAt,
           type: row.type as RuntimeDomainEvent['type'],
           payload: JSON.parse(row.payloadJson) as RuntimeDomainEvent['payload']
         })) as RuntimeDomainEvent[],
-      updateSessionSummary: async (spaceId, summary, nowIso) => {
-        this.deps.sessionRegistry.updateSummary(spaceId, summary, nowIso);
+      updateSessionSummary: async (transportResourceId, summary, nowIso) => {
+        this.deps.sessionRegistry.updateSummary(transportResourceId, summary, nowIso);
       },
-      retrieveMemory: async ({ query, scopeId, spaceId, threadId, maxResults, enableRerank }) =>
+      retrieveMemory: async ({ query, scopeId, transportResourceId, threadId, maxResults, enableRerank }) =>
         this.deps.runGuardedAction({
           action: 'memory.read',
           actor: actorId,
-          target: spaceId ? `${scopeId}:${spaceId}:${threadId ?? 'root'}` : scopeId,
+          target: transportResourceId ? `${scopeId}:${transportResourceId}:${threadId ?? 'root'}` : scopeId,
           payload: { query, maxResults, enableRerank },
           title: 'Memory read blocked',
           execute: async () =>
             await retrieveFromMemoryWithSQLite(
               query,
               this.deps.runtimeRoot,
-              { scopeId: scopeId, spaceId: spaceId, threadId: threadId ?? null, projectKey: 'default' },
+              { scopeId: scopeId, transportResourceId: transportResourceId, threadId: threadId ?? null, projectKey: 'default' },
               this.deps.sqlitePath,
               { maxResults, enableRerank }
             )
         }),
-      writeSessionMemory: async ({ scopeId, spaceId, threadId, kind, content, sourceRefs }) => {
+      writeSessionMemory: async ({ scopeId, transportResourceId, threadId, kind, content, sourceRefs }) => {
         await this.deps.runGuardedAction({
           action: kind === 'summary' ? 'memory.write' : 'fs.write',
           actor: actorId,
-          target: `${scopeId}:${spaceId}:${threadId ?? 'root'}:${kind}`,
+          target: `${scopeId}:${transportResourceId}:${threadId ?? 'root'}:${kind}`,
           payload: { sourceRefs },
           title: 'Session memory write blocked',
           execute: async () =>
             this.deps.memoryStore.writeSessionRecord({
               scopeId: scopeId,
-              spaceId: spaceId,
+              transportResourceId: transportResourceId,
               threadId: threadId ?? null,
               kind,
               content,
@@ -718,7 +718,7 @@ export class RuntimePluginContextService {
             }).then(() => {
               void refreshMemoryIndex(
                 this.deps.runtimeRoot,
-                { scopeId: scopeId, spaceId: spaceId, threadId: threadId ?? null, projectKey: 'default' },
+                { scopeId: scopeId, transportResourceId: transportResourceId, threadId: threadId ?? null, projectKey: 'default' },
                 this.deps.sqlitePath
               );
             })
@@ -786,7 +786,7 @@ export class RuntimePluginContextService {
             updatedAt: nowIso
           }));
         }
-        return { session: created.session, spaceId: created.spaceId };
+        return { session: created.session, transportResourceId: created.transportResourceId };
       },
       runGate: async ({ gateId, command, args, cwd, required, workItemId, sessionId }) =>
         await this.deps.runGuardedAction({
@@ -896,7 +896,7 @@ export class RuntimePluginContextService {
             });
             const reply = await context.runAgent({
               surface: 'session',
-              spaceId: created.spaceId,
+              transportResourceId: created.transportResourceId,
               actorId,
               actorLabel: this.contextPackageId(actorId),
               text: prompt,
@@ -925,35 +925,35 @@ export class RuntimePluginContextService {
             };
           }
         }),
-      directSession: async ({ sessionId, spaceId, instruction, reason }) =>
+      directSession: async ({ sessionId, transportResourceId, instruction, reason }) =>
         await this.deps.workManagement.directManagedSession({
           actorId,
           sessionId,
-          spaceId: spaceId,
+          transportResourceId: transportResourceId,
           instruction,
           reason
         }),
-      archiveSession: async ({ spaceId, sessionId }) =>
+      archiveSession: async ({ transportResourceId, sessionId }) =>
         await this.deps.workManagement.archiveManagedSession({
           actorId,
-          spaceId: spaceId,
+          transportResourceId: transportResourceId,
           sessionId
         }),
-      deleteArchivedSession: async ({ spaceId, sessionId }) =>
+      deleteArchivedSession: async ({ transportResourceId, sessionId }) =>
         await this.deps.workManagement.deleteManagedSession({
           actorId,
-          spaceId: spaceId,
+          transportResourceId: transportResourceId,
           sessionId
         }),
-      archiveSpaceTarget: async ({ spaceId }) =>
-        await this.deps.workManagement.archiveChannelTarget({
+      archiveTransportResourceTarget: async ({ transportResourceId }) =>
+        await this.deps.workManagement.archiveResourceTarget({
           actorId,
-          spaceId: spaceId
+          transportResourceId: transportResourceId
         }),
-      deleteArchivedSpaceTarget: async ({ spaceId }) =>
-        await this.deps.workManagement.deleteArchivedChannelTarget({
+      deleteArchivedTransportResourceTarget: async ({ transportResourceId }) =>
+        await this.deps.workManagement.deleteArchivedResourceTarget({
           actorId,
-          spaceId: spaceId
+          transportResourceId: transportResourceId
         }),
       respondToRuntimeRequest: async ({ threadId, requestId, decision, requesterActor }) => {
         await this.deps.resolvePendingRequest({
@@ -1089,13 +1089,13 @@ export class RuntimePluginContextService {
           }
           return true;
         }),
-      sendMessage: async (spaceId, payload) => {
-        await this.deps.postTransportMessage(actorId, spaceId, payload);
+      sendMessage: async (transportResourceId, payload) => {
+        await this.deps.postTransportMessage(actorId, transportResourceId, payload);
       },
       sendStatusUpdate: async (payload) => {
-        const namespaceState = this.deps.getNamespaceState();
-        if (namespaceState) {
-          await this.deps.postTransportMessage(actorId, namespaceState.statusChannelId, payload);
+        const surfaceState = this.deps.getSurfaceState();
+        if (surfaceState) {
+          await this.deps.postTransportMessage(actorId, surfaceState.statusResourceId, payload);
         }
       },
       appendAuditEvent: (event, payload) => {
@@ -1104,7 +1104,7 @@ export class RuntimePluginContextService {
       nowIso: () => this.deps.now(),
       runAgent: async ({
         surface,
-        spaceId,
+        transportResourceId,
         actorId: promptActorId,
         actorLabel,
         text,
@@ -1120,7 +1120,7 @@ export class RuntimePluginContextService {
           ...(await this.deps.getPluginHost().beforeAgentPrompt(
             {
               surface,
-              spaceId,
+              transportResourceId,
               actorId: promptActorId,
               actorLabel,
               text,
@@ -1130,7 +1130,7 @@ export class RuntimePluginContextService {
             (pluginId) => this.createContext(`plugin:${pluginId}`)
           ))
         ];
-        const activeSession = session ?? (await this.deps.ensureChatSession(spaceId, cwd));
+        const activeSession = session ?? (await this.deps.ensureCoordinationSession(transportResourceId, cwd));
         const prompt = [
           ...promptSections,
           '',
@@ -1149,7 +1149,7 @@ export class RuntimePluginContextService {
         const result = await this.deps.providerOrchestrator.runTurn({
           actorId,
           session: activeSession,
-          spaceId: spaceId,
+          transportResourceId: transportResourceId,
           surface,
           promptContent: text,
           promptSource,
@@ -1167,7 +1167,7 @@ export class RuntimePluginContextService {
         await this.deps.getPluginHost().afterAgentResponse(
           {
             surface,
-            spaceId,
+            transportResourceId,
             actorId: promptActorId,
             actorLabel,
             text,
@@ -1224,7 +1224,7 @@ export class RuntimePluginContextService {
     const sessions = this.deps.sessionRegistry.list();
     const session =
       sessions.find((entry) => entry.sessionId === normalized) ??
-      sessions.find((entry) => entry.spaceId === normalized) ??
+      sessions.find((entry) => entry.transportResourceId === normalized) ??
       sessions.find((entry) => entry.threadId === normalized) ??
       null;
     if (!session) {

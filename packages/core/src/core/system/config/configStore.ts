@@ -6,7 +6,7 @@ import {
   parseMoorlineConfig,
   type MoorlineConfig,
   type MoorlineSecrets,
-  type ManagedNamespaceState,
+  type ManagedSurfaceState,
   type ProviderConfig,
   type TransportConfig
 } from '../../../types/config.js';
@@ -769,14 +769,14 @@ export function ensureRuntimePaths(runtimeRoot: string): RuntimePaths {
   return paths;
 }
 
-export function loadInstallationState(path: string): ManagedNamespaceState | null {
+export function loadInstallationState(path: string): ManagedSurfaceState | null {
   if (!existsSync(path)) {
     return null;
   }
-  return readJsonFile(path) as ManagedNamespaceState;
+  return readJsonFile(path) as ManagedSurfaceState;
 }
 
-export function saveInstallationState(path: string, state: ManagedNamespaceState): void {
+export function saveInstallationState(path: string, state: ManagedSurfaceState): void {
   writeJsonFile(path, state);
 }
 

@@ -63,8 +63,8 @@ describe('host repository split contract', () => {
 
   it('keeps core free of CLI, HTTP, and moved package implementation imports', () => {
     const source = readSourceTree(join(root, 'packages', 'core', 'src'));
-    expect(source).not.toMatch(/@moorline\/(http|codex|discord)/);
-    expect(source).not.toMatch(/from ['"][^'"]*packages\/(cli|http|codex|discord)/);
+    expect(source).not.toMatch(/@moorline\/(http|provider|transport)/);
+    expect(source).not.toMatch(/from ['"][^'"]*packages\/(cli|http|provider|transport)/);
   });
 
   it('ships official/http as the default api-adapter package', () => {
@@ -170,7 +170,7 @@ describe('host repository split contract', () => {
     expect(pkg.scripts['validate:installables']).toBeUndefined();
     expect(pkg.scripts['test:full']).not.toContain('validate:installables');
     expect(existsSync(join(root, 'packages', 'package-kit'))).toBe(false);
-    expect(existsSync(join(root, 'packages', 'codex'))).toBe(false);
+    expect(existsSync(join(root, 'packages', 'provider'))).toBe(false);
     expect(existsSync(join(root, 'tools', 'installables'))).toBe(false);
   });
 
@@ -240,6 +240,36 @@ describe('host repository split contract', () => {
     expect(configSource).toContain('config.namespace has been removed');
     expect(configSource).not.toContain('asObject(root.namespace');
     expect(configSource).not.toContain('namespace: parseSurfaceNames(surface)');
+  });
+
+  it('keeps public runtime terminology resource-oriented', () => {
+    const publicSources = [
+      readSourceTree(join(root, 'packages', 'contracts', 'src')),
+      readSourceTree(join(root, 'packages', 'control-api', 'src')),
+      readSourceTree(join(root, 'packages', 'cli', 'src')),
+      readSourceTree(join(root, 'packages', 'http', 'src')),
+      readFileSync(join(root, 'README.md'), 'utf8'),
+      readFileSync(join(root, 'docs', 'TERMINOLOGY.md'), 'utf8')
+    ].join('\n');
+
+    const oldMessageSurface = ['c', 'hat'].join('');
+    const oldResourceWord = ['s', 'pace'].join('');
+    const oldTransportPackage = ['dis', 'cord'].join('');
+    const forbiddenTerms = [
+      ['main', '_', oldMessageSurface],
+      ['Runtime', 'S', 'pace'],
+      [oldResourceWord, 'Id'],
+      [oldResourceWord, 'Name'],
+      [oldMessageSurface],
+      ['official', '/', oldTransportPackage],
+      [oldTransportPackage],
+      ['transport', '.', oldResourceWord],
+      ['--', oldResourceWord]
+    ];
+    for (const term of forbiddenTerms) {
+      const forbidden = new RegExp(term.join('').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      expect(publicSources).not.toMatch(forbidden);
+    }
   });
 
   it('uses the runtime package install roots', () => {

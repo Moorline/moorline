@@ -64,9 +64,9 @@ Operator-supported session modes:
 - `full-access`: no approval gate.
 - `approval-required`: protected actions require approval.
 
-## Managed Space Setup And Recovery
+## Managed Resource Setup And Recovery
 
-Transport packages may create managed spaces, roles, or other native resources. Check the active transport package documentation for package-specific setup and recovery steps.
+Transport packages may create managed resources, roles, or other native resources. Check the active transport package documentation for package-specific setup and recovery steps.
 
 Generic recovery checklist:
 - rerun `moorline configure apply` after package config changes
@@ -133,7 +133,7 @@ Use these checks to verify:
 - package registry/cache state
 - provider installation/auth
 - applied transport config
-- namespace state
+- surface state
 - persisted provider binding health
 - recorded package load failures
 
@@ -167,8 +167,8 @@ MOORLINE_HOME="$smoke_dir/home" timeout 10s "$smoke_dir/moorline-cli-linux-x64/m
 rm -rf "$smoke_dir"
 ```
 
-Then run the GitHub release workflow manually with `workflow_dispatch`.
-The workflow builds and smokes artifacts without uploading GitHub release assets or publishing npm packages.
+Then run the release workflow manually with `workflow_dispatch`.
+The workflow builds and smokes artifacts without uploading release assets or publishing npm packages.
 
 ## Release Smoke
 
@@ -252,7 +252,7 @@ Tracked by default:
 
 Not tracked:
 - `config.secrets.json`
-- runtime DB/state/logs/chat/workspaces/memory
+- runtime DB/state/logs/coordination/workspaces/memory
 
 ## Backup
 
@@ -324,11 +324,11 @@ If startup reports missing `node:sqlite` support, fix the runtime before opening
 
 Official package npm-compatible artifacts live in `Moorline/packages`.
 
-The initial public npm artifacts are:
+Initial public npm artifacts include:
 
 - `@moorline/basic-essentials@0.0.1`
-- `@moorline/codex-default@0.0.1`
-- `@moorline/discord-default@0.0.1`
+- provider-specific default bundles from the packages repo
+- transport-specific default bundles from the packages repo
 
 Build official npm-compatible package directories and tarballs:
 
@@ -348,7 +348,7 @@ dist/npm-packages/moorline-npm-summary.json
 Publishing is manual:
 
 ```bash
-npm publish dist/npm-packages/@moorline/discord-default --access public
+npm publish dist/npm-packages/@moorline/<package-name> --access public
 ```
 
 Do not ask users to run `npm install` for Moorline packages. Users should install through:

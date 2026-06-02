@@ -1,9 +1,9 @@
-interface ManagedSpaceOwnership {
+interface ManagedTransportResourceOwnership {
   scopeId: string;
   ownerApplicationId?: string;
 }
 
-export function buildManagedSpaceMetadata(input: ManagedSpaceOwnership): Record<string, unknown> {
+export function buildManagedTransportResourceMetadata(input: ManagedTransportResourceOwnership): Record<string, unknown> {
   return {
     moorlineManaged: true,
     moorlineOwnerScopeId: input.scopeId,

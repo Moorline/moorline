@@ -71,7 +71,7 @@ export class ProviderCompactionPolicy {
       this.deps.recordRuntimeActivity({
         threadId: event.threadId,
         sessionId: session.sessionId,
-        spaceId: session.spaceId,
+        transportResourceId: session.transportResourceId,
         sourceEventId: event.eventId,
         kind: 'thread.compaction.requested',
         severity: 'warning',
@@ -82,7 +82,7 @@ export class ProviderCompactionPolicy {
       this.deps.appendAuditEvent('provider.thread_compaction.requested', {
         threadId: event.threadId,
         sessionId: session.sessionId,
-        spaceId: session.spaceId,
+        transportResourceId: session.transportResourceId,
         totalTokens,
         modelContextWindow,
         usageRatio,
@@ -93,7 +93,7 @@ export class ProviderCompactionPolicy {
       this.deps.appendAuditEvent('provider.thread_compaction.failed', {
         threadId: event.threadId,
         sessionId: session.sessionId,
-        spaceId: session.spaceId,
+        transportResourceId: session.transportResourceId,
         error: error instanceof Error ? error.message : String(error)
       });
     }
@@ -128,7 +128,7 @@ export class ProviderCompactionPolicy {
       this.deps.recordRuntimeActivity({
         threadId,
         sessionId: session?.sessionId ?? null,
-        spaceId: session?.spaceId ?? null,
+        transportResourceId: session?.transportResourceId ?? null,
         sourceEventId: randomUUID(),
         kind: 'thread.compaction.timeout',
         severity: 'warning',
@@ -139,7 +139,7 @@ export class ProviderCompactionPolicy {
       this.deps.appendAuditEvent('provider.thread_compaction.timeout', {
         threadId,
         sessionId: session?.sessionId ?? null,
-        spaceId: session?.spaceId ?? null,
+        transportResourceId: session?.transportResourceId ?? null,
         timeoutMs: THREAD_COMPACTION_LATCH_TIMEOUT_MS
       });
     }, THREAD_COMPACTION_LATCH_TIMEOUT_MS);

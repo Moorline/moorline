@@ -25,7 +25,7 @@ export interface ManagementReadModelServiceDeps {
   now: () => string;
   getRuntimeControlStatus: () => RuntimeControlStatus;
   getRuntimeStatus: ManagementRuntimeStatusProvider;
-  getNamespaceState: () => RuntimeSurfaceState | null;
+  getSurfaceState: () => RuntimeSurfaceState | null;
   getManagementSurface: () => {
     enabled: boolean;
     host: string;

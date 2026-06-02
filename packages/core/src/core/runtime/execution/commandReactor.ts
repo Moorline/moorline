@@ -6,26 +6,26 @@ import type { SessionRegistry } from '../../domain/sessions/sessionState.js';
 export class CommandReactor {
   constructor(private readonly sessions: SessionRegistry) {}
 
-  createChatSession(input: {
+  createCoordinationSession(input: {
     scopeId: string;
-    spaceId: string;
+    transportResourceId: string;
     threadId: string;
-    spaceName: string;
+    transportResourceName: string;
     workspacePath: string;
     runtimeMode: RuntimeModeName;
     nowIso: string;
     providerAutoStartEnabled?: boolean;
   }): RuntimeSessionRow | null {
-    const existing = this.sessions.getBySpaceId(input.spaceId);
+    const existing = this.sessions.getByTransportResourceId(input.transportResourceId);
     if (existing) {
       return existing;
     }
     return this.sessions.updateSession({
-      sessionId: `chat-${input.spaceId}`,
+      sessionId: `coordination-${input.transportResourceId}`,
       scopeId: input.scopeId,
-      spaceId: input.spaceId,
+      transportResourceId: input.transportResourceId,
       threadId: input.threadId,
-      spaceName: input.spaceName,
+      transportResourceName: input.transportResourceName,
       workspacePath: input.workspacePath,
       runtimeMode: input.runtimeMode,
       lifecycleStatus: 'hot',
@@ -46,8 +46,8 @@ export class CommandReactor {
 
   createSession(input: {
     scopeId: string;
-    spaceId: string;
-    spaceName: string;
+    transportResourceId: string;
+    transportResourceName: string;
     requestedName: string;
     runtimeMode: RuntimeModeName;
     nowIso: string;

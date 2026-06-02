@@ -6,7 +6,7 @@ interface RuntimeTransportSurfaceServiceDeps {
   queue<T>(key: string, work: () => Promise<T>): Promise<T>;
   guard(): RuntimeActionGuard;
   transport(): RuntimeTransport;
-  getNamespaceState(): RuntimeSurfaceState | null;
+  getSurfaceState(): RuntimeSurfaceState | null;
 }
 
 const TYPING_REFRESH_MS = 8_000;
@@ -14,22 +14,22 @@ const TYPING_REFRESH_MS = 8_000;
 export class RuntimeTransportSurfaceService {
   constructor(private readonly deps: RuntimeTransportSurfaceServiceDeps) {}
 
-  startTypingLoop(actor: string, spaceId: string): () => void {
+  startTypingLoop(actor: string, transportResourceId: string): () => void {
     const transport = this.deps.transport() as RuntimeTransport & {
-      triggerTyping?(spaceId: string): Promise<void>;
+      triggerTyping?(transportResourceId: string): Promise<void>;
     };
     if (typeof transport.triggerTyping === 'function') {
       let stopped = false;
       let interval: ReturnType<typeof globalThis.setInterval> | null = null;
       const trigger = async (): Promise<void> => {
         try {
-          await this.deps.queue(spaceId, async () =>
+          await this.deps.queue(transportResourceId, async () =>
             await this.deps.guard().run({
               action: 'transport.message.send',
               actor,
-              target: `${spaceId}:typing`,
+              target: `${transportResourceId}:typing`,
               execute: async () => {
-                await transport.triggerTyping?.(spaceId);
+                await transport.triggerTyping?.(transportResourceId);
               }
             })
           );
@@ -53,25 +53,25 @@ export class RuntimeTransportSurfaceService {
       };
     }
 
-    void this.setPresence(actor, spaceId, 'busy');
+    void this.setPresence(actor, transportResourceId, 'busy');
     return () => {
-      void this.setPresence(actor, spaceId, 'online');
+      void this.setPresence(actor, transportResourceId, 'online');
     };
   }
 
-  async setPresence(actor: string, spaceId: string, status: 'online' | 'idle' | 'busy' | 'offline'): Promise<void> {
+  async setPresence(actor: string, transportResourceId: string, status: 'online' | 'idle' | 'busy' | 'offline'): Promise<void> {
     const transport = this.deps.transport();
     if (!transport.capabilities().presence || !transport.setPresence) {
       return;
     }
-    await this.deps.queue(spaceId, async () =>
+    await this.deps.queue(transportResourceId, async () =>
       await this.deps.guard().run({
         action: 'transport.message.send',
         actor,
-        target: `${spaceId}:presence`,
+        target: `${transportResourceId}:presence`,
         execute: async () => {
           await transport.setPresence?.({
-            spaceId: spaceId,
+            transportResourceId: transportResourceId,
             status
           });
         }
@@ -79,24 +79,24 @@ export class RuntimeTransportSurfaceService {
     );
   }
 
-  async postMessage(actor: string, spaceId: string, payload: RuntimeMessagePayload): Promise<{ id: string }> {
-    return await this.deps.queue(spaceId, async () =>
+  async postMessage(actor: string, transportResourceId: string, payload: RuntimeMessagePayload): Promise<{ id: string }> {
+    return await this.deps.queue(transportResourceId, async () =>
       await this.deps.guard().run({
         action: 'transport.message.send',
         actor,
-        target: spaceId,
+        target: transportResourceId,
         execute: async () => {
-          return await this.deps.transport().sendMessage({ spaceId: spaceId }, payload);
+          return await this.deps.transport().sendMessage({ transportResourceId: transportResourceId }, payload);
         }
       })
     );
   }
 
   async sendStatusUpdate(payload: RuntimeMessagePayload): Promise<void> {
-    const namespace = this.deps.getNamespaceState();
-    if (!namespace) {
+    const surface = this.deps.getSurfaceState();
+    if (!surface) {
       return;
     }
-    await this.postMessage('runtime:status', namespace.statusChannelId, payload);
+    await this.postMessage('runtime:status', surface.statusResourceId, payload);
   }
 }

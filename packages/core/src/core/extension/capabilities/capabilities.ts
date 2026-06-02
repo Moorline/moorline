@@ -19,9 +19,9 @@ const CAPABILITIES = [
   'sidecar.manage',
   'transport.message.send',
   'transport.action.register',
-  'transport.space.create',
-  'transport.space.update',
-  'transport.space.delete',
+  'transport.resource.create',
+  'transport.resource.update',
+  'transport.resource.delete',
   'transport.native.action.map',
   'transport.native.interaction'
 ] as const;
