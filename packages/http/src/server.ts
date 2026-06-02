@@ -19,7 +19,7 @@ import {
   defaultAdminConfig,
   defaultHttpApiAdapterConfig,
   defaultMainProcessConfig,
-  defaultNamespaceNames,
+  defaultSurfaceNames,
   formatManagementHttpUrl,
   parseHttpApiAdapterConfig,
   type MoorlineConfig
@@ -194,7 +194,7 @@ export class ControlApiServer {
         runtimeMode: 'full-access',
         model: 'latest'
       },
-      surface: defaultNamespaceNames(),
+      surface: defaultSurfaceNames(),
       setup: {
         completed: false
       },

@@ -44,7 +44,7 @@ export interface RuntimeProviderTestResult {
 export interface RuntimeProviderSessionInput {
   sessionId: string;
   threadId: string;
-  spaceId: string;
+  transportResourceId: string;
   runtimeMode: RuntimeModeName;
   workspacePath: string;
   resumeThreadId: string | null;

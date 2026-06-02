@@ -13,8 +13,8 @@ export type ExecutionModeName = 'full-access' | 'approval-required';
 
 export interface RuntimeSurfaceNames {
   mainCategoryName: string;
-  chatChannelName: string;
-  statusChannelName: string;
+  coordinationResourceName: string;
+  statusResourceName: string;
   sessionsGroupName: string;
   archiveGroupName: string;
 }
@@ -171,14 +171,14 @@ export type AppliedMoorlineConfig = MoorlineConfig & {
   transport: TransportConfig;
   provider: ProviderConfig;
   main: MainProcessConfig;
-  namespace: RuntimeSurfaceNames;
+  surface: RuntimeSurfaceNames;
 };
 
 export interface RuntimeSurfaceState {
   scopeId?: string;
   mainCategoryId: string;
-  chatChannelId: string;
-  statusChannelId: string;
+  coordinationResourceId: string;
+  statusResourceId: string;
   sessionsCategoryId: string;
   archiveCategoryId: string;
   adminAccessGroupId?: string;
@@ -191,7 +191,7 @@ export interface RuntimeSurfaceState {
   updatedAt: string;
 }
 
-export type ManagedNamespaceState = RuntimeSurfaceState;
+export type ManagedSurfaceState = RuntimeSurfaceState;
 
 export function defaultMoorlineHomePath(): string {
   const override = process.env.MOORLINE_HOME?.trim();
@@ -464,8 +464,8 @@ function parseManagementHost(
 function parseSurfaceNames(root: Record<string, unknown>): RuntimeSurfaceNames {
   return {
     mainCategoryName: asString(root.mainCategoryName, 'config.surface.mainCategoryName'),
-    chatChannelName: asString(root.chatChannelName, 'config.surface.chatChannelName'),
-    statusChannelName: asString(root.statusChannelName, 'config.surface.statusChannelName'),
+    coordinationResourceName: asString(root.coordinationResourceName, 'config.surface.coordinationResourceName'),
+    statusResourceName: asString(root.statusResourceName, 'config.surface.statusResourceName'),
     sessionsGroupName: asString(root.sessionsGroupName, 'config.surface.sessionsGroupName'),
     archiveGroupName: asString(root.archiveGroupName, 'config.surface.archiveGroupName')
   };
@@ -533,11 +533,11 @@ function parseSetupState(root: unknown): MoorlineSetupState {
   };
 }
 
-export function defaultNamespaceNames(): RuntimeSurfaceNames {
+export function defaultSurfaceNames(): RuntimeSurfaceNames {
   return {
     mainCategoryName: 'Moorline',
-    chatChannelName: 'moorline-chat',
-    statusChannelName: 'moorline-status',
+    coordinationResourceName: 'moorline-coordination',
+    statusResourceName: 'moorline-status',
     sessionsGroupName: 'Moorline Sessions',
     archiveGroupName: 'Moorline Archive'
   };

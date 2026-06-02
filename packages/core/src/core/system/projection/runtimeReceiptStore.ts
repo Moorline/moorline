@@ -30,7 +30,7 @@ export class RuntimeReceiptStore {
           SELECT
             thread_id as threadId,
             session_id as sessionId,
-            space_id as spaceId,
+            transport_resource_id as transportResourceId,
             active_turn_id as activeTurnId,
             state,
             wait_reason as waitReason,
@@ -51,7 +51,7 @@ export class RuntimeReceiptStore {
         SELECT
           thread_id as threadId,
           session_id as sessionId,
-          space_id as spaceId,
+          transport_resource_id as transportResourceId,
           active_turn_id as activeTurnId,
           state,
           wait_reason as waitReason,
@@ -69,13 +69,13 @@ export class RuntimeReceiptStore {
     this.db
       .prepare(`
         INSERT INTO runtime_receipts (
-          thread_id, session_id, space_id, active_turn_id, state, wait_reason,
+          thread_id, session_id, transport_resource_id, active_turn_id, state, wait_reason,
           pending_request_id, last_assistant_text, updated_at
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(thread_id) DO UPDATE SET
           session_id = excluded.session_id,
-          space_id = excluded.space_id,
+          transport_resource_id = excluded.transport_resource_id,
           active_turn_id = excluded.active_turn_id,
           state = excluded.state,
           wait_reason = excluded.wait_reason,
@@ -86,7 +86,7 @@ export class RuntimeReceiptStore {
       .run(
         row.threadId,
         row.sessionId,
-        row.spaceId,
+        row.transportResourceId,
         row.activeTurnId,
         row.state,
         row.waitReason,

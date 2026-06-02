@@ -119,7 +119,7 @@ export class RuntimeIngestion {
     const receipt = this.store.getRuntimeReceipt(event.threadId) ?? {
       threadId: event.threadId,
       sessionId: event.sessionId,
-      spaceId: event.spaceId,
+      transportResourceId: event.transportResourceId,
       activeTurnId: null,
       state: 'idle' as const,
       waitReason: null,

@@ -19,23 +19,23 @@ export interface CreateSessionOrchestrationPayload {
 
 export interface DirectSessionOrchestrationPayload {
   sessionId?: string;
-  spaceId?: string;
+  transportResourceId?: string;
   instruction: string;
   reason?: string;
 }
 
 export interface ArchiveSessionOrchestrationPayload {
   sessionId?: string;
-  spaceId: string;
+  transportResourceId: string;
 }
 
 export interface DeleteSessionOrchestrationPayload {
   sessionId?: string;
-  spaceId: string;
+  transportResourceId: string;
 }
 
 export interface PostMessageOrchestrationPayload {
-  spaceId: string;
+  transportResourceId: string;
   content?: string;
   files?: Array<{
     path: string;
@@ -219,42 +219,42 @@ function validatePayloadByType(
         };
       }
       const sessionId = readOptionalTrimmedString(record, 'sessionId');
-      const spaceId = readOptionalTrimmedString(record, 'spaceId');
-      if (!sessionId && !spaceId) {
+      const transportResourceId = readOptionalTrimmedString(record, 'transportResourceId');
+      if (!sessionId && !transportResourceId) {
         return {
           code: 'ORCH_DIRECT_SESSION_TARGET_REQUIRED',
-          message: 'direct_session payload requires sessionId or spaceId.'
+          message: 'direct_session payload requires sessionId or transportResourceId.'
         };
       }
       const reason = readOptionalTrimmedString(record, 'reason');
       return {
         instruction,
         ...(sessionId ? { sessionId } : {}),
-        ...(spaceId ? { spaceId } : {}),
+        ...(transportResourceId ? { transportResourceId } : {}),
         ...(reason ? { reason } : {})
       };
     }
     case 'archive_session':
     case 'delete_session': {
-      const spaceId = readTrimmedString(record, 'spaceId');
-      if (!spaceId) {
+      const transportResourceId = readTrimmedString(record, 'transportResourceId');
+      if (!transportResourceId) {
         return {
           code: 'ORCH_SESSION_SPACE_REQUIRED',
-          message: `${type} payload requires non-empty spaceId.`
+          message: `${type} payload requires non-empty transportResourceId.`
         };
       }
       const sessionId = readOptionalTrimmedString(record, 'sessionId');
       return {
-        spaceId,
+        transportResourceId,
         ...(sessionId ? { sessionId } : {})
       };
     }
     case 'post_message': {
-      const spaceId = readTrimmedString(record, 'spaceId');
-      if (!spaceId) {
+      const transportResourceId = readTrimmedString(record, 'transportResourceId');
+      if (!transportResourceId) {
         return {
           code: 'ORCH_POST_MESSAGE_SPACE_REQUIRED',
-          message: 'post_message payload requires non-empty spaceId.'
+          message: 'post_message payload requires non-empty transportResourceId.'
         };
       }
       const content = readOptionalTrimmedString(record, 'content');
@@ -298,7 +298,7 @@ function validatePayloadByType(
         };
       }
       return {
-        spaceId,
+        transportResourceId,
         ...(content ? { content } : {}),
         ...(files ? { files } : {})
       };
@@ -462,7 +462,7 @@ function dedupeWindowKey(nowIso: string): string {
 function orchestrationDedupeKey(input: {
   actorId: string;
   requestedByThreadId: string;
-  requestedBySpaceId: string;
+  requestedByTransportResourceId: string;
   type: RuntimeOrchestrationRequestType;
   targetSessionId: string | null;
   payload: RuntimeOrchestrationPayload;
@@ -474,7 +474,7 @@ function orchestrationDedupeKey(input: {
     input.type,
     input.actorId,
     input.requestedByThreadId,
-    input.requestedBySpaceId,
+    input.requestedByTransportResourceId,
     input.targetSessionId ?? '-',
     payloadDigest
   ].join('|');
@@ -495,7 +495,7 @@ export function enqueueOrchestrationRequest(input: {
   store: SqliteSessionStore;
   actorId: string;
   requestedByThreadId: string;
-  requestedBySpaceId: string;
+  requestedByTransportResourceId: string;
   type: RuntimeOrchestrationRequestType;
   targetSessionId?: string;
   payload: RuntimeOrchestrationPayload;
@@ -505,7 +505,7 @@ export function enqueueOrchestrationRequest(input: {
   const dedupeKey = orchestrationDedupeKey({
     actorId: input.actorId,
     requestedByThreadId: input.requestedByThreadId,
-    requestedBySpaceId: input.requestedBySpaceId,
+    requestedByTransportResourceId: input.requestedByTransportResourceId,
     type: input.type,
     targetSessionId: input.targetSessionId ?? null,
     payload,
@@ -519,7 +519,7 @@ export function enqueueOrchestrationRequest(input: {
     requestId: randomUUID(),
     actorId: input.actorId,
     requestedByThreadId: input.requestedByThreadId,
-    requestedBySpaceId: input.requestedBySpaceId,
+    requestedByTransportResourceId: input.requestedByTransportResourceId,
     dedupeKey,
     type: input.type,
     targetSessionId: input.targetSessionId ?? null,

@@ -20,9 +20,9 @@ export type SessionLifecycleStatus = 'hot' | 'cool' | 'archived';
 export interface RuntimeSessionRow {
   sessionId: string;
   scopeId: string;
-  spaceId: string;
+  transportResourceId: string;
   threadId: string;
-  spaceName: string;
+  transportResourceName: string;
   workspacePath: string;
   runtimeMode: RuntimeModeName;
   lifecycleStatus: SessionLifecycleStatus;
@@ -68,7 +68,7 @@ export interface RuntimeOrchestrationRequestRow {
   requestId: string;
   actorId: string;
   requestedByThreadId: string;
-  requestedBySpaceId: string;
+  requestedByTransportResourceId: string;
   dedupeKey: string | null;
   type: RuntimeOrchestrationRequestType;
   targetSessionId: string | null;
@@ -176,7 +176,7 @@ export interface RuntimeEventRow {
   eventId: string;
   provider: string;
   threadId: string;
-  spaceId: string | null;
+  transportResourceId: string | null;
   turnId: string | null;
   itemId: string | null;
   requestId: string | null;
@@ -188,7 +188,7 @@ export interface RuntimeEventRow {
 export interface DomainEventRow {
   eventId: string;
   threadId: string;
-  spaceId: string | null;
+  transportResourceId: string | null;
   sessionId: string | null;
   sourceProviderEventId: string | null;
   type: string;
@@ -319,9 +319,9 @@ export const RUNTIME_SESSION_SELECT = `
   SELECT
     session_id as sessionId,
     scope_id as scopeId,
-    space_id as spaceId,
+    transport_resource_id as transportResourceId,
     thread_id as threadId,
-    space_name as spaceName,
+    transport_resource_name as transportResourceName,
     workspace_path as workspacePath,
     runtime_mode as runtimeMode,
     lifecycle_status as lifecycleStatus,

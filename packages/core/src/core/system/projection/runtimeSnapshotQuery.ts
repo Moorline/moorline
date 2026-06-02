@@ -45,8 +45,8 @@ export class RuntimeSnapshotQuery {
     this.directory = new ProviderSessionDirectory(store);
   }
 
-  getSessionBySpaceId(spaceId: string): RuntimeSessionSnapshot | null {
-    const session = this.store.getSessionBySpaceId(spaceId);
+  getSessionByTransportResourceId(transportResourceId: string): RuntimeSessionSnapshot | null {
+    const session = this.store.getSessionByTransportResourceId(transportResourceId);
     return session ? this.buildSessionSnapshot(session) : null;
   }
 
@@ -147,8 +147,8 @@ export class RuntimeSnapshotQuery {
     return this.store.listOpenPendingRequests().find((request) => request.requestId === requestId) ?? null;
   }
 
-  listOpenRequestsBySpace(spaceId: string): PendingRuntimeRequestRecord[] {
-    return this.store.listOpenPendingRequestsBySpace(spaceId);
+  listOpenRequestsByTransportResource(transportResourceId: string): PendingRuntimeRequestRecord[] {
+    return this.store.listOpenPendingRequestsByTransportResource(transportResourceId);
   }
 
   listRecentActivities(limit: number): RuntimeActivityRecord[] {
@@ -160,9 +160,9 @@ export class RuntimeSnapshotQuery {
     this.projections.close();
   }
 
-  findOpenRequestByMessage(spaceId: string, messageId: string): PendingRuntimeRequestRecord | null {
+  findOpenRequestByMessage(transportResourceId: string, messageId: string): PendingRuntimeRequestRecord | null {
     return (
-      this.listOpenRequestsBySpace(spaceId).find(
+      this.listOpenRequestsByTransportResource(transportResourceId).find(
         (request) =>
           request.messageId === messageId &&
           request.requestType !== 'tool_user_input'

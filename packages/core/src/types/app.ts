@@ -82,7 +82,7 @@ export interface ManagementSessionOwner {
 }
 
 export interface ManagedSessionRecord extends ManagedObjectBase {
-  spaceId: string;
+  transportResourceId: string;
   threadId: string;
   lifecycleStatus: 'hot' | 'cool' | 'archived';
   runtimeMode: RuntimeModeName;
@@ -138,7 +138,7 @@ export interface ManagedServiceRecord extends ManagedObjectBase {
 
 export interface ManagedPendingRequestRecord extends ManagedObjectBase {
   threadId: string;
-  spaceId: string;
+  transportResourceId: string;
   requestType: string;
   requesterUserId: string | null;
   createdAt: string;
@@ -156,7 +156,7 @@ export interface ManagedPendingRequestRecord extends ManagedObjectBase {
 
 export interface ManagedProviderThreadRecord extends ManagedObjectBase {
   threadId: string;
-  spaceId: string | null;
+  transportResourceId: string | null;
   providerThreadId: string | null;
   runtimeMode: RuntimeModeName;
   model: string | null;
@@ -398,14 +398,14 @@ export interface ManagementReadModel {
   setup: {
     runtimeRoot: string;
     installationStatePath: string;
-    namespaceBootstrapped: boolean;
+    surfaceBootstrapped: boolean;
     providerConnected: boolean;
     readyForSessions: boolean;
     nextAction: string;
     completed: boolean;
   };
   settings: ManagementSettingsContract;
-  namespace: RuntimeSurfaceState | null;
+  surface: RuntimeSurfaceState | null;
   runtime: {
     status: ReturnType<ManagementRuntimeStatusProvider>;
     control: RuntimeControlStatus;
@@ -462,7 +462,7 @@ export interface ManagementReadModel {
       title: string;
       detail: string | null;
       threadId: string;
-      spaceId: string | null;
+      transportResourceId: string | null;
       createdAt: string;
     }>;
   };

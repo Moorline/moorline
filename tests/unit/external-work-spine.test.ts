@@ -19,8 +19,8 @@ function createStore(): SqliteSessionStore {
 function queuedWorkItem(input: Partial<RuntimeWorkItemRecord> & { workItemId: string; packageId?: string }): RuntimeWorkItemRecord {
   return {
     workItemId: input.workItemId,
-    packageId: input.packageId ?? 'official/github-worker',
-    queue: input.queue ?? 'issues',
+    packageId: input.packageId ?? 'acme/external-worker',
+    queue: input.queue ?? 'items',
     status: input.status ?? 'queued',
     priority: input.priority ?? 0,
     ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
@@ -44,29 +44,29 @@ describe('external work spine storage', () => {
   it('upserts resources and enqueues work idempotently', () => {
     const store = createStore();
     const resource = store.upsertExternalResource({
-      provider: 'github',
-      kind: 'issue',
-      id: 'Moorline/moorline#123',
-      url: 'https://github.com/Moorline/moorline/issues/123',
+      provider: 'external-system',
+      kind: 'item',
+      id: 'external:item:123',
+      url: 'https://external.example/resources/123',
       title: 'Make work first class',
       metadata: { number: 123 },
       nowIso: '2026-06-01T00:00:00.000Z'
     });
 
     expect(resource).toMatchObject({
-      provider: 'github',
-      kind: 'issue',
-      id: 'Moorline/moorline#123',
+      provider: 'external-system',
+      kind: 'item',
+      id: 'external:item:123',
       title: 'Make work first class'
     });
 
     const first = store.enqueueWorkItem({
       workItemId: 'work-1',
-      packageId: 'official/github-worker',
-      queue: 'issues',
+      packageId: 'acme/external-worker',
+      queue: 'items',
       status: 'queued',
       priority: 10,
-      idempotencyKey: 'github:issue:123',
+      idempotencyKey: 'external:item:123',
       externalResource: resource,
       payload: { action: 'opened' },
       attempts: 0,
@@ -88,9 +88,9 @@ describe('external work spine storage', () => {
 
     expect(second.workItemId).toBe(first.workItemId);
     expect(second.externalResource).toMatchObject({
-      provider: 'github',
-      kind: 'issue',
-      id: 'Moorline/moorline#123'
+      provider: 'external-system',
+      kind: 'item',
+      id: 'external:item:123'
     });
   });
 
@@ -99,8 +99,8 @@ describe('external work spine storage', () => {
     store.enqueueWorkItem(queuedWorkItem({ workItemId: 'work-lease' }));
 
     const claimed = store.claimWorkItem({
-      packageId: 'official/github-worker',
-      queue: 'issues',
+      packageId: 'acme/external-worker',
+      queue: 'items',
       leaseOwner: 'worker-a',
       leaseExpiresAt: '2026-06-01T00:05:00.000Z',
       nowIso: '2026-06-01T00:00:00.000Z'
@@ -113,8 +113,8 @@ describe('external work spine storage', () => {
 
     expect(
       store.claimWorkItem({
-        packageId: 'official/github-worker',
-        queue: 'issues',
+        packageId: 'acme/external-worker',
+        queue: 'items',
         leaseOwner: 'worker-b',
         leaseExpiresAt: '2026-06-01T00:06:00.000Z',
         nowIso: '2026-06-01T00:01:00.000Z'
@@ -122,8 +122,8 @@ describe('external work spine storage', () => {
     ).toBeNull();
 
     const reclaimed = store.claimWorkItem({
-      packageId: 'official/github-worker',
-      queue: 'issues',
+      packageId: 'acme/external-worker',
+      queue: 'items',
       leaseOwner: 'worker-b',
       leaseExpiresAt: '2026-06-01T00:10:00.000Z',
       nowIso: '2026-06-01T00:06:00.000Z'
@@ -142,8 +142,8 @@ describe('external work spine storage', () => {
     store.enqueueWorkItem(queuedWorkItem({ workItemId: 'other-package', packageId: 'official/other-worker', priority: 999 }));
 
     const claimed = store.claimWorkItem({
-      packageId: 'official/github-worker',
-      queue: 'issues',
+      packageId: 'acme/external-worker',
+      queue: 'items',
       leaseOwner: 'worker-a',
       leaseExpiresAt: '2026-06-01T00:05:00.000Z',
       nowIso: '2026-06-01T00:00:00.000Z'
@@ -152,7 +152,7 @@ describe('external work spine storage', () => {
 
     const other = store.claimWorkItem({
       packageId: 'official/other-worker',
-      queue: 'issues',
+      queue: 'items',
       leaseOwner: 'worker-b',
       leaseExpiresAt: '2026-06-01T00:05:00.000Z',
       nowIso: '2026-06-01T00:00:00.000Z'
@@ -165,9 +165,9 @@ describe('external work spine storage', () => {
     store.upsertSession({
       sessionId: 'session-1',
       scopeId: 'runtime',
-      spaceId: 'space-1',
+      transportResourceId: 'resource-1',
       threadId: 'thread-1',
-      spaceName: 'Issue 123',
+      transportResourceName: 'Item 123',
       workspacePath: '/tmp/session-1',
       runtimeMode: 'full-access',
       lifecycleStatus: 'hot',
@@ -184,7 +184,7 @@ describe('external work spine storage', () => {
       lastError: null,
       tags: []
     });
-    const resource = { provider: 'github', kind: 'issue', id: 'Moorline/moorline#123' };
+    const resource = { provider: 'external-system', kind: 'item', id: 'external:item:123' };
     store.upsertExternalResource({ ...resource, nowIso: '2026-06-01T00:00:00.000Z' });
     store.bindSessionToExternalResource({
       sessionId: 'session-1',
@@ -199,7 +199,7 @@ describe('external work spine storage', () => {
     const gate = store.upsertGateRun({
       gateRunId: 'gate-1',
       gateId: 'lint',
-      packageId: 'official/github-worker',
+      packageId: 'acme/external-worker',
       sessionId: 'session-1',
       command: 'bun',
       args: ['run', 'lint'],
@@ -223,10 +223,10 @@ describe('external event plugin dispatch', () => {
   it('dispatches external transport events to the dedicated hook', async () => {
     const seen: RuntimeTransportEvent[] = [];
     const plugin: RuntimePlugin = {
-      id: 'official/github-worker',
+      id: 'acme/external-worker',
       manifest: {
-        id: 'official/github-worker',
-        name: 'GitHub Worker',
+        id: 'acme/external-worker',
+        name: 'External Worker',
         version: '1.0.0',
         type: 'plugin',
         capabilities: ['package.work.manage'],
@@ -243,16 +243,16 @@ describe('external event plugin dispatch', () => {
       {
         type: 'external.event.received',
         scopeId: 'runtime',
-        source: 'github',
-        eventName: 'issues.opened',
+        source: 'external-system',
+        eventName: 'item.opened',
         receivedAt: '2026-06-01T00:00:00.000Z',
         resource: {
-          provider: 'github',
-          kind: 'issue',
-          id: 'Moorline/moorline#123'
+          provider: 'external-system',
+          kind: 'item',
+          id: 'external:item:123'
         },
         payload: { action: 'opened' },
-        idempotencyKey: 'github:issue:123'
+        idempotencyKey: 'external:item:123'
       },
       () => ({}) as RuntimePluginContext
     );
@@ -261,7 +261,7 @@ describe('external event plugin dispatch', () => {
     expect(seen).toHaveLength(1);
     expect(seen[0]).toMatchObject({
       type: 'external.event.received',
-      eventName: 'issues.opened'
+      eventName: 'item.opened'
     });
   });
 
@@ -283,10 +283,10 @@ describe('external event plugin dispatch', () => {
       }
     };
     const externalPlugin: RuntimePlugin = {
-      id: 'official/github-worker',
+      id: 'acme/external-worker',
       manifest: {
-        id: 'official/github-worker',
-        name: 'GitHub Worker',
+        id: 'acme/external-worker',
+        name: 'External Worker',
         version: '1.0.0',
         type: 'plugin',
         capabilities: ['package.work.manage'],
@@ -303,8 +303,8 @@ describe('external event plugin dispatch', () => {
       {
         type: 'external.event.received',
         scopeId: 'runtime',
-        source: 'github',
-        eventName: 'issues.opened',
+        source: 'external-system',
+        eventName: 'item.opened',
         receivedAt: '2026-06-01T00:00:00.000Z',
         payload: {}
       },
@@ -318,10 +318,10 @@ describe('external event plugin dispatch', () => {
 describe('external event plugin contract validation', () => {
   it('requires onExternalEvent to be declared and implemented consistently', () => {
     const valid: RuntimePlugin = {
-      id: 'official/github-worker',
+      id: 'acme/external-worker',
       manifest: {
-        id: 'official/github-worker',
-        name: 'GitHub Worker',
+        id: 'acme/external-worker',
+        name: 'External Worker',
         version: '1.0.0',
         type: 'plugin',
         capabilities: ['package.work.manage'],
@@ -343,7 +343,7 @@ describe('external event plugin contract validation', () => {
 
     expect(() =>
       validatePluginRuntimeContract({
-        id: 'official/github-worker',
+        id: 'acme/external-worker',
         manifest: valid.manifest
       })
     ).toThrow(/declares hook onExternalEvent but does not implement it/);

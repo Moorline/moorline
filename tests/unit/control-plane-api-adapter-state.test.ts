@@ -6,7 +6,7 @@ import { saveMoorlineConfig } from '../../packages/core/src/core/system/config/c
 import {
   defaultAdminConfig,
   defaultMainProcessConfig,
-  defaultNamespaceNames,
+  defaultSurfaceNames,
   type MoorlineConfig
 } from '../../packages/core/src/types/config.js';
 import { createTempRoot } from '../helpers/temp.js';
@@ -25,7 +25,7 @@ describe('ControlPlane API adapter state projection', () => {
         runtimeMode: 'full-access',
         model: 'latest'
       },
-      surface: defaultNamespaceNames(),
+      surface: defaultSurfaceNames(),
       setup: {
         completed: false
       },

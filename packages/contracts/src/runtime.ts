@@ -225,7 +225,7 @@ export interface PendingRuntimeRequestRecord {
   requestId: string;
   threadId: string;
   turnId: string | null;
-  spaceId: string;
+  transportResourceId: string;
   requesterUserId: string | null;
   messageId: string | null;
   requestType: CanonicalRequestType;

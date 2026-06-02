@@ -44,14 +44,14 @@ export class ProviderAttachmentResolver {
     this.deps.appendAuditEvent('provider.attachment.rejected', {
       threadId,
       sessionId: session?.sessionId ?? null,
-      spaceId: session?.spaceId ?? null,
+      transportResourceId: session?.transportResourceId ?? null,
       localPath,
       reason: 'outside-allowlisted-roots'
     });
     this.deps.recordRuntimeActivity({
       threadId,
       sessionId: session?.sessionId ?? null,
-      spaceId: session?.spaceId ?? null,
+      transportResourceId: session?.transportResourceId ?? null,
       sourceEventId: sourceEventId || randomUUID(),
       kind: 'provider.attachment.rejected',
       severity: 'warning',

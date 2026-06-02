@@ -5,7 +5,7 @@ import {
   defaultAdminConfig,
   defaultHttpApiAdapterConfig,
   defaultMainProcessConfig,
-  defaultNamespaceNames,
+  defaultSurfaceNames,
   type MoorlineConfig
 } from '../../packages/core/src/types/config.js';
 import { saveMoorlineConfig } from '../../packages/core/src/core/system/config/configStore.js';
@@ -103,7 +103,7 @@ async function importHttpAdapter() {
 function writeConfig(root: string, apiConfig: Record<string, unknown> = defaultHttpApiAdapterConfig()): string {
   const runtimeRoot = join(root, 'runtime');
   mkdirSync(runtimeRoot, { recursive: true });
-  const namespace = defaultNamespaceNames();
+  const surface = defaultSurfaceNames();
   const config: MoorlineConfig = {
     version: 4,
     runtimeRoot,
@@ -113,7 +113,7 @@ function writeConfig(root: string, apiConfig: Record<string, unknown> = defaultH
       runtimeMode: 'full-access',
       model: 'latest'
     },
-    surface: namespace,
+    surface: surface,
     setup: {
       completed: false
     },

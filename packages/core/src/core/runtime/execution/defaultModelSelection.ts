@@ -10,7 +10,7 @@ export function normalizeAndValidateDefaultModel(input: {
   }
   if (!usesProviderDefaultModel(normalizedModel)) {
     if (input.availableModels.length === 0) {
-      throw new Error('Moorline has not observed provider model metadata yet. Start a chat or session turn first.');
+      throw new Error('Moorline has not observed provider model metadata yet. Start a provider-backed turn first.');
     }
     if (!input.availableModels.includes(normalizedModel)) {
       throw new Error(`Model ${normalizedModel} is not in the current provider model list.`);

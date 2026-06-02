@@ -9,20 +9,20 @@ function isPathWithinRoot(rootPath: string, candidatePath: string): boolean {
 export function assertRuntimeOwnedWorkspacePath(input: {
   workspacesDir: string;
   workspacePath: string;
-  expectedWorkspaceId: string;
+  expectedWorkDirName: string;
   entityLabel: string;
 }): string {
   const root = resolve(input.workspacesDir);
   const candidate = resolve(input.workspacePath);
-  const expected = resolve(join(root, input.expectedWorkspaceId));
+  const expected = resolve(join(root, input.expectedWorkDirName));
 
   if (!isPathWithinRoot(root, candidate)) {
     throw new Error(`${input.entityLabel} workspace path is outside the managed runtime workspace root.`);
   }
 
-  if (candidate !== expected || basename(candidate) !== input.expectedWorkspaceId) {
+  if (candidate !== expected || basename(candidate) !== input.expectedWorkDirName) {
     throw new Error(
-      `${input.entityLabel} workspace path does not match the runtime-owned workspace id ${input.expectedWorkspaceId}.`
+      `${input.entityLabel} workspace path does not match the runtime-owned work directory id ${input.expectedWorkDirName}.`
     );
   }
 

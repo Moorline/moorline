@@ -9,7 +9,7 @@ const TRACKED_ROOTS = [
 
 const IGNORED_ROOTS = [
   'config.secrets.json',
-  'runtime/chat',
+  'runtime/coordination',
   'runtime/logs',
   'runtime/memory',
   'runtime/state',

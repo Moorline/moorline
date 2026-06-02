@@ -4,13 +4,13 @@ import type { RuntimeCommandRunner } from './runtime.js';
 import type { RuntimeExternalResourceRef } from './external.js';
 
 export type RuntimeScopeId = string;
-export type RuntimeSpaceId = string;
+export type RuntimeTransportResourceId = string;
 export type RuntimeThreadId = string;
 
 export interface RuntimeSurfaceNames {
   mainCategoryName: string;
-  chatChannelName: string;
-  statusChannelName: string;
+  coordinationResourceName: string;
+  statusResourceName: string;
   sessionsGroupName: string;
   archiveGroupName: string;
 }
@@ -46,8 +46,8 @@ export interface RuntimeAccessGroupInput {
 export interface RuntimeSurfaceState {
   scopeId?: string;
   mainCategoryId: string;
-  chatChannelId: string;
-  statusChannelId: string;
+  coordinationResourceId: string;
+  statusResourceId: string;
   sessionsCategoryId: string;
   archiveCategoryId: string;
   adminAccessGroupId?: string;
@@ -82,11 +82,11 @@ export interface RuntimeActorIdentity {
   transportMetadata?: Record<string, unknown>;
 }
 
-export interface RuntimeSpaceRecord {
-  id: RuntimeSpaceId;
+export interface RuntimeTransportResourceRecord {
+  id: RuntimeTransportResourceId;
   name: string;
-  kind: 'root' | 'group' | 'room' | 'thread' | 'dm' | 'external';
-  parentId: RuntimeSpaceId | null;
+  kind: 'root' | 'collection' | 'conversation' | 'item' | 'direct' | 'external';
+  parentId: RuntimeTransportResourceId | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -148,14 +148,14 @@ export type RuntimeTransportEvent =
   | {
       type: 'message.received';
       scopeId: RuntimeScopeId;
-      spaceId: RuntimeSpaceId;
+      transportResourceId: RuntimeTransportResourceId;
       actor: RuntimeActorIdentity;
       message: RuntimeInboundMessage;
     }
   | {
       type: 'action.invoked';
       scopeId: RuntimeScopeId;
-      spaceId?: RuntimeSpaceId;
+      transportResourceId?: RuntimeTransportResourceId;
       actor: RuntimeActorIdentity;
       actionId: string;
       input: Record<string, unknown>;
@@ -164,9 +164,9 @@ export type RuntimeTransportEvent =
   | {
       type: 'resource.lifecycle';
       scopeId: RuntimeScopeId;
-      resource: RuntimeSpaceRecord;
+      resource: RuntimeTransportResourceRecord;
       action: 'created' | 'updated' | 'deleted';
-      previous?: Partial<RuntimeSpaceRecord>;
+      previous?: Partial<RuntimeTransportResourceRecord>;
     }
   | {
       type: 'external.event.received';
@@ -203,13 +203,13 @@ export interface RuntimeTransportAuth {
 
 export interface RuntimeMessageTarget {
   scopeId?: RuntimeScopeId;
-  spaceId: RuntimeSpaceId;
+  transportResourceId: RuntimeTransportResourceId;
   threadId?: RuntimeThreadId;
 }
 
 export interface RuntimeTransportCapabilities {
   nativeActions: boolean;
-  spaces: {
+  resources: {
     list: boolean;
     create: boolean;
     update: boolean;
@@ -221,30 +221,30 @@ export interface RuntimeTransportCapabilities {
   metadata?: Record<string, unknown>;
 }
 
-export interface RuntimeCreateSpaceInput {
+export interface RuntimeCreateTransportResourceInput {
   scopeId: RuntimeScopeId;
   name: string;
-  kind: RuntimeSpaceRecord['kind'];
-  parentId?: RuntimeSpaceId | null;
+  kind: RuntimeTransportResourceRecord['kind'];
+  parentId?: RuntimeTransportResourceId | null;
   metadata?: Record<string, unknown>;
 }
 
-export interface RuntimeUpdateSpaceInput {
+export interface RuntimeUpdateTransportResourceInput {
   scopeId: RuntimeScopeId;
-  spaceId: RuntimeSpaceId;
+  transportResourceId: RuntimeTransportResourceId;
   name?: string;
-  parentId?: RuntimeSpaceId | null;
+  parentId?: RuntimeTransportResourceId | null;
   metadata?: Record<string, unknown>;
 }
 
-export interface RuntimeDeleteSpaceInput {
+export interface RuntimeDeleteTransportResourceInput {
   scopeId: RuntimeScopeId;
-  spaceId: RuntimeSpaceId;
+  transportResourceId: RuntimeTransportResourceId;
 }
 
 export interface RuntimePresenceInput {
   scopeId?: RuntimeScopeId;
-  spaceId?: RuntimeSpaceId;
+  transportResourceId?: RuntimeTransportResourceId;
   status: 'online' | 'idle' | 'busy' | 'offline';
   text?: string;
 }
@@ -274,10 +274,10 @@ export interface RuntimeTransport {
   capabilities(): RuntimeTransportCapabilities;
   onEvent(handler: (event: RuntimeTransportEvent) => Promise<void>): void;
   sendMessage(target: RuntimeMessageTarget, payload: RuntimeMessagePayload): Promise<RuntimeMessageReceipt>;
-  listSpaces?(scopeId: RuntimeScopeId): Promise<RuntimeSpaceRecord[]>;
-  createSpace?(input: RuntimeCreateSpaceInput): Promise<RuntimeSpaceRecord>;
-  updateSpace?(input: RuntimeUpdateSpaceInput): Promise<RuntimeSpaceRecord>;
-  deleteSpace?(input: RuntimeDeleteSpaceInput): Promise<void>;
+  listTransportResources?(scopeId: RuntimeScopeId): Promise<RuntimeTransportResourceRecord[]>;
+  createTransportResource?(input: RuntimeCreateTransportResourceInput): Promise<RuntimeTransportResourceRecord>;
+  updateTransportResource?(input: RuntimeUpdateTransportResourceInput): Promise<RuntimeTransportResourceRecord>;
+  deleteTransportResource?(input: RuntimeDeleteTransportResourceInput): Promise<void>;
   setPresence?(input: RuntimePresenceInput): Promise<void>;
   registerNativeActions?(input: RuntimeNativeActionRegistration): Promise<void>;
   ensureAccessGroup?(input: RuntimeAccessGroupInput): Promise<RuntimeAccessGroupRecord>;

@@ -15,8 +15,8 @@ export function computeRuntimeStatus(input: {
   now: () => string;
 }): MoorlineRuntimeStatus {
   const overview = input.snapshots.overview();
-  const sessions = overview.sessions.map((entry) => entry.session).filter((session) => !session.sessionId.startsWith('chat-'));
-  const receipts = overview.receipts.filter((receipt) => receipt.sessionId && !receipt.sessionId.startsWith('chat-'));
+  const sessions = overview.sessions.map((entry) => entry.session).filter((session) => !session.sessionId.startsWith('coordination-'));
+  const receipts = overview.receipts.filter((receipt) => receipt.sessionId && !receipt.sessionId.startsWith('coordination-'));
   const startedAtMs = input.startedAtIso ? Date.parse(input.startedAtIso) : Date.parse(input.now());
   const nowMs = Date.parse(input.now());
   return {

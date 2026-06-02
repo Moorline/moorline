@@ -79,7 +79,7 @@ function packageIdKeyword(packageId: string): string {
   return `moorline-id-${packageId.replace('/', '-')}`;
 }
 
-function packageNamespace(packageId: string): string {
+function packageSurface(packageId: string): string {
   return packageId.split('/')[0] ?? '';
 }
 
@@ -273,7 +273,7 @@ export class NpmRegistryClient {
     const requiredKeywords = [
       MOORLINE_KEYWORD,
       `moorline-kind-${moorline.kind}`,
-      `moorline-namespace-${packageNamespace(moorline.packageId)}`,
+      `moorline-surface-${packageSurface(moorline.packageId)}`,
       packageIdKeyword(moorline.packageId)
     ];
     if (!requiredKeywords.every((keyword) => keywords.includes(keyword))) {
@@ -348,8 +348,8 @@ export class NpmRegistryClient {
 }
 
 export function npmNameForOfficialPackageId(packageId: string): string | null {
-  const [namespace, name] = packageId.split('/');
-  if (namespace !== 'official' || !name) {
+  const [surface, name] = packageId.split('/');
+  if (surface !== 'official' || !name) {
     return null;
   }
   return `@moorline/${name}`;

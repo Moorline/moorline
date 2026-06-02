@@ -311,7 +311,7 @@ export function parseCliArgs(argv: string[]): CliCommand {
 
   if (command === 'ops' && rest[1] === 'session' && rest[2] === 'direct') {
     const usage =
-      'Usage: moorline ops session direct (--session <id>|--space <id>) --instruction <text> [--reason <text>] [--url <url>] [--token <token>] [--json] [--config <path>]';
+      'Usage: moorline ops session direct (--session <id>|--resource <id>) --instruction <text> [--reason <text>] [--url <url>] [--token <token>] [--json] [--config <path>]';
     const parsed = parseConnectionOptions(rest.slice(3));
     let instruction: string | undefined;
     let reason: string | undefined;
@@ -348,7 +348,7 @@ export function parseCliArgs(argv: string[]): CliCommand {
 
   if (command === 'ops' && rest[1] === 'session' && (rest[2] === 'archive' || rest[2] === 'delete')) {
     const action = rest[2];
-    const usage = `Usage: moorline ops session ${action} (--session <id>|--space <id>) [--url <url>] [--token <token>] [--json] [--config <path>]`;
+    const usage = `Usage: moorline ops session ${action} (--session <id>|--resource <id>) [--url <url>] [--token <token>] [--json] [--config <path>]`;
     const parsed = parseConnectionOptions(rest.slice(3));
     const path = action === 'archive' ? '/api/work/session/archive' : '/api/work/session/delete';
     return apiPost(path, parseSessionTarget(parsed.rest, usage), configPath, parsed.options, parsed.json);

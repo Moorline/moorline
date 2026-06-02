@@ -8,7 +8,7 @@ import {
   defaultAdminConfig,
   defaultHttpApiAdapterConfig,
   defaultMainProcessConfig,
-  defaultNamespaceNames,
+  defaultSurfaceNames,
   defaultMoorlineRuntimeRoot,
   type MoorlineConfig
 } from '@moorline/core/types/config.js';
@@ -166,7 +166,7 @@ function defaultRuntimeRootForConfig(configPath: string, explicitConfigPath?: st
 }
 
 function initialMoorlineConfig(configPath: string, explicitConfigPath?: string): MoorlineConfig {
-  const namespace = defaultNamespaceNames();
+  const surface = defaultSurfaceNames();
   return {
     version: 4,
     runtimeRoot: defaultRuntimeRootForConfig(configPath, explicitConfigPath),
@@ -176,7 +176,7 @@ function initialMoorlineConfig(configPath: string, explicitConfigPath?: string):
       runtimeMode: 'full-access',
       model: DEFAULT_MOORLINE_MODEL
     },
-    surface: namespace,
+    surface: surface,
     setup: {
       completed: false
     },

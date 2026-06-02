@@ -17,9 +17,9 @@
     "command.exec",
     "transport.message.send",
     "transport.action.register",
-    "transport.space.create",
-    "transport.space.update",
-    "transport.space.delete",
+    "transport.resource.create",
+    "transport.resource.update",
+    "transport.resource.delete",
     "fs.read",
     "fs.write",
     "memory.read",
@@ -42,13 +42,13 @@
       "allowCapabilities": [
         "transport.action.register",
         "transport.message.send",
-        "transport.space.update",
+        "transport.resource.update",
         "session.archive"
       ]
     },
     {
-      "actorPrefix": "runtime:namespace/",
-      "allowCapabilities": ["transport.space.create", "transport.space.update", "transport.space.delete"]
+      "actorPrefix": "runtime:surface/",
+      "allowCapabilities": ["transport.resource.create", "transport.resource.update", "transport.resource.delete"]
     },
     {
       "actorPrefix": "runtime:status",
@@ -60,7 +60,7 @@
     },
     {
       "actorPrefix": "runtime:lifecycle/",
-      "allowCapabilities": ["memory.write", "session.archive", "transport.space.update"]
+      "allowCapabilities": ["memory.write", "session.archive", "transport.resource.update"]
     },
     {
       "actorPrefix": "runtime:package-job",

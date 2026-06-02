@@ -263,14 +263,14 @@ export class PluginHost {
   async executeAction(
     actionId: string,
     input: Record<string, unknown>,
-    actor: { scopeId: string; spaceId?: string; actorId: string; displayName?: string },
+    actor: { scopeId: string; transportResourceId?: string; actorId: string; displayName?: string },
     contextFactory: (pluginId: string) => RuntimePluginContext
   ): Promise<RuntimeActionDispatchResult> {
     return await this.handleAction(
       {
         type: 'action.invoked',
         scopeId: actor.scopeId,
-        ...(actor.spaceId ? { spaceId: actor.spaceId } : {}),
+        ...(actor.transportResourceId ? { transportResourceId: actor.transportResourceId } : {}),
         actor: {
           actorId: actor.actorId,
           ...(actor.displayName ? { displayName: actor.displayName } : {})

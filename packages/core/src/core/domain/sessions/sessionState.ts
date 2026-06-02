@@ -46,8 +46,8 @@ export class SessionRegistry {
     return this.store.listSessions();
   }
 
-  getBySpaceId(spaceId: string): RuntimeSessionRow | null {
-    return this.store.getSessionBySpaceId(spaceId);
+  getByTransportResourceId(transportResourceId: string): RuntimeSessionRow | null {
+    return this.store.getSessionByTransportResourceId(transportResourceId);
   }
 
   getByThreadId(threadId: string): RuntimeSessionRow | null {
@@ -56,8 +56,8 @@ export class SessionRegistry {
 
   create(input: {
     scopeId: string;
-    spaceId: string;
-    spaceName: string;
+    transportResourceId: string;
+    transportResourceName: string;
     requestedName: string;
     runtimeMode: RuntimeModeName;
     nowIso: string;
@@ -75,9 +75,9 @@ export class SessionRegistry {
     const row: RuntimeSessionRow = {
       sessionId,
       scopeId: input.scopeId,
-      spaceId: input.spaceId,
+      transportResourceId: input.transportResourceId,
       threadId,
-      spaceName: input.spaceName,
+      transportResourceName: input.transportResourceName,
       workspacePath,
       runtimeMode: input.runtimeMode,
       lifecycleStatus: 'hot',
@@ -117,8 +117,8 @@ export class SessionRegistry {
     return this.store.getSession(row.sessionId)!;
   }
 
-  updateSummary(spaceId: string, summary: string, nowIso: string): RuntimeSessionRow | null {
-    const session = this.getBySpaceId(spaceId);
+  updateSummary(transportResourceId: string, summary: string, nowIso: string): RuntimeSessionRow | null {
+    const session = this.getByTransportResourceId(transportResourceId);
     if (!session) {
       return null;
     }
@@ -129,8 +129,8 @@ export class SessionRegistry {
     });
   }
 
-  markDirected(input: { spaceId: string; directedAt: string; directedBy: string }): RuntimeSessionRow | null {
-    const session = this.getBySpaceId(input.spaceId);
+  markDirected(input: { transportResourceId: string; directedAt: string; directedBy: string }): RuntimeSessionRow | null {
+    const session = this.getByTransportResourceId(input.transportResourceId);
     if (!session) {
       return null;
     }
@@ -142,8 +142,8 @@ export class SessionRegistry {
     });
   }
 
-  archive(spaceId: string, nowIso: string): RuntimeSessionRow | null {
-    const session = this.getBySpaceId(spaceId);
+  archive(transportResourceId: string, nowIso: string): RuntimeSessionRow | null {
+    const session = this.getByTransportResourceId(transportResourceId);
     if (!session) {
       return null;
     }
@@ -155,8 +155,8 @@ export class SessionRegistry {
     });
   }
 
-  deleteArchived(spaceId: string): RuntimeSessionRow | null {
-    const session = this.getBySpaceId(spaceId);
+  deleteArchived(transportResourceId: string): RuntimeSessionRow | null {
+    const session = this.getByTransportResourceId(transportResourceId);
     if (!session || session.lifecycleStatus !== 'archived') {
       return null;
     }
@@ -165,7 +165,7 @@ export class SessionRegistry {
       managedWorkspacePath = assertRuntimeOwnedWorkspacePath({
         workspacesDir: this.workspacesDir,
         workspacePath: session.workspacePath,
-        expectedWorkspaceId: session.sessionId,
+        expectedWorkDirName: session.sessionId,
         entityLabel: `Session ${session.sessionId}`
       });
     } catch (error) {

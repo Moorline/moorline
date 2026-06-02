@@ -39,7 +39,7 @@ import type { ManagementReadModel } from '../../../types/app.js';
 
 const CONTROL_API_ACTOR_ID = 'app:control-api';
 const CONTROL_API_REQUEST_THREAD = 'control-api';
-const CONTROL_API_REQUEST_SPACE = 'control-api';
+const CONTROL_API_REQUEST_RESOURCE = 'control-api';
 const ORCHESTRATION_TIMEOUT_MS = 180_000;
 
 export class ControlApiActionsService {
@@ -305,7 +305,7 @@ export class ControlApiActionsService {
         store,
         actorId: CONTROL_API_ACTOR_ID,
         requestedByThreadId: CONTROL_API_REQUEST_THREAD,
-        requestedBySpaceId: CONTROL_API_REQUEST_SPACE,
+        requestedByTransportResourceId: CONTROL_API_REQUEST_RESOURCE,
         type,
         payload: payload as never,
         nowIso: this.now()

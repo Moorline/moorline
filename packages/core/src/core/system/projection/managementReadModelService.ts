@@ -182,7 +182,7 @@ export class ManagementReadModelService {
     const managementSurface = this.deps.getManagementSurface();
     const providerDiagnostics = this.deps.provider.getDiagnostics();
     const auditLogPath = join(this.deps.runtimeRoot, 'logs', 'policy-audit.jsonl');
-    const namespaceState = this.deps.getNamespaceState();
+    const surfaceState = this.deps.getSurfaceState();
     const homeRoot = this.deps.homeRoot;
     const historyStatus = this.history.statusSync(homeRoot);
     const historyEntries = historyStatus.gitAvailable ? this.history.listSync(homeRoot, 30) : [];
@@ -206,7 +206,7 @@ export class ManagementReadModelService {
       setup: {
         runtimeRoot: this.deps.runtimeRoot,
         installationStatePath: join(this.deps.runtimeRoot, 'state', 'installation.json'),
-        namespaceBootstrapped: namespaceState !== null,
+        surfaceBootstrapped: surfaceState !== null,
         providerConnected,
         readyForSessions: runtimeStartability.startable,
         nextAction: runtimeStartability.startable
@@ -257,7 +257,7 @@ export class ManagementReadModelService {
           }
         }
       },
-      namespace: namespaceState,
+      surface: surfaceState,
       runtime: {
         status: this.deps.getRuntimeStatus(),
         control: this.deps.getRuntimeControlStatus(),
@@ -345,7 +345,7 @@ export class ManagementReadModelService {
           title: activity.title,
           detail: activity.detail,
           threadId: activity.threadId,
-          spaceId: activity.spaceId,
+          transportResourceId: activity.transportResourceId,
           createdAt: activity.createdAt
         }))
       },
@@ -463,7 +463,7 @@ export class ManagementReadModelService {
     return this.deps.snapshots.listSessions().map((snapshot) => ({
       id: snapshot.session.sessionId,
       kind: 'session',
-      name: snapshot.session.spaceName,
+      name: snapshot.session.transportResourceName,
       summary: summarize(snapshot.session.summary ?? snapshot.session.objective ?? null),
       controls: ['inspect', 'archive', 'delete_archived', 'provider_start', 'provider_stop', 'interrupt_turn'],
       mutability: {
@@ -489,7 +489,7 @@ export class ManagementReadModelService {
           providerStatus: snapshot.provider?.status ?? snapshot.session.providerStatus
         }
       },
-      spaceId: snapshot.session.spaceId,
+      transportResourceId: snapshot.session.transportResourceId,
       threadId: snapshot.session.threadId,
       lifecycleStatus: snapshot.session.lifecycleStatus,
       runtimeMode: snapshot.session.runtimeMode,
@@ -741,12 +741,12 @@ export class ManagementReadModelService {
         updatedAt: request.createdAt,
         details: {
           threadId: request.threadId,
-          spaceId: request.spaceId,
+          transportResourceId: request.transportResourceId,
           requesterUserId: request.requesterUserId
         }
       },
       threadId: request.threadId,
-      spaceId: request.spaceId,
+      transportResourceId: request.transportResourceId,
       requestType: request.requestType,
       requesterUserId: request.requesterUserId,
       createdAt: request.createdAt,
@@ -790,7 +790,7 @@ export class ManagementReadModelService {
           }
         },
         threadId: session.threadId,
-        spaceId: snapshot?.session.spaceId ?? null,
+        transportResourceId: snapshot?.session.transportResourceId ?? null,
         providerThreadId: snapshot?.provider?.providerThreadId ?? session.resumeCursor?.threadId ?? null,
         runtimeMode: session.runtimeMode,
         model: session.model ?? null

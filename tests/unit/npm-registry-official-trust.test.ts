@@ -80,7 +80,7 @@ describe('npm official trust', () => {
           keywords: [
             'moorline-package',
             'moorline-kind-api-adapter',
-            'moorline-namespace-official',
+            'moorline-surface-official',
             'moorline-id-official-http-alt-for-test'
           ],
           'dist-tags': {
@@ -93,7 +93,7 @@ describe('npm official trust', () => {
               keywords: [
                 'moorline-package',
                 'moorline-kind-api-adapter',
-                'moorline-namespace-official',
+                'moorline-surface-official',
                 'moorline-id-official-http-alt-for-test'
               ],
               dist: {
@@ -178,7 +178,7 @@ describe('npm official trust', () => {
           keywords: [
             'moorline-package',
             'moorline-kind-plugin',
-            'moorline-namespace-acme',
+            'moorline-surface-acme',
             'moorline-id-acme-widget'
           ],
           'dist-tags': {
@@ -191,7 +191,7 @@ describe('npm official trust', () => {
               keywords: [
                 'moorline-package',
                 'moorline-kind-plugin',
-                'moorline-namespace-acme',
+                'moorline-surface-acme',
                 'moorline-id-acme-widget'
               ],
               dist: {

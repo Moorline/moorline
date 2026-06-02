@@ -31,7 +31,7 @@ export class PendingRequestProjectionStore {
             request_id as requestId,
             thread_id as threadId,
             turn_id as turnId,
-            space_id as spaceId,
+            transport_resource_id as transportResourceId,
             requester_user_id as requesterUserId,
             message_id as messageId,
             request_type as requestType,
@@ -48,7 +48,7 @@ export class PendingRequestProjectionStore {
     );
   }
 
-  listBySpace(spaceId: string): PendingRuntimeRequestRecord[] {
+  listByTransportResource(transportResourceId: string): PendingRuntimeRequestRecord[] {
     return mapRows<PendingRuntimeRequestRecord>(
       this.db
         .prepare(`
@@ -56,7 +56,7 @@ export class PendingRequestProjectionStore {
           request_id as requestId,
           thread_id as threadId,
           turn_id as turnId,
-          space_id as spaceId,
+          transport_resource_id as transportResourceId,
           requester_user_id as requesterUserId,
           message_id as messageId,
           request_type as requestType,
@@ -67,10 +67,10 @@ export class PendingRequestProjectionStore {
           created_at as createdAt,
           resolved_at as resolvedAt
         FROM pending_runtime_requests
-        WHERE space_id = ?
+        WHERE transport_resource_id = ?
         ORDER BY created_at ASC, request_id ASC
       `)
-        .all(spaceId)
+        .all(transportResourceId)
     );
   }
 
@@ -82,7 +82,7 @@ export class PendingRequestProjectionStore {
           request_id as requestId,
           thread_id as threadId,
           turn_id as turnId,
-          space_id as spaceId,
+          transport_resource_id as transportResourceId,
           requester_user_id as requesterUserId,
           message_id as messageId,
           request_type as requestType,
@@ -104,14 +104,14 @@ export class PendingRequestProjectionStore {
     this.db
       .prepare(`
         INSERT INTO pending_runtime_requests (
-          request_id, thread_id, turn_id, space_id, requester_user_id, message_id,
+          request_id, thread_id, turn_id, transport_resource_id, requester_user_id, message_id,
           request_type, status, detail, questions_json, decision, created_at, resolved_at
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(request_id) DO UPDATE SET
           thread_id = excluded.thread_id,
           turn_id = excluded.turn_id,
-          space_id = excluded.space_id,
+          transport_resource_id = excluded.transport_resource_id,
           requester_user_id = excluded.requester_user_id,
           message_id = excluded.message_id,
           request_type = excluded.request_type,
@@ -126,7 +126,7 @@ export class PendingRequestProjectionStore {
         row.requestId,
         row.threadId,
         row.turnId,
-        row.spaceId,
+        row.transportResourceId,
         row.requesterUserId,
         row.messageId,
         row.requestType,

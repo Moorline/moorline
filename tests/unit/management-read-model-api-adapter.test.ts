@@ -6,14 +6,14 @@ import { ManagementReadModelService } from '../../packages/core/src/core/system/
 import {
   defaultAdminConfig,
   defaultMainProcessConfig,
-  defaultNamespaceNames,
+  defaultSurfaceNames,
   type MoorlineConfig
 } from '../../packages/core/src/types/config.js';
 import type { PackageInstallRecord } from '../../packages/core/src/types/package.js';
 import { createTempRoot } from '../helpers/temp.js';
 
 function freshInitConfig(runtimeRoot: string): MoorlineConfig {
-  const namespace = defaultNamespaceNames();
+  const surface = defaultSurfaceNames();
   return {
     version: 4,
     runtimeRoot,
@@ -23,7 +23,7 @@ function freshInitConfig(runtimeRoot: string): MoorlineConfig {
       runtimeMode: 'full-access',
       model: 'latest'
     },
-    surface: namespace,
+    surface: surface,
     setup: {
       completed: false
     },
@@ -106,7 +106,7 @@ function buildReadModel(input: {
       startedAt: null,
       activeSessions: 0
     }) as never,
-    getNamespaceState: () => null,
+    getSurfaceState: () => null,
     getManagementSurface: () => ({
       enabled: true,
       host: '127.0.0.1',

@@ -9,7 +9,7 @@ export class RuntimeOrchestrationRepository {
     this.db
       .prepare(`
         INSERT INTO runtime_orchestration_requests (
-          request_id, actor_id, requested_by_thread_id, requested_by_space_id, dedupe_key, type, target_session_id,
+          request_id, actor_id, requested_by_thread_id, requested_by_transport_resource_id, dedupe_key, type, target_session_id,
           payload_json, status, result_json, error, execution_owner, execution_attempt, execution_started_at,
           completion_token, completed_at, created_at, updated_at
         )
@@ -17,7 +17,7 @@ export class RuntimeOrchestrationRepository {
         ON CONFLICT(request_id) DO UPDATE SET
           actor_id = excluded.actor_id,
           requested_by_thread_id = excluded.requested_by_thread_id,
-          requested_by_space_id = excluded.requested_by_space_id,
+          requested_by_transport_resource_id = excluded.requested_by_transport_resource_id,
           dedupe_key = excluded.dedupe_key,
           type = excluded.type,
           target_session_id = excluded.target_session_id,
@@ -37,7 +37,7 @@ export class RuntimeOrchestrationRepository {
         row.requestId,
         row.actorId,
         row.requestedByThreadId,
-        row.requestedBySpaceId,
+        row.requestedByTransportResourceId,
         row.dedupeKey,
         row.type,
         row.targetSessionId,
@@ -109,7 +109,7 @@ export class RuntimeOrchestrationRepository {
             request_id as requestId,
             actor_id as actorId,
             requested_by_thread_id as requestedByThreadId,
-            requested_by_space_id as requestedBySpaceId,
+            requested_by_transport_resource_id as requestedByTransportResourceId,
             dedupe_key as dedupeKey,
             type,
             target_session_id as targetSessionId,
@@ -139,7 +139,7 @@ export class RuntimeOrchestrationRepository {
             request_id as requestId,
             actor_id as actorId,
             requested_by_thread_id as requestedByThreadId,
-            requested_by_space_id as requestedBySpaceId,
+            requested_by_transport_resource_id as requestedByTransportResourceId,
             dedupe_key as dedupeKey,
             type,
             target_session_id as targetSessionId,
@@ -171,7 +171,7 @@ export class RuntimeOrchestrationRepository {
           request_id as requestId,
           actor_id as actorId,
           requested_by_thread_id as requestedByThreadId,
-          requested_by_space_id as requestedBySpaceId,
+          requested_by_transport_resource_id as requestedByTransportResourceId,
           dedupe_key as dedupeKey,
           type,
           target_session_id as targetSessionId,

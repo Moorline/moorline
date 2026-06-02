@@ -6,13 +6,13 @@ import type { ProviderRuntimeEvent, RuntimeEventRow } from './types.js';
 export class ProviderEventLogRepository {
   constructor(private readonly db: DatabaseSync) {}
 
-  appendRuntimeEvent(event: ProviderRuntimeEvent, spaceId: string | null): EventPersistenceResult {
+  appendRuntimeEvent(event: ProviderRuntimeEvent, transportResourceId: string | null): EventPersistenceResult {
     const providerPackageId = event.providerPackageId ?? event.provider ?? 'unknown';
     const payloadJson = JSON.stringify(event.payload);
     const result = this.db
       .prepare(`
         INSERT OR IGNORE INTO runtime_events (
-          event_id, provider, thread_id, space_id, turn_id, item_id, request_id, type, payload_json, created_at
+          event_id, provider, thread_id, transport_resource_id, turn_id, item_id, request_id, type, payload_json, created_at
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
@@ -20,7 +20,7 @@ export class ProviderEventLogRepository {
         event.eventId,
         providerPackageId,
         event.threadId,
-        spaceId,
+        transportResourceId,
         event.turnId ?? null,
         event.itemId ?? null,
         event.requestId ?? null,
@@ -37,7 +37,7 @@ export class ProviderEventLogRepository {
       existing &&
       existing.provider === providerPackageId &&
       existing.threadId === event.threadId &&
-      existing.spaceId === spaceId &&
+      existing.transportResourceId === transportResourceId &&
       existing.turnId === (event.turnId ?? null) &&
       existing.itemId === (event.itemId ?? null) &&
       existing.requestId === (event.requestId ?? null) &&
@@ -59,7 +59,7 @@ export class ProviderEventLogRepository {
           event_id as eventId,
           provider,
           thread_id as threadId,
-          space_id as spaceId,
+          transport_resource_id as transportResourceId,
           turn_id as turnId,
           item_id as itemId,
           request_id as requestId,
@@ -82,7 +82,7 @@ export class ProviderEventLogRepository {
           event_id as eventId,
           provider,
           thread_id as threadId,
-          space_id as spaceId,
+          transport_resource_id as transportResourceId,
           turn_id as turnId,
           item_id as itemId,
           request_id as requestId,

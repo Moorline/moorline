@@ -132,7 +132,7 @@ bun run moorline configure import ~/moorline-backup.tgz --force --token <api-tok
 
 Moorline uses the active provider package for model and turn execution.
 
-Runtime work can start from chat-like messages, transport-native actions, external events, scheduled package jobs, or plugin-managed work queues. Chat is one transport shape, not the architectural center.
+Runtime work can start from messages, transport-native actions, external events, scheduled package jobs, or plugin-managed work queues. Message-oriented transports are one transport shape, not the architectural center.
 
 ### Admin control
 
@@ -141,8 +141,8 @@ Configure admin authority in `~/.moorline/config.json`:
 ```json
 {
   "admin": {
-    "roleIds": ["discord-role-id"],
-    "userIds": ["discord-user-id"],
+    "roleIds": ["transport-role-id"],
+    "userIds": ["transport-user-id"],
     "allowTransportAdmin": false,
     "managedRole": {
       "enabled": true,
@@ -158,12 +158,12 @@ Admin authority is explicit by default, with a managed Moorline-scoped role boot
 - `managedRole.name` lets you rename that dedicated Moorline-only role
 - `allowTransportAdmin` can optionally allow transport-native elevated permissions to count as admin authority
 
-### Main chat
+### Coordination surface
 - bound by the active transport package
 - provider-backed
 - uses the configured default runtime mode
 - intended for coordination, status, and lightweight help
-- shares the managed chat workspace under the runtime root
+- shares the managed coordination workspace under the runtime root
 
 ### Sessions
 - created by the active transport/plugin package surface
@@ -194,7 +194,7 @@ Tracked history covers:
 - `runtime/policies/`
 
 Ignored runtime-working data includes:
-- `chat/`
+- `coordination/`
 - `memory/`
 - `logs/`
 - `state/`

@@ -11,10 +11,10 @@ export class ProviderRequestProjector {
   constructor(private readonly deps: ProviderRequestProjectorDeps) {}
 
   async project(event: ProviderRuntimeEvent, input: {
-    spaceId: string | null;
+    transportResourceId: string | null;
     waiterAuthorId: string | null;
   }): Promise<PendingRuntimeRequestRecord | null> {
-    if (event.type === 'request.opened' && input.spaceId) {
+    if (event.type === 'request.opened' && input.transportResourceId) {
       const requestId = event.requestId ?? event.eventId;
       const existing = this.deps.pending.getPendingRequest(requestId);
       if (existing && existing.status !== 'open') {
@@ -27,7 +27,7 @@ export class ProviderRequestProjector {
         requestId,
         threadId: event.threadId,
         turnId: event.turnId ?? null,
-        spaceId: input.spaceId,
+        transportResourceId: input.transportResourceId,
         requesterUserId:
           input.waiterAuthorId ?? this.deps.attribution.getThreadRequester(event.threadId) ?? null,
         messageId: null,
@@ -40,11 +40,11 @@ export class ProviderRequestProjector {
         resolvedAt: null
       } satisfies PendingRuntimeRequestRecord;
       this.deps.pending.upsertPendingRequest(request);
-      await this.deps.postRuntimeRequestMessage(input.spaceId, request);
+      await this.deps.postRuntimeRequestMessage(input.transportResourceId, request);
       return request;
     }
 
-    if (event.type === 'user-input.requested' && input.spaceId) {
+    if (event.type === 'user-input.requested' && input.transportResourceId) {
       const requestId = event.requestId ?? event.eventId;
       const existing = this.deps.pending.getPendingRequest(requestId);
       if (existing && existing.status !== 'open') {
@@ -57,7 +57,7 @@ export class ProviderRequestProjector {
         requestId,
         threadId: event.threadId,
         turnId: event.turnId ?? null,
-        spaceId: input.spaceId,
+        transportResourceId: input.transportResourceId,
         requesterUserId:
           input.waiterAuthorId ?? this.deps.attribution.getThreadRequester(event.threadId) ?? null,
         messageId: null,
@@ -70,7 +70,7 @@ export class ProviderRequestProjector {
         resolvedAt: null
       } satisfies PendingRuntimeRequestRecord;
       this.deps.pending.upsertPendingRequest(request);
-      await this.deps.postRuntimeRequestMessage(input.spaceId, request);
+      await this.deps.postRuntimeRequestMessage(input.transportResourceId, request);
       return request;
     }
 

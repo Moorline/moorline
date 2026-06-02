@@ -3,7 +3,7 @@ export type {
   RuntimeActorIdentity,
   RuntimeAttachmentPayload,
   RuntimeMessagePayload,
-  RuntimeSpaceRecord,
+  RuntimeTransportResourceRecord,
   RuntimeTransport,
   RuntimeTransportEvent,
   RuntimeTransportPackage,

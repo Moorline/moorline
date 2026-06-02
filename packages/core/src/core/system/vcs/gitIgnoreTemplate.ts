@@ -1,7 +1,7 @@
 export function moorlineGitIgnoreTemplate(): string {
   return [
     'config.secrets.json',
-    'runtime/chat/',
+    'runtime/coordination/',
     'runtime/logs/',
     'runtime/memory/',
     'runtime/state/',

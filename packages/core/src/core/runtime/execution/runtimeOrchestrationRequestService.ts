@@ -106,7 +106,7 @@ interface RuntimeOrchestrationRequestServiceDeps {
     files: RuntimeAttachmentPayload[] | undefined,
     input: { requestedByThreadId: string | null }
   ): void;
-  postTransportMessage(actor: string, spaceId: string, payload: RuntimeMessagePayload): Promise<{ id: string }>;
+  postTransportMessage(actor: string, transportResourceId: string, payload: RuntimeMessagePayload): Promise<{ id: string }>;
   nowMs?(): number;
   drainWaitTimeoutMs?: number;
   onForcedDrain?(signal: ForcedDrainSignal): void;
@@ -249,7 +249,7 @@ export class RuntimeOrchestrationRequestService {
         this.deps.validateLocalFiles(attachments, {
           requestedByThreadId: request.requestedByThreadId
         });
-        return await this.deps.postTransportMessage(request.actorId, payload.spaceId, {
+        return await this.deps.postTransportMessage(request.actorId, payload.transportResourceId, {
           ...(payload.content ? { text: payload.content } : {}),
           ...(attachments ? { attachments } : {}),
           metadata: {

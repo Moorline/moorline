@@ -157,7 +157,7 @@ export function validatePackageId(packageId: unknown, label: string): string {
   }
   if (!PACKAGE_ID_PATTERN.test(normalized)) {
     throw new Error(
-      `${label} must match <namespace>/<name> using lowercase letters, numbers, ".", "_" or "-". Received: ${packageId}`
+      `${label} must match <surface>/<name> using lowercase letters, numbers, ".", "_" or "-". Received: ${packageId}`
     );
   }
   return normalized;

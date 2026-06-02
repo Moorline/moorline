@@ -22,7 +22,7 @@ export type RuntimeWaitReason = 'approval' | 'user_input' | null;
 export interface RuntimeReceiptRecord {
   threadId: string;
   sessionId: string | null;
-  spaceId: string | null;
+  transportResourceId: string | null;
   activeTurnId: string | null;
   state: RuntimeReceiptState;
   waitReason: RuntimeWaitReason;
@@ -50,7 +50,7 @@ export interface ProviderBindingRecord {
 interface RuntimeDomainEventBase {
   eventId: string;
   threadId: string;
-  spaceId: string | null;
+  transportResourceId: string | null;
   sessionId: string | null;
   sourceProviderEventId?: string | null;
   createdAt: string;
@@ -68,7 +68,7 @@ export type RuntimeDomainEvent = RuntimeDomainEventBase &
   | {
       eventId: string;
       threadId: string;
-      spaceId: string | null;
+      transportResourceId: string | null;
       sessionId: string | null;
       createdAt: string;
       type:
@@ -89,7 +89,7 @@ export type RuntimeDomainEvent = RuntimeDomainEventBase &
   | {
       eventId: string;
       threadId: string;
-      spaceId: string | null;
+      transportResourceId: string | null;
       sessionId: string | null;
       createdAt: string;
       type: 'request.opened' | 'request.resolved';
@@ -98,7 +98,7 @@ export type RuntimeDomainEvent = RuntimeDomainEventBase &
   | {
       eventId: string;
       threadId: string;
-      spaceId: string | null;
+      transportResourceId: string | null;
       sessionId: string | null;
       createdAt: string;
       type: 'item.observed';
@@ -115,7 +115,7 @@ export type RuntimeDomainEvent = RuntimeDomainEventBase &
   | {
       eventId: string;
       threadId: string;
-      spaceId: string | null;
+      transportResourceId: string | null;
       sessionId: string | null;
       createdAt: string;
       type: 'thread.token_usage.updated' | 'thread.compacted';
@@ -129,7 +129,7 @@ export type RuntimeDomainEvent = RuntimeDomainEventBase &
   | {
       eventId: string;
       threadId: string;
-      spaceId: string | null;
+      transportResourceId: string | null;
       sessionId: string | null;
       createdAt: string;
       type:
@@ -163,16 +163,16 @@ function withProviderEventIdentity(sourceEventId: string, events: RuntimeDomainE
 export function domainEventsFromProviderEvent(input: {
   event: ProviderRuntimeEvent;
   sessionId: string | null;
-  spaceId: string | null;
+  transportResourceId: string | null;
   runtimeMode: RuntimeModeName | null;
   workspacePath: string | null;
   request: PendingRuntimeRequestRecord | null;
 }): RuntimeDomainEvent[] {
-  const { event, sessionId, spaceId, runtimeMode, workspacePath, request } = input;
+  const { event, sessionId, transportResourceId, runtimeMode, workspacePath, request } = input;
   const base = {
     eventId: event.eventId,
     threadId: event.threadId,
-    spaceId,
+    transportResourceId,
     sessionId,
     createdAt: event.createdAt
   };

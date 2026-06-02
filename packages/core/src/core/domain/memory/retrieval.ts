@@ -69,7 +69,7 @@ async function refreshMemoryIndexInternal(repoPath: string, scope: NormalizedRet
       .prepare(
         `SELECT scope_key as scopeKey, file_path as filePath, file_mtime_ms as fileMtimeMs, file_size as fileSize
          FROM retrieval_files
-         WHERE ${selectScopeFilter('retrieval_files', !scope.spaceId)}`
+         WHERE ${selectScopeFilter('retrieval_files', !scope.transportResourceId)}`
       )
       .all(...scopeFilterArgs(scope)) as unknown as RetrievalFileRow[];
     const indexedByPath = new Map(indexedRows.map((row) => [fileIdentity(row.scopeKey, row.filePath), row]));
@@ -110,7 +110,7 @@ async function refreshMemoryIndexInternal(repoPath: string, scope: NormalizedRet
         layer,
         project_key,
         scope_id,
-        space_id,
+        transport_resource_id,
         thread_id,
         file_path,
         file_mtime_ms,
@@ -128,7 +128,7 @@ async function refreshMemoryIndexInternal(repoPath: string, scope: NormalizedRet
         layer = excluded.layer,
         project_key = excluded.project_key,
         scope_id = excluded.scope_id,
-        space_id = excluded.space_id,
+        transport_resource_id = excluded.transport_resource_id,
         thread_id = excluded.thread_id,
         file_path = excluded.file_path,
         file_mtime_ms = excluded.file_mtime_ms,
@@ -148,7 +148,7 @@ async function refreshMemoryIndexInternal(repoPath: string, scope: NormalizedRet
         layer,
         project_key,
         scope_id,
-        space_id,
+        transport_resource_id,
         thread_id,
         file_mtime_ms,
         file_size,
@@ -158,7 +158,7 @@ async function refreshMemoryIndexInternal(repoPath: string, scope: NormalizedRet
         project_key = excluded.project_key,
         layer = excluded.layer,
         scope_id = excluded.scope_id,
-        space_id = excluded.space_id,
+        transport_resource_id = excluded.transport_resource_id,
         thread_id = excluded.thread_id,
         file_mtime_ms = excluded.file_mtime_ms,
         file_size = excluded.file_size,
@@ -257,7 +257,7 @@ async function refreshMemoryIndexInternal(repoPath: string, scope: NormalizedRet
             target.layer,
             target.projectKey,
             target.scopeId,
-            target.spaceId,
+            target.transportResourceId,
             target.threadId,
             path,
             fileStat.mtimeMs,
@@ -278,7 +278,7 @@ async function refreshMemoryIndexInternal(repoPath: string, scope: NormalizedRet
           target.layer,
           target.projectKey,
           target.scopeId,
-          target.spaceId,
+          target.transportResourceId,
           target.threadId,
           fileStat.mtimeMs,
           fileStat.size,
@@ -331,7 +331,7 @@ async function ensureFreshEnoughIndex(repoPath: string, scope: NormalizedRetriev
       )
       .get(key) as RetrievalIndexStateRow | undefined;
     const chunkCountRow = db
-      .prepare(`SELECT COUNT(*) as count FROM retrieval_chunks WHERE ${selectScopeFilter('retrieval_chunks', !scope.spaceId)}`)
+      .prepare(`SELECT COUNT(*) as count FROM retrieval_chunks WHERE ${selectScopeFilter('retrieval_chunks', !scope.transportResourceId)}`)
       .get(...scopeFilterArgs(scope)) as { count: number };
 
     if (!state || !state.lastRefreshCompletedAt || chunkCountRow.count === 0) {
@@ -362,7 +362,7 @@ function loadIndexedDocs(db: DatabaseSync, scope: NormalizedRetrievalScope): Can
           content_hash as contentHash,
           metadata_tokens as metadataTokens
         FROM retrieval_chunks
-        WHERE ${selectScopeFilter('retrieval_chunks', !scope.spaceId)}`
+        WHERE ${selectScopeFilter('retrieval_chunks', !scope.transportResourceId)}`
     )
     .all(...scopeFilterArgs(scope)) as unknown as RetrievalChunkRow[];
 

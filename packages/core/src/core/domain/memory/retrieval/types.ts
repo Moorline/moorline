@@ -70,7 +70,7 @@ export interface IndexTarget {
   rootPath: string;
   projectKey: string | null;
   scopeId: string | null;
-  spaceId: string | null;
+  transportResourceId: string | null;
   threadId: string | null;
 }
 
@@ -81,7 +81,7 @@ export interface RetrievalOptions {
 
 export interface RetrievalScope {
   scopeId: string;
-  spaceId?: string;
+  transportResourceId?: string;
   threadId?: string | null;
   projectKey?: string;
 }

@@ -1,2 +1,2 @@
--- Squashed before public release: scope/space terminology now exists in the
+-- Squashed before public release: surface/resource terminology now exists in the
 -- original table definitions.

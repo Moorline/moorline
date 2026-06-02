@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseCliArgs } from '../../packages/cli/src/app/cli/cliCommands.js';
 import { executeCli } from '../../packages/cli/src/app/cli/cli.js';
 import { runApiForeground } from '../../packages/cli/src/app/cli/cliForegroundCommands.js';
-import { defaultAdminConfig, defaultMainProcessConfig, defaultNamespaceNames, type MoorlineConfig } from '../../packages/core/src/types/config.js';
+import { defaultAdminConfig, defaultMainProcessConfig, defaultSurfaceNames, type MoorlineConfig } from '../../packages/core/src/types/config.js';
 import { saveMoorlineConfig } from '../../packages/core/src/core/system/config/configStore.js';
 import { createTempRoot } from '../helpers/temp.js';
 
@@ -86,7 +86,7 @@ function writeNoEndpointApiAdapter(root: string): void {
 }
 
 function customAdapterConfig(root: string): MoorlineConfig {
-  const namespace = defaultNamespaceNames();
+  const surface = defaultSurfaceNames();
   return {
     version: 4,
     runtimeRoot: join(root, 'runtime'),
@@ -96,7 +96,7 @@ function customAdapterConfig(root: string): MoorlineConfig {
       runtimeMode: 'full-access',
       model: 'latest'
     },
-    surface: namespace,
+    surface: surface,
     setup: {
       completed: false
     },

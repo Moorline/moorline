@@ -11,7 +11,7 @@ import {
   defaultAdminConfig,
   defaultHttpApiAdapterConfig,
   defaultMainProcessConfig,
-  defaultNamespaceNames,
+  defaultSurfaceNames,
   type MoorlineConfig
 } from '../../packages/core/src/types/config.js';
 import { createTempRoot } from '../helpers/temp.js';
@@ -92,8 +92,8 @@ function installedApiAdapterRecord(input: { runtimeRoot: string; packageId: stri
 function writeTransportPackage(root: string): void {
   mkdirSync(root, { recursive: true });
   const manifest = {
-    id: 'official/discord',
-    name: 'official/discord',
+    id: 'official/transport',
+    name: 'official/transport',
     version: '1.0.0',
     type: 'transport',
     entrypoint: 'index.mjs'
@@ -105,7 +105,7 @@ function writeTransportPackage(root: string): void {
       {
         schemaVersion: 1,
         display: {
-          name: 'Discord Transport',
+          name: 'Example Transport',
           description: 'Fake transport package.',
           version: '1.0.0',
           tags: ['transport']
@@ -273,7 +273,7 @@ describe('api-adapter package installation', () => {
     const runtimeRoot = join(root, 'runtime');
     const sourceDir = join(root, 'bundle-source');
     writeBundlePackage(sourceDir);
-    const namespace = defaultNamespaceNames();
+    const surface = defaultSurfaceNames();
     const config: MoorlineConfig = {
       version: 4,
       runtimeRoot,
@@ -283,7 +283,7 @@ describe('api-adapter package installation', () => {
         runtimeMode: 'full-access',
         model: 'latest'
       },
-      surface: namespace,
+      surface: surface,
       setup: {
         completed: false
       },
@@ -386,7 +386,7 @@ describe('api-adapter package installation', () => {
     const root = createTempRoot('moorline-http-package-config-');
     const runtimeRoot = join(root, 'runtime');
     mkdirSync(runtimeRoot, { recursive: true });
-    const namespace = defaultNamespaceNames();
+    const surface = defaultSurfaceNames();
     const config: MoorlineConfig = {
       version: 4,
       runtimeRoot,
@@ -396,7 +396,7 @@ describe('api-adapter package installation', () => {
         runtimeMode: 'full-access',
         model: 'latest'
       },
-      surface: namespace,
+      surface: surface,
       setup: {
         completed: false
       },
@@ -448,7 +448,7 @@ describe('api-adapter package installation', () => {
     const httpSourceDir = join(root, 'http-source');
     writeApiAdapterPackage(sourceDir);
     writeApiAdapterPackage(httpSourceDir, 'official/http');
-    const namespace = defaultNamespaceNames();
+    const surface = defaultSurfaceNames();
     const config: MoorlineConfig = {
       version: 4,
       runtimeRoot,
@@ -458,7 +458,7 @@ describe('api-adapter package installation', () => {
         runtimeMode: 'full-access',
         model: 'latest'
       },
-      surface: namespace,
+      surface: surface,
       setup: {
         completed: false
       },
@@ -534,7 +534,7 @@ describe('api-adapter package installation', () => {
     const httpSourceDir = join(root, 'http-source');
     writeApiAdapterPackage(sourceDir);
     writeApiAdapterPackage(httpSourceDir, 'official/http');
-    const namespace = defaultNamespaceNames();
+    const surface = defaultSurfaceNames();
     const config: MoorlineConfig = {
       version: 4,
       runtimeRoot,
@@ -544,7 +544,7 @@ describe('api-adapter package installation', () => {
         runtimeMode: 'full-access',
         model: 'latest'
       },
-      surface: namespace,
+      surface: surface,
       setup: {
         completed: false
       },
@@ -670,9 +670,9 @@ describe('api-adapter package installation', () => {
   it('rejects a fresh setup with official/http absent from inventory', async () => {
     const root = createTempRoot('moorline-http-package-apply-');
     const runtimeRoot = join(root, 'runtime');
-    const transportPath = join(runtimeRoot, 'packages', 'transports', 'official', 'discord');
+    const transportPath = join(runtimeRoot, 'packages', 'transports', 'official', 'transport');
     writeTransportPackage(transportPath);
-    const namespace = defaultNamespaceNames();
+    const surface = defaultSurfaceNames();
     const config: MoorlineConfig = {
       version: 4,
       runtimeRoot,
@@ -682,7 +682,7 @@ describe('api-adapter package installation', () => {
         runtimeMode: 'full-access',
         model: 'latest'
       },
-      surface: namespace,
+      surface: surface,
       setup: {
         completed: false
       },
@@ -693,7 +693,7 @@ describe('api-adapter package installation', () => {
           configByPackageId: {}
         },
         transport: {
-          activePackageId: 'official/discord',
+          activePackageId: 'official/transport',
           config: {
             accessToken: 'token',
             scopeId: 'scope',
@@ -704,7 +704,7 @@ describe('api-adapter package installation', () => {
           configByPackageId: {}
         },
         provider: {
-          activePackageId: 'official/codex',
+          activePackageId: 'acme/provider',
           config: {},
           configByPackageId: {}
         },
@@ -728,8 +728,8 @@ describe('api-adapter package installation', () => {
           family: 'installable',
           kind: 'transport',
           surface: 'transport',
-          packageId: 'official/discord',
-          name: 'official/discord',
+          packageId: 'official/transport',
+          name: 'official/transport',
           version: '1.0.0',
           installPath: transportPath,
           source: { kind: 'local_dir', path: transportPath },
@@ -742,13 +742,13 @@ describe('api-adapter package installation', () => {
           family: 'installable',
           kind: 'provider',
           surface: 'provider',
-          packageId: 'official/codex',
-          name: 'official/codex',
+          packageId: 'acme/provider',
+          name: 'acme/provider',
           version: '1.0.0',
-          installPath: join(runtimeRoot, 'packages', 'providers', 'official', 'codex'),
-          source: { kind: 'local_dir', path: join(root, 'codex') },
+          installPath: join(runtimeRoot, 'packages', 'providers', 'acme', 'provider'),
+          source: { kind: 'local_dir', path: join(root, 'provider') },
           installedAt: '2026-05-20T00:00:00.000Z',
-          manifestPath: join(root, 'codex', 'manifest.json'),
+          manifestPath: join(root, 'provider', 'manifest.json'),
           manifestHash: 'provider-hash',
           dependencies: []
         },
@@ -783,7 +783,7 @@ describe('api-adapter package installation', () => {
   it('rejects selected api-adapters with missing required config before apply completes', async () => {
     const root = createTempRoot('moorline-api-adapter-schema-');
     const runtimeRoot = join(root, 'runtime');
-    const transportPath = join(runtimeRoot, 'packages', 'transports', 'official', 'discord');
+    const transportPath = join(runtimeRoot, 'packages', 'transports', 'official', 'transport');
     const adapterSourcePath = join(root, 'adapter-source');
     writeTransportPackage(transportPath);
     writeRequiredApiAdapterPackage(adapterSourcePath);
@@ -794,7 +794,7 @@ describe('api-adapter package installation', () => {
         path: adapterSourcePath
       }
     });
-    const namespace = defaultNamespaceNames();
+    const surface = defaultSurfaceNames();
     const config: MoorlineConfig = {
       version: 4,
       runtimeRoot,
@@ -804,7 +804,7 @@ describe('api-adapter package installation', () => {
         runtimeMode: 'full-access',
         model: 'latest'
       },
-      surface: namespace,
+      surface: surface,
       setup: {
         completed: false
       },
@@ -815,7 +815,7 @@ describe('api-adapter package installation', () => {
           configByPackageId: {}
         },
         transport: {
-          activePackageId: 'official/discord',
+          activePackageId: 'official/transport',
           config: {
             accessToken: 'token',
             scopeId: 'scope',
@@ -826,7 +826,7 @@ describe('api-adapter package installation', () => {
           configByPackageId: {}
         },
         provider: {
-          activePackageId: 'official/codex',
+          activePackageId: 'acme/provider',
           config: {},
           configByPackageId: {}
         },
@@ -849,8 +849,8 @@ describe('api-adapter package installation', () => {
         family: 'installable',
         kind: 'transport',
         surface: 'transport',
-        packageId: 'official/discord',
-        name: 'official/discord',
+        packageId: 'official/transport',
+        name: 'official/transport',
         version: '1.0.0',
         installPath: transportPath,
         source: { kind: 'local_dir', path: transportPath },
@@ -863,13 +863,13 @@ describe('api-adapter package installation', () => {
         family: 'installable',
         kind: 'provider',
         surface: 'provider',
-        packageId: 'official/codex',
-        name: 'official/codex',
+        packageId: 'acme/provider',
+        name: 'acme/provider',
         version: '1.0.0',
-        installPath: join(runtimeRoot, 'packages', 'providers', 'official', 'codex'),
-        source: { kind: 'local_dir', path: join(root, 'codex') },
+        installPath: join(runtimeRoot, 'packages', 'providers', 'acme', 'provider'),
+        source: { kind: 'local_dir', path: join(root, 'provider') },
         installedAt: '2026-05-20T00:00:00.000Z',
-        manifestPath: join(root, 'codex', 'manifest.json'),
+        manifestPath: join(root, 'provider', 'manifest.json'),
         manifestHash: 'provider-hash',
         dependencies: []
       }
@@ -884,7 +884,7 @@ describe('api-adapter package installation', () => {
   it('does not consider the runtime startable when no api-adapter is selected', () => {
     const root = createTempRoot('moorline-api-adapter-required-');
     const runtimeRoot = join(root, 'runtime');
-    const namespace = defaultNamespaceNames();
+    const surface = defaultSurfaceNames();
     const config: MoorlineConfig = {
       version: 4,
       runtimeRoot,
@@ -894,7 +894,7 @@ describe('api-adapter package installation', () => {
         runtimeMode: 'full-access',
         model: 'latest'
       },
-      surface: namespace,
+      surface: surface,
       setup: {
         completed: false
       },
@@ -905,12 +905,12 @@ describe('api-adapter package installation', () => {
           configByPackageId: {}
         },
         transport: {
-          activePackageId: 'official/discord',
+          activePackageId: 'official/transport',
           config: {},
           configByPackageId: {}
         },
         provider: {
-          activePackageId: 'official/codex',
+          activePackageId: 'acme/provider',
           config: {},
           configByPackageId: {}
         },
@@ -932,13 +932,13 @@ describe('api-adapter package installation', () => {
           family: 'installable',
           kind: 'transport',
           surface: 'transport',
-          packageId: 'official/discord',
-          name: 'official/discord',
+          packageId: 'official/transport',
+          name: 'official/transport',
           version: '1.0.0',
-          installPath: join(runtimeRoot, 'packages', 'transports', 'official', 'discord'),
-          source: { kind: 'local_dir', path: join(root, 'discord') },
+          installPath: join(runtimeRoot, 'packages', 'transports', 'official', 'transport'),
+          source: { kind: 'local_dir', path: join(root, 'transport') },
           installedAt: '2026-05-20T00:00:00.000Z',
-          manifestPath: join(root, 'discord', 'manifest.json'),
+          manifestPath: join(root, 'transport', 'manifest.json'),
           manifestHash: 'transport-hash',
           dependencies: []
         },
@@ -946,13 +946,13 @@ describe('api-adapter package installation', () => {
           family: 'installable',
           kind: 'provider',
           surface: 'provider',
-          packageId: 'official/codex',
-          name: 'official/codex',
+          packageId: 'acme/provider',
+          name: 'acme/provider',
           version: '1.0.0',
-          installPath: join(runtimeRoot, 'packages', 'providers', 'official', 'codex'),
-          source: { kind: 'local_dir', path: join(root, 'codex') },
+          installPath: join(runtimeRoot, 'packages', 'providers', 'acme', 'provider'),
+          source: { kind: 'local_dir', path: join(root, 'provider') },
           installedAt: '2026-05-20T00:00:00.000Z',
-          manifestPath: join(root, 'codex', 'manifest.json'),
+          manifestPath: join(root, 'provider', 'manifest.json'),
           manifestHash: 'provider-hash',
           dependencies: []
         }
@@ -994,7 +994,7 @@ describe('api-adapter package installation', () => {
       ),
       'utf8'
     );
-    const namespace = defaultNamespaceNames();
+    const surface = defaultSurfaceNames();
     const config: MoorlineConfig = {
       version: 4,
       runtimeRoot,
@@ -1004,7 +1004,7 @@ describe('api-adapter package installation', () => {
         runtimeMode: 'full-access',
         model: 'latest'
       },
-      surface: namespace,
+      surface: surface,
       setup: {
         completed: false
       },
@@ -1019,12 +1019,12 @@ describe('api-adapter package installation', () => {
           configByPackageId: {}
         },
         transport: {
-          activePackageId: 'official/discord',
+          activePackageId: 'official/transport',
           config: {},
           configByPackageId: {}
         },
         provider: {
-          activePackageId: 'official/codex',
+          activePackageId: 'acme/provider',
           config: {},
           configByPackageId: {}
         },
@@ -1047,13 +1047,13 @@ describe('api-adapter package installation', () => {
           family: 'installable',
           kind: 'transport',
           surface: 'transport',
-          packageId: 'official/discord',
-          name: 'official/discord',
+          packageId: 'official/transport',
+          name: 'official/transport',
           version: '1.0.0',
-          installPath: join(runtimeRoot, 'packages', 'transports', 'official', 'discord'),
-          source: { kind: 'local_dir', path: join(root, 'discord') },
+          installPath: join(runtimeRoot, 'packages', 'transports', 'official', 'transport'),
+          source: { kind: 'local_dir', path: join(root, 'transport') },
           installedAt: '2026-05-20T00:00:00.000Z',
-          manifestPath: join(root, 'discord', 'manifest.json'),
+          manifestPath: join(root, 'transport', 'manifest.json'),
           manifestHash: 'transport-hash',
           dependencies: []
         },
@@ -1061,13 +1061,13 @@ describe('api-adapter package installation', () => {
           family: 'installable',
           kind: 'provider',
           surface: 'provider',
-          packageId: 'official/codex',
-          name: 'official/codex',
+          packageId: 'acme/provider',
+          name: 'acme/provider',
           version: '1.0.0',
-          installPath: join(runtimeRoot, 'packages', 'providers', 'official', 'codex'),
-          source: { kind: 'local_dir', path: join(root, 'codex') },
+          installPath: join(runtimeRoot, 'packages', 'providers', 'acme', 'provider'),
+          source: { kind: 'local_dir', path: join(root, 'provider') },
           installedAt: '2026-05-20T00:00:00.000Z',
-          manifestPath: join(root, 'codex', 'manifest.json'),
+          manifestPath: join(root, 'provider', 'manifest.json'),
           manifestHash: 'provider-hash',
           dependencies: []
         }
@@ -1084,7 +1084,7 @@ describe('api-adapter package installation', () => {
   it('does not carry stale official/http config when selecting and configuring a custom api-adapter from fresh defaults', async () => {
     const root = createTempRoot('moorline-api-adapter-switch-');
     const runtimeRoot = join(root, 'runtime');
-    const transportPath = join(runtimeRoot, 'packages', 'transports', 'official', 'discord');
+    const transportPath = join(runtimeRoot, 'packages', 'transports', 'official', 'transport');
     const adapterSourcePath = join(root, 'adapter-source');
     writeTransportPackage(transportPath);
     writeRequiredApiAdapterPackage(adapterSourcePath);
@@ -1095,7 +1095,7 @@ describe('api-adapter package installation', () => {
         path: adapterSourcePath
       }
     });
-    const namespace = defaultNamespaceNames();
+    const surface = defaultSurfaceNames();
     const config: MoorlineConfig = {
       version: 4,
       runtimeRoot,
@@ -1105,7 +1105,7 @@ describe('api-adapter package installation', () => {
         runtimeMode: 'full-access',
         model: 'latest'
       },
-      surface: namespace,
+      surface: surface,
       setup: {
         completed: false
       },
@@ -1116,7 +1116,7 @@ describe('api-adapter package installation', () => {
           configByPackageId: {}
         },
         transport: {
-          activePackageId: 'official/discord',
+          activePackageId: 'official/transport',
           config: {
             accessToken: 'token',
             scopeId: 'scope',
@@ -1127,7 +1127,7 @@ describe('api-adapter package installation', () => {
           configByPackageId: {}
         },
         provider: {
-          activePackageId: 'official/codex',
+          activePackageId: 'acme/provider',
           config: {},
           configByPackageId: {}
         },
@@ -1150,8 +1150,8 @@ describe('api-adapter package installation', () => {
         family: 'installable',
         kind: 'transport',
         surface: 'transport',
-        packageId: 'official/discord',
-        name: 'official/discord',
+        packageId: 'official/transport',
+        name: 'official/transport',
         version: '1.0.0',
         installPath: transportPath,
         source: { kind: 'local_dir', path: transportPath },
@@ -1164,13 +1164,13 @@ describe('api-adapter package installation', () => {
         family: 'installable',
         kind: 'provider',
         surface: 'provider',
-        packageId: 'official/codex',
-        name: 'official/codex',
+        packageId: 'acme/provider',
+        name: 'acme/provider',
         version: '1.0.0',
-        installPath: join(runtimeRoot, 'packages', 'providers', 'official', 'codex'),
-        source: { kind: 'local_dir', path: join(root, 'codex') },
+        installPath: join(runtimeRoot, 'packages', 'providers', 'acme', 'provider'),
+        source: { kind: 'local_dir', path: join(root, 'provider') },
         installedAt: '2026-05-20T00:00:00.000Z',
-        manifestPath: join(root, 'codex', 'manifest.json'),
+        manifestPath: join(root, 'provider', 'manifest.json'),
         manifestHash: 'provider-hash',
         dependencies: []
       }
@@ -1200,7 +1200,7 @@ describe('api-adapter package installation', () => {
     const root = createTempRoot('moorline-api-adapter-share-');
     const runtimeRoot = join(root, 'runtime');
     mkdirSync(runtimeRoot, { recursive: true });
-    const namespace = defaultNamespaceNames();
+    const surface = defaultSurfaceNames();
     const config: MoorlineConfig = {
       version: 4,
       runtimeRoot,
@@ -1210,7 +1210,7 @@ describe('api-adapter package installation', () => {
         runtimeMode: 'full-access',
         model: 'latest'
       },
-      surface: namespace,
+      surface: surface,
       setup: {
         completed: false
       },

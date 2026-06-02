@@ -11,14 +11,14 @@ export class DomainEventLogRepository {
     const result = this.db
       .prepare(`
         INSERT OR IGNORE INTO domain_events (
-          event_id, thread_id, space_id, session_id, source_provider_event_id, type, payload_json, created_at
+          event_id, thread_id, transport_resource_id, session_id, source_provider_event_id, type, payload_json, created_at
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         event.eventId,
         event.threadId,
-        event.spaceId,
+        event.transportResourceId,
         event.sessionId,
         event.sourceProviderEventId ?? null,
         event.type,
@@ -32,7 +32,7 @@ export class DomainEventLogRepository {
     const existing = this.getDomainEvent(event.eventId);
     if (
       existing?.threadId === event.threadId &&
-      existing.spaceId === event.spaceId &&
+      existing.transportResourceId === event.transportResourceId &&
       existing.sessionId === event.sessionId &&
       existing.sourceProviderEventId === (event.sourceProviderEventId ?? null) &&
       existing.type === event.type &&
@@ -52,7 +52,7 @@ export class DomainEventLogRepository {
         SELECT
           event_id as eventId,
           thread_id as threadId,
-          space_id as spaceId,
+          transport_resource_id as transportResourceId,
           session_id as sessionId,
           source_provider_event_id as sourceProviderEventId,
           type,
@@ -73,7 +73,7 @@ export class DomainEventLogRepository {
           SELECT
             event_id as eventId,
             thread_id as threadId,
-            space_id as spaceId,
+            transport_resource_id as transportResourceId,
             session_id as sessionId,
             source_provider_event_id as sourceProviderEventId,
             type,
