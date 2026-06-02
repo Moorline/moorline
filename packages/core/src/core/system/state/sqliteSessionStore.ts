@@ -2,6 +2,8 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { ManagedSidecarRecord, SidecarScopeKind } from '../../runtime/supervision/managedSidecar.js';
 import { openRuntimeSqliteDatabase } from './sqlite/connection.js';
 import { DomainEventLogRepository } from './sqlite/domainEventLogRepository.js';
+import { ExternalResourceRepository } from './sqlite/externalResourceRepository.js';
+import { GateRunRepository } from './sqlite/gateRunRepository.js';
 import { ManagedSidecarRepository } from './sqlite/managedSidecarRepository.js';
 import { RuntimeOrchestrationRepository } from './sqlite/orchestrationRepository.js';
 import { PackageJobRepository } from './sqlite/packageJobRepository.js';
@@ -14,6 +16,14 @@ import { RuntimeHistoryPruningRepository, type RuntimeHistoryPruneInput, type Ru
 import { RuntimeReceiptRepository } from './sqlite/runtimeReceiptRepository.js';
 import { SessionRepository } from './sqlite/sessionRepository.js';
 import { SessionMetadataRepository } from './sqlite/sessionMetadataRepository.js';
+import { WorkItemRepository } from './sqlite/workItemRepository.js';
+import type {
+  RuntimeExternalResourceRecord,
+  RuntimeExternalResourceRef,
+  RuntimeGateRunRecord,
+  RuntimeWorkItemRecord,
+  RuntimeWorkItemStatus
+} from '../../../types/external.js';
 import {
   type DomainEventRow,
   type PendingRuntimeRequestRecord,
@@ -39,6 +49,8 @@ export class SqliteSessionStore {
   private readonly db: DatabaseSync;
   private readonly ownsDb: boolean;
   private readonly domainEvents: DomainEventLogRepository;
+  private readonly externalResources: ExternalResourceRepository;
+  private readonly gateRuns: GateRunRepository;
   private readonly historyPruning: RuntimeHistoryPruningRepository;
   private readonly managedSidecars: ManagedSidecarRepository;
   private readonly metadata: SessionMetadataRepository;
@@ -50,6 +62,7 @@ export class SqliteSessionStore {
   private readonly providerEvents: ProviderEventLogRepository;
   private readonly runtimeReceipts: RuntimeReceiptRepository;
   private readonly sessions: SessionRepository;
+  private readonly workItems: WorkItemRepository;
 
   constructor(pathOrDb: string | DatabaseSync) {
     if (typeof pathOrDb === 'string') {
@@ -60,6 +73,8 @@ export class SqliteSessionStore {
       this.ownsDb = false;
     }
     this.domainEvents = new DomainEventLogRepository(this.db);
+    this.externalResources = new ExternalResourceRepository(this.db);
+    this.gateRuns = new GateRunRepository(this.db);
     this.historyPruning = new RuntimeHistoryPruningRepository(this.db);
     this.managedSidecars = new ManagedSidecarRepository(this.db);
     this.metadata = new SessionMetadataRepository(this.db);
@@ -71,6 +86,7 @@ export class SqliteSessionStore {
     this.providerEvents = new ProviderEventLogRepository(this.db);
     this.runtimeReceipts = new RuntimeReceiptRepository(this.db);
     this.sessions = new SessionRepository(this.db);
+    this.workItems = new WorkItemRepository(this.db);
   }
 
   database(): DatabaseSync {
@@ -135,6 +151,75 @@ export class SqliteSessionStore {
 
   deletePackageJob(packageId: string, jobId: string): RuntimePackageJobRow | null {
     return this.packageJobs.delete(packageId, jobId);
+  }
+
+  upsertExternalResource(input: RuntimeExternalResourceRef & { state?: string; nowIso: string }): RuntimeExternalResourceRecord {
+    return this.externalResources.upsert(input);
+  }
+
+  listExternalResources(filter?: { provider?: string; kind?: string; limit?: number }): RuntimeExternalResourceRecord[] {
+    return this.externalResources.list(filter);
+  }
+
+  bindSessionToExternalResource(input: {
+    sessionId: string;
+    resource: RuntimeExternalResourceRef;
+    relationship: string;
+    nowIso: string;
+  }): void {
+    this.externalResources.bindSession(input);
+  }
+
+  listExternalResourcesForSession(sessionId: string): RuntimeExternalResourceRecord[] {
+    return this.externalResources.listResourcesForSession(sessionId);
+  }
+
+  listSessionIdsForExternalResource(resource: RuntimeExternalResourceRef): string[] {
+    return this.externalResources.listSessionBindingsForResource(resource).map((row) => row.sessionId);
+  }
+
+  updateWorkItem(record: RuntimeWorkItemRecord): RuntimeWorkItemRecord {
+    return this.workItems.update(record);
+  }
+
+  enqueueWorkItem(record: RuntimeWorkItemRecord): RuntimeWorkItemRecord {
+    return this.workItems.enqueue(record);
+  }
+
+  getWorkItem(workItemId: string): RuntimeWorkItemRecord | null {
+    return this.workItems.get(workItemId);
+  }
+
+  listWorkItems(filter?: {
+    packageId?: string;
+    queue?: string;
+    status?: RuntimeWorkItemStatus;
+    externalResource?: RuntimeExternalResourceRef;
+    limit?: number;
+  }): RuntimeWorkItemRecord[] {
+    return this.workItems.list(filter);
+  }
+
+  claimWorkItem(input: {
+    packageId: string;
+    queue: string;
+    leaseOwner: string;
+    leaseExpiresAt: string;
+    nowIso: string;
+  }): RuntimeWorkItemRecord | null {
+    return this.workItems.claim(input);
+  }
+
+  upsertGateRun(record: RuntimeGateRunRecord): RuntimeGateRunRecord {
+    return this.gateRuns.upsert(record);
+  }
+
+  getGateRun(gateRunId: string): RuntimeGateRunRecord | null {
+    return this.gateRuns.get(gateRunId);
+  }
+
+  listGateRuns(filter?: { workItemId?: string; sessionId?: string; limit?: number }): RuntimeGateRunRecord[] {
+    return this.gateRuns.list(filter);
   }
 
   upsertManagedSidecar(row: ManagedSidecarRecord): void {

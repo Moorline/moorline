@@ -1,6 +1,7 @@
 import type { JsonSchemaLike, PackageDependency, PackageManifestBase } from './package.js';
 import { validateJsonSchemaLike, validatePackageActivationRule, validatePackageDependencies, validatePackageId } from './package.js';
 import type { RuntimeCommandRunner } from './runtime.js';
+import type { RuntimeExternalResourceRef } from './external.js';
 
 export type RuntimeScopeId = string;
 export type RuntimeSpaceId = string;
@@ -166,6 +167,17 @@ export type RuntimeTransportEvent =
       resource: RuntimeSpaceRecord;
       action: 'created' | 'updated' | 'deleted';
       previous?: Partial<RuntimeSpaceRecord>;
+    }
+  | {
+      type: 'external.event.received';
+      scopeId: RuntimeScopeId;
+      actor?: RuntimeActorIdentity;
+      source: string;
+      eventName: string;
+      resource?: RuntimeExternalResourceRef;
+      payload: unknown;
+      receivedAt: string;
+      idempotencyKey?: string;
     };
 
 export interface RuntimeTransportAccessInput {

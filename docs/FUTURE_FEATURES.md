@@ -9,7 +9,7 @@ Status: deferred after `0.0.1`
 Desired behavior:
 - publish a shareable setup bundle to GitHub
 - import a setup bundle from a GitHub URL
-- optionally scaffold a repo for local-only packages or policies
+- optionally scaffold a repo for operator-controlled packages or policies
 
 Not included in `0.0.x`:
 - repo creation UX

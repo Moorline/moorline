@@ -12,6 +12,8 @@ export const CAPABILITIES = [
   'package.state.read',
   'package.state.write',
   'package.job.manage',
+  'package.work.manage',
+  'provider.headless.run',
   'net.connect',
   'runtime.control',
   'sidecar.manage',

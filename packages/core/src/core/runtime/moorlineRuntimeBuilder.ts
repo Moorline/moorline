@@ -414,6 +414,12 @@ export function buildMoorlineRuntimeServiceGraph(
       await callbacks.postTransportMessage(actor, spaceId, payload);
     },
     appendAuditEvent: callbacks.appendAuditEvent,
+    upsertExternalResource: (resource) => {
+      store.upsertExternalResource({
+        ...resource,
+        nowIso: callbacks.now()
+      });
+    },
     createPluginContext: callbacks.createPluginContext,
     isAdminActor: callbacks.isAdminActor,
     respondToProviderRequest: async (actorId, threadId, requestId, decision, deniedTitle, metadata) =>
@@ -683,6 +689,7 @@ export function buildMoorlineRuntimeServiceGraph(
     homeRoot,
     sqlitePath: paths.sqlitePath,
     chatWorkspacePath,
+    commandRunner: normalizedDeps.commandRunner,
     store,
     sessionRegistry,
     skillRegistry,
@@ -715,6 +722,7 @@ export function buildMoorlineRuntimeServiceGraph(
       await callbacks.postTransportMessage(actor, spaceId, payload);
     },
     appendAuditEvent: callbacks.appendAuditEvent,
+    recordRuntimeActivity: callbacks.recordRuntimeActivity,
     now: callbacks.now,
     runGuardedAction: callbacks.runGuardedAction,
     resolvePendingRequest: async (input) =>
@@ -733,6 +741,7 @@ export function buildMoorlineRuntimeServiceGraph(
     homeRoot,
     runtimeRoot: paths.runtimeRoot,
     config: normalizedConfig,
+    store,
     snapshots,
     skills: skillRegistry,
     provider: providerService,

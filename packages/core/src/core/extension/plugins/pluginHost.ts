@@ -16,9 +16,11 @@ import type { RuntimeActivityRecord } from '../../system/projection/runtimeActiv
 import type { RuntimeDomainEvent, RuntimeReceiptRecord } from '../../runtime/execution/runtimeDomain.js';
 
 type ActionEvent = Extract<RuntimeTransportEvent, { type: 'action.invoked' }>;
+type ExternalEvent = Extract<RuntimeTransportEvent, { type: 'external.event.received' }>;
 type PluginHookName =
   | 'onRuntimeStarted'
   | 'onTransportEvent'
+  | 'onExternalEvent'
   | 'onAction'
   | 'beforeAgentPrompt'
   | 'afterAgentResponse'
@@ -199,11 +201,39 @@ export class PluginHost {
       }
       result = mergeDispatchResult(result, next);
       if (!next.continueDispatch) {
+        if (event.type === 'external.event.received') {
+          break;
+        }
         return result;
       }
     }
     if (event.type === 'action.invoked') {
       result = mergeDispatchResult(result, await this.handleAction(event, contextFactory));
+    }
+    if (event.type === 'external.event.received') {
+      result = mergeDispatchResult(result, await this.handleExternalEvent(event, contextFactory));
+    }
+    return result;
+  }
+
+  async handleExternalEvent(event: ExternalEvent, contextFactory: (pluginId: string) => RuntimePluginContext): Promise<RuntimeActionDispatchResult> {
+    let result: RuntimeActionDispatchResult = { handled: false };
+    for (const plugin of this.plugins) {
+      if (!(plugin.manifest.hooks ?? []).includes('onExternalEvent')) {
+        continue;
+      }
+      const next = await this.runRequiredHook(
+        plugin,
+        'onExternalEvent',
+        async () => normalizeDispatchResult(await plugin.onExternalEvent?.(event, contextFactory(plugin.id)))
+      );
+      if (!next.handled) {
+        continue;
+      }
+      result = mergeDispatchResult(result, next);
+      if (!next.continueDispatch) {
+        return result;
+      }
     }
     return result;
   }

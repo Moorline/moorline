@@ -1,12 +1,14 @@
 # Moorline
 
-Moorline 0.0.x is a local-first coding operator with a small core plus package-managed transports, providers, plugins, skills, and bundles.
+Moorline 0.0.x is an operator-controlled runtime for connecting external surfaces, providers, and packages into durable, auditable agent-powered work.
+
+Its core job is orchestration: receive work from transports or external events, bind that work to durable runtime state, route it through providers and plugins, and keep the resulting sessions, gates, policy decisions, audit logs, and recovery state inspectable.
 
 The shipped operator surfaces are:
-- `moorline` for setup, package management, runtime control, local history, and Control API access
-- the bundled HTTP API adapter package used by local and remote CLI clients
+- `moorline` for setup, package management, runtime control, history, and Control API access
+- the bundled HTTP API adapter package used by local or remote CLI clients
 
-Moorline does not require a hosted relay. Execution, state, secrets, and workspaces stay on the operator machine.
+Moorline does not require a hosted relay. It can run on an operator machine, a server, or another operator-controlled environment. The operator controls the runtime packages, provider and transport selection, policy, state, secrets, and audit trail.
 
 ## Repo Layout
 
@@ -61,10 +63,10 @@ If setup is incomplete, the Control API stays in management-only mode so you can
 Install package bundles or individual packages for the transport, provider, plugins, and skills you want to run. Bundles install and activate their member packages while keeping every underlying API adapter, provider, transport, plugin, and skill independently inspectable. Optional bundles do not block setup readiness; setup readiness depends on one active API adapter, one active transport, and one active provider.
 
 Package trust note:
-- API adapter, provider, transport, and plugin packages are trusted local code once enabled
+- API adapter, provider, transport, and plugin packages are trusted runtime code once activated
 - bundle packages are metadata-only package groups; their members carry the runtime behavior
-- package validation checks structure, metadata, and install safety; it is not a JavaScript sandbox
-- install third-party runtime packages only from sources you are willing to execute on the operator machine
+- package validation checks structure, metadata, and install safety; Moorline does not sandbox arbitrary JavaScript package code
+- install third-party runtime packages only from sources you are willing to execute in the operator-controlled environment
 
 Source-checkout note for unreleased branches:
 - published releases install official bundles from the public package artifacts
@@ -124,11 +126,13 @@ If runtime state already exists, import fails unless `--force` is provided:
 bun run moorline configure import ~/moorline-backup.tgz --force --token <api-token>
 ```
 
-`--force` wipes current local runtime state before restoring from the archive.
+`--force` wipes current runtime state before restoring from the archive.
 
 ## Runtime Behavior
 
 Moorline uses the active provider package for model and turn execution.
+
+Runtime work can start from chat-like messages, transport-native actions, external events, scheduled package jobs, or plugin-managed work queues. Chat is one transport shape, not the architectural center.
 
 ### Admin control
 
@@ -175,11 +179,11 @@ Moorline 0.0.x operator-facing session modes:
 - `full-access`: the active provider runs with full local access and no approval gate.
 - `approval-required`: protected provider actions request approval before they continue.
 
-Both modes run locally on the operator machine. `approval-required` adds operator review, not host isolation.
+Both modes run inside the configured runtime environment. `approval-required` adds operator review, not host isolation.
 
-## Local State And Local History
+## Runtime State And History
 
-Moorline stores operator-owned state under `~/.moorline/`.
+By default, Moorline stores operator-owned runtime state under `~/.moorline/`. Deployments may place this home directory on an operator machine, a server, or another controlled environment.
 
 Tracked local history lives at:
 - `~/.moorline/.git/`

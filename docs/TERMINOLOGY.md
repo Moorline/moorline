@@ -25,6 +25,12 @@ These are the safest default words for product copy.
 
 - `Moorline`
   - The product name.
+- `operator-controlled runtime`
+  - Preferred high-level product framing. Moorline is controlled by the person or team running it, regardless of whether it runs on a laptop, server, or other controlled environment.
+- `external surface`
+  - A place where work, events, or interaction can enter or leave Moorline, such as Discord, GitHub, email, CI, or an API adapter.
+- `work`
+  - Durable agent-powered activity owned by the runtime. Work may come from chat messages, external events, package triggers, scheduled jobs, or operator requests.
 - `CLI`
   - The packaged `moorline` command-line interface.
 - `setup`
@@ -34,7 +40,7 @@ These are the safest default words for product copy.
 - `provider`
   - A package that powers the agent runtime.
 - `transport`
-  - A package that connects Moorline to an external surface such as Discord.
+  - A package that connects Moorline to an external surface. A transport may be chat-like, event-like, API-like, or integration-specific.
 - `plugin`
   - A package that adds runtime tools, commands, hooks, or integrations.
 - `skill`
@@ -213,6 +219,12 @@ Use these precisely:
 
 ## Deprecated Or Avoided Language
 
+- `local-first`
+  - Avoid as product identity. Prefer `operator-controlled`, `self-hostable`, or concrete deployment wording. Local execution is supported, but Moorline is not defined by laptop/local-only operation.
+- `coding operator`
+  - Avoid as product identity. Moorline can run coding workflows, but its core shape is broader: external event/resource intake, durable work, provider execution, policy, audit, and package orchestration.
+- `chat-centered`
+  - Avoid. Chat is one transport shape, not the center of the runtime architecture.
 - `package surfaces`
   - Prefer `packages`, `package kinds`, or the specific package kinds.
 - `installable skills`

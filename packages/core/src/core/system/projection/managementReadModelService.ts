@@ -26,6 +26,8 @@ import type {
   ManagementInstalledPackageRecord,
   ManagementPackageConfigRecord,
   ManagementReadModelPresentation,
+  ManagedExternalResourceRecord,
+  ManagedGateRunRecord,
   ManagedPendingRequestRecord,
   ManagedPluginRecord,
   ManagedProviderThreadRecord,
@@ -33,6 +35,7 @@ import type {
   ManagedSessionRecord,
   ManagedSidecarSummary,
   ManagedSkillRecord,
+  ManagedWorkItemRecord,
   ManagementReadModel
 } from '../../../types/app.js';
 import type { JsonSchemaLike, PackageInstallRecord } from '../../../types/package.js';
@@ -129,6 +132,25 @@ function pathContains(rootPath: string, candidatePath: string): boolean {
   return relativePath === '' || (!relativePath.startsWith('..') && !relativePath.startsWith('/') && !relativePath.startsWith('\\'));
 }
 
+function runtimeSqliteObjectBase(label: string) {
+  return {
+    controls: ['inspect'],
+    mutability: {
+      editable: false,
+      installable: false,
+      removable: false
+    },
+    trust: {
+      level: 'operator' as const,
+      source: 'runtime SQLite state'
+    },
+    sourceOfTruth: {
+      kind: 'sqlite' as const,
+      label
+    }
+  };
+}
+
 function schemaFieldType(property: ConfigSchemaProperty): 'string' | 'boolean' | 'number' {
   return property.type ?? 'string';
 }
@@ -153,6 +175,9 @@ export class ManagementReadModelService {
     const pendingRequests = this.buildPendingRequests();
     const providerThreads = this.buildProviderThreads();
     const sidecars = this.buildSidecars(inventory.installed);
+    const externalResources = this.buildExternalResources();
+    const workItems = this.buildWorkItems();
+    const gateRuns = this.buildGateRuns();
     const managementContributions = this.buildManagementContributions();
     const managementSurface = this.deps.getManagementSurface();
     const providerDiagnostics = this.deps.provider.getDiagnostics();
@@ -340,7 +365,10 @@ export class ManagementReadModelService {
         skills: skills.length,
         services: services.length,
         providerThreads: providerThreads.length,
-        sidecars: sidecars.length
+        sidecars: sidecars.length,
+        externalResources: externalResources.length,
+        workItems: workItems.length,
+        gateRuns: gateRuns.length
       },
       objects: {
         sessions,
@@ -350,7 +378,10 @@ export class ManagementReadModelService {
         managementContributions,
         pendingRequests,
         providerThreads,
-        sidecars
+        sidecars,
+        externalResources,
+        workItems,
+        gateRuns
       }
     };
   }
@@ -442,7 +473,7 @@ export class ManagementReadModelService {
       },
       trust: {
         level: 'operator',
-        source: 'local SQLite runtime state'
+        source: 'runtime SQLite state'
       },
       sourceOfTruth: {
         kind: 'sqlite',
@@ -475,7 +506,73 @@ export class ManagementReadModelService {
       waitState: snapshot.receipt?.state ?? 'idle',
       providerStatus: snapshot.provider?.status ?? snapshot.session.providerStatus,
       pendingRequestCount: snapshot.pendingRequests.length,
-      recentActivityCount: snapshot.recentActivities.length
+      recentActivityCount: snapshot.recentActivities.length,
+      externalResources: this.deps.store?.listExternalResourcesForSession(snapshot.session.sessionId) ?? []
+    }));
+  }
+
+  private buildExternalResources(): ManagedExternalResourceRecord[] {
+    return (this.deps.store?.listExternalResources({ limit: 100 }) ?? []).map((resource) => ({
+      id: `${resource.provider}:${resource.kind}:${resource.id}`,
+      kind: 'external_resource',
+      name: resource.title ?? resource.id,
+      summary: summarize(resource.url ?? resource.state ?? null),
+      ...runtimeSqliteObjectBase('runtime_external_resources'),
+      runtimeState: {
+        status: resource.state ?? 'seen',
+        updatedAt: resource.lastSeenAt,
+        details: {
+          provider: resource.provider,
+          kind: resource.kind,
+          externalId: resource.id
+        }
+      },
+      resource
+    }));
+  }
+
+  private buildWorkItems(): ManagedWorkItemRecord[] {
+    return (this.deps.store?.listWorkItems({ limit: 100 }) ?? []).map((workItem) => ({
+      id: workItem.workItemId,
+      kind: 'work_item',
+      name: `${workItem.queue}:${workItem.workItemId}`,
+      summary: summarize(workItem.phase ?? workItem.lastError ?? null),
+      ...runtimeSqliteObjectBase('runtime_work_items'),
+      runtimeState: {
+        status: workItem.status,
+        updatedAt: workItem.updatedAt,
+        details: {
+          packageId: workItem.packageId,
+          queue: workItem.queue,
+          attempts: workItem.attempts,
+          sessionId: workItem.sessionId ?? null,
+          externalResource: workItem.externalResource ?? null
+        }
+      },
+      workItem
+    }));
+  }
+
+  private buildGateRuns(): ManagedGateRunRecord[] {
+    return (this.deps.store?.listGateRuns({ limit: 100 }) ?? []).map((gateRun) => ({
+      id: gateRun.gateRunId,
+      kind: 'gate_run',
+      name: gateRun.gateId,
+      summary: summarize(gateRun.stderr || gateRun.stdout || null),
+      ...runtimeSqliteObjectBase('runtime_gate_runs'),
+      runtimeState: {
+        status: gateRun.status,
+        updatedAt: gateRun.completedAt ?? gateRun.startedAt,
+        details: {
+          packageId: gateRun.packageId,
+          command: gateRun.command,
+          required: gateRun.required,
+          exitCode: gateRun.exitCode,
+          workItemId: gateRun.workItemId ?? null,
+          sessionId: gateRun.sessionId ?? null
+        }
+      },
+      gateRun
     }));
   }
 

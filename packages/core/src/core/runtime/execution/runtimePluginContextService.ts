@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   type AdminConfig,
   usesProviderDefaultModel,
@@ -7,7 +8,7 @@ import {
 import { saveMoorlineConfig } from '../../system/config/configStore.js';
 import type { RuntimeControlStatus } from '../supervision/runtimeControl.js';
 import type { RuntimeDomainEvent } from './runtimeDomain.js';
-import type { RuntimeActivityStore } from '../../system/projection/runtimeActivityStore.js';
+import type { RuntimeActivityRecord, RuntimeActivityStore } from '../../system/projection/runtimeActivityStore.js';
 import type { ProjectionStateStore } from '../../system/projection/projectionStateStore.js';
 import type { RuntimeSnapshotQuery } from '../../system/projection/runtimeSnapshotQuery.js';
 import type { RuntimeProvider } from '../../../types/provider.js';
@@ -24,6 +25,11 @@ import type {
   RuntimeMessagePayload
 } from '../../../types/transport.js';
 import { parseRuntimeModeName } from '../../../types/runtime.js';
+import type { RuntimeCommandRunner } from '../../../types/runtime.js';
+import type {
+  RuntimeGateRunRecord,
+  RuntimeWorkItemRecord
+} from '../../../types/external.js';
 import { refreshMemoryIndex, retrieveFromMemoryWithSQLite } from '../../domain/memory/retrieval.js';
 import { MemoryStore } from '../../domain/memory/store.js';
 import type { RuntimeControlService } from '../supervision/runtimeControlService.js';
@@ -51,6 +57,7 @@ interface RuntimePluginContextServiceDeps {
   homeRoot: string;
   sqlitePath: string;
   chatWorkspacePath: string;
+  commandRunner?: RuntimeCommandRunner;
   store: SqliteSessionStore;
   sessionRegistry: SessionRegistry;
   skillRegistry: SkillRegistry;
@@ -76,6 +83,7 @@ interface RuntimePluginContextServiceDeps {
   normalizeReply(text: string): string;
   postTransportMessage(actor: string, spaceId: string, payload: RuntimeMessagePayload): Promise<void>;
   appendAuditEvent(event: string, payload: Record<string, unknown>): void;
+  recordRuntimeActivity(input: Omit<RuntimeActivityRecord, 'activityId'>): void;
   now(): string;
   runGuardedAction<T>(input: {
     action: Parameters<RuntimeActionGuard['run']>[0]['action'];
@@ -150,6 +158,107 @@ export class RuntimePluginContextService {
     } catch {
       return null;
     }
+  }
+
+  private validateStructuredOutput(value: unknown, schema: unknown): void {
+    if (!schema || typeof schema !== 'object' || Array.isArray(schema)) {
+      return;
+    }
+    const record = schema as { type?: unknown; required?: unknown; properties?: unknown };
+    if (record.type === 'object' && (!value || typeof value !== 'object' || Array.isArray(value))) {
+      throw new Error('Headless run output must be a JSON object.');
+    }
+    const objectValue = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+    if (Array.isArray(record.required)) {
+      for (const key of record.required) {
+        if (typeof key === 'string' && objectValue[key] === undefined) {
+          throw new Error(`Headless run output is missing required field: ${key}.`);
+        }
+      }
+    }
+    const properties =
+      record.properties && typeof record.properties === 'object' && !Array.isArray(record.properties)
+        ? (record.properties as Record<string, { type?: unknown }>)
+        : {};
+    for (const [key, property] of Object.entries(properties)) {
+      const expected = property.type;
+      const actual = objectValue[key];
+      if (actual === undefined || typeof expected !== 'string') {
+        continue;
+      }
+      const ok =
+        expected === 'array'
+          ? Array.isArray(actual)
+          : expected === 'object'
+            ? actual !== null && typeof actual === 'object' && !Array.isArray(actual)
+            : typeof actual === expected;
+      if (!ok) {
+        throw new Error(`Headless run output field ${key} must be ${expected}.`);
+      }
+    }
+  }
+
+  private transitionWorkItem(
+    actorId: string,
+    workItemId: string,
+    update: (current: RuntimeWorkItemRecord, nowIso: string) => RuntimeWorkItemRecord
+  ): RuntimeWorkItemRecord {
+    const current = this.requireOwnedWorkItem(actorId, workItemId);
+    const nowIso = this.deps.now();
+    const updated = this.deps.store.updateWorkItem(update(current, nowIso));
+    this.deps.appendAuditEvent('work_item.updated', {
+      actorId,
+      packageId: updated.packageId,
+      workItemId: updated.workItemId,
+      queue: updated.queue,
+      status: updated.status
+    });
+    this.deps.recordRuntimeActivity({
+      ...this.activityTargetForSession(updated.sessionId, 'runtime:work'),
+      sourceEventId: randomUUID(),
+      kind: `work_item.${updated.status}`,
+      severity: updated.status === 'failed' || updated.status === 'dead_lettered' ? 'error' : 'info',
+      title: `Work item ${updated.status}`,
+      detail: `${updated.packageId}/${updated.queue}/${updated.workItemId}`,
+      createdAt: nowIso
+    });
+    return updated;
+  }
+
+  private requireOwnedWorkItem(actorId: string, workItemId: string): RuntimeWorkItemRecord {
+    const record = this.deps.store.getWorkItem(workItemId);
+    if (!record) {
+      throw new Error(`Unknown work item: ${workItemId}`);
+    }
+    const packageId = this.contextPackageId(actorId);
+    if (record.packageId !== packageId) {
+      throw new Error(`Work item ${workItemId} is owned by ${record.packageId}, not ${packageId}.`);
+    }
+    return record;
+  }
+
+  private requireSession(sessionId: string): RuntimeSessionRow {
+    const session = this.deps.store.getSession(sessionId);
+    if (!session) {
+      throw new Error(`Unknown session: ${sessionId}`);
+    }
+    return session;
+  }
+
+  private activityTargetForSession(sessionId: string | null | undefined, fallbackThreadId: string): {
+    threadId: string;
+    sessionId: string | null;
+    spaceId: string | null;
+  } {
+    if (!sessionId) {
+      return { threadId: fallbackThreadId, sessionId: null, spaceId: null };
+    }
+    const session = this.deps.store.getSession(sessionId);
+    return {
+      threadId: session?.threadId ?? fallbackThreadId,
+      sessionId,
+      spaceId: session?.spaceId ?? null
+    };
   }
 
   createContext(actorId: string): RuntimePluginContext {
@@ -299,6 +408,220 @@ export class RuntimePluginContextService {
           createdAt: row.createdAt,
           updatedAt: row.updatedAt
         })),
+      enqueueWorkItem: async ({ queue, workItemId, idempotencyKey, externalResource, payload, priority, runAfter, maxAttempts }) =>
+        await this.deps.runGuardedAction({
+          action: 'package.work.manage',
+          actor: actorId,
+          target: `${this.contextPackageId(actorId)}:${queue}`,
+          payload: { idempotencyKey, externalResource },
+          title: 'Package work enqueue blocked',
+          execute: async () => {
+            const packageId = this.contextPackageId(actorId);
+            const normalizedQueue = queue.trim();
+            if (!normalizedQueue) {
+              throw new Error('Work item queue is required.');
+            }
+            const nowIso = this.deps.now();
+            if (externalResource) {
+              this.deps.store.upsertExternalResource({ ...externalResource, nowIso });
+            }
+            const record = this.deps.store.enqueueWorkItem({
+              workItemId: workItemId?.trim() || randomUUID(),
+              packageId,
+              queue: normalizedQueue,
+              status: 'queued',
+              priority: Number.isFinite(priority) ? Math.trunc(priority ?? 0) : 0,
+              ...(idempotencyKey ? { idempotencyKey } : {}),
+              ...(externalResource ? { externalResource } : {}),
+              payload: payload ?? {},
+              attempts: 0,
+              maxAttempts: Math.max(1, Math.trunc(maxAttempts ?? 3)),
+              runAfter: runAfter ?? null,
+              leaseOwner: null,
+              leaseExpiresAt: null,
+              lastError: null,
+              createdAt: nowIso,
+              updatedAt: nowIso,
+              completedAt: null
+            });
+            this.deps.appendAuditEvent('work_item.enqueued', {
+              actorId,
+              packageId,
+              workItemId: record.workItemId,
+              queue: record.queue,
+              idempotencyKey: record.idempotencyKey
+            });
+            this.deps.recordRuntimeActivity({
+              threadId: 'runtime:work',
+              sessionId: null,
+              spaceId: null,
+              sourceEventId: randomUUID(),
+              kind: 'work_item.queued',
+              severity: 'info',
+              title: 'Work item queued',
+              detail: `${record.packageId}/${record.queue}/${record.workItemId}`,
+              createdAt: nowIso
+            });
+            return record;
+          }
+        }),
+      claimWorkItem: async ({ queue, leaseSeconds, leaseOwner }) =>
+        await this.deps.runGuardedAction({
+          action: 'package.work.manage',
+          actor: actorId,
+          target: `${this.contextPackageId(actorId)}:${queue}`,
+          title: 'Package work claim blocked',
+          execute: async () => {
+            const now = new Date(this.deps.now());
+            const leaseMs = Math.max(1, leaseSeconds ?? 300) * 1000;
+            const claimed = this.deps.store.claimWorkItem({
+              packageId: this.contextPackageId(actorId),
+              queue,
+              leaseOwner: leaseOwner?.trim() || actorId,
+              leaseExpiresAt: new Date(now.getTime() + leaseMs).toISOString(),
+              nowIso: now.toISOString()
+            });
+            if (claimed) {
+              this.deps.appendAuditEvent('work_item.claimed', {
+                actorId,
+                packageId: claimed.packageId,
+                workItemId: claimed.workItemId,
+                queue: claimed.queue,
+                attempts: claimed.attempts
+              });
+              this.deps.recordRuntimeActivity({
+                ...this.activityTargetForSession(claimed.sessionId, 'runtime:work'),
+                sourceEventId: randomUUID(),
+                kind: 'work_item.claimed',
+                severity: 'info',
+                title: 'Work item claimed',
+                detail: `${claimed.packageId}/${claimed.queue}/${claimed.workItemId}`,
+                createdAt: now.toISOString()
+              });
+            }
+            return claimed;
+          }
+        }),
+      completeWorkItem: async ({ workItemId, phase }) =>
+        await this.deps.runGuardedAction({
+          action: 'package.work.manage',
+          actor: actorId,
+          target: workItemId,
+          title: 'Package work complete blocked',
+          execute: async () =>
+            this.transitionWorkItem(actorId, workItemId, (current, nowIso) => ({
+              ...current,
+              status: 'completed',
+              ...(phase ? { phase } : {}),
+              leaseOwner: null,
+              leaseExpiresAt: null,
+              lastError: null,
+              updatedAt: nowIso,
+              completedAt: nowIso
+            }))
+        }),
+      failWorkItem: async ({ workItemId, error, retryAfter, phase }) =>
+        await this.deps.runGuardedAction({
+          action: 'package.work.manage',
+          actor: actorId,
+          target: workItemId,
+          title: 'Package work fail blocked',
+          execute: async () =>
+            this.transitionWorkItem(actorId, workItemId, (current, nowIso) => {
+              const shouldRetry = retryAfter !== undefined && current.attempts < current.maxAttempts;
+              return {
+                ...current,
+                status: shouldRetry ? 'queued' : 'failed',
+                ...(phase ? { phase } : {}),
+                runAfter: shouldRetry ? retryAfter : current.runAfter,
+                leaseOwner: null,
+                leaseExpiresAt: null,
+                lastError: error,
+                updatedAt: nowIso,
+                completedAt: shouldRetry ? null : nowIso
+              };
+            })
+        }),
+      deadLetterWorkItem: async ({ workItemId, reason, phase }) =>
+        await this.deps.runGuardedAction({
+          action: 'package.work.manage',
+          actor: actorId,
+          target: workItemId,
+          title: 'Package work dead-letter blocked',
+          execute: async () =>
+            this.transitionWorkItem(actorId, workItemId, (current, nowIso) => ({
+              ...current,
+              status: 'dead_lettered',
+              ...(phase ? { phase } : {}),
+              leaseOwner: null,
+              leaseExpiresAt: null,
+              lastError: reason,
+              updatedAt: nowIso,
+              completedAt: nowIso
+            }))
+        }),
+      updateWorkItem: async ({ workItemId, payload, phase, externalResource, sessionId }) =>
+        await this.deps.runGuardedAction({
+          action: 'package.work.manage',
+          actor: actorId,
+          target: workItemId,
+          title: 'Package work update blocked',
+          execute: async () => {
+            if (sessionId) {
+              this.requireSession(sessionId);
+            }
+            return this.transitionWorkItem(actorId, workItemId, (current, nowIso) => ({
+              ...current,
+              ...(payload ? { payload } : {}),
+              ...(phase ? { phase } : {}),
+              ...(externalResource ? { externalResource } : {}),
+              ...(sessionId ? { sessionId } : {}),
+              updatedAt: nowIso
+            }));
+          }
+        }),
+      getWorkItem: (workItemId) => {
+        const record = this.deps.store.getWorkItem(workItemId);
+        return record?.packageId === this.contextPackageId(actorId) ? record : null;
+      },
+      listWorkItems: (filter) =>
+        this.deps.store.listWorkItems({
+          packageId: this.contextPackageId(actorId),
+          queue: filter?.queue,
+          status: filter?.status,
+          externalResource: filter?.externalResource,
+          limit: filter?.limit
+        }),
+      upsertExternalResource: async (input) =>
+        await this.deps.runGuardedAction({
+          action: 'package.work.manage',
+          actor: actorId,
+          target: `${input.provider}:${input.kind}:${input.id}`,
+          title: 'External resource update blocked',
+          execute: async () => this.deps.store.upsertExternalResource({ ...input, nowIso: this.deps.now() })
+        }),
+      listExternalResources: (filter) => this.deps.store.listExternalResources(filter),
+      bindSessionToExternalResource: async ({ sessionId, externalResource, relationship }) =>
+        await this.deps.runGuardedAction({
+          action: 'package.work.manage',
+          actor: actorId,
+          target: `${sessionId}:${externalResource.provider}:${externalResource.kind}:${externalResource.id}`,
+          title: 'Session resource binding blocked',
+          execute: async () => {
+            this.requireSession(sessionId);
+            this.deps.store.upsertExternalResource({ ...externalResource, nowIso: this.deps.now() });
+            this.deps.store.bindSessionToExternalResource({
+              sessionId,
+              resource: externalResource,
+              relationship: relationship?.trim() || 'source',
+              nowIso: this.deps.now()
+            });
+          }
+        }),
+      listSessionsForExternalResource: (resource) => {
+        const ids = new Set(this.deps.store.listSessionIdsForExternalResource(resource));
+        return this.deps.snapshots.listSessions().filter((snapshot) => ids.has(snapshot.session.sessionId));
+      },
       listPendingRequests: (spaceId) =>
         this.deps.store.listPendingRequestsBySpace(spaceId).filter((request) => request.status === 'open'),
       listRuntimeReceipts: () => this.deps.snapshots.overview().receipts,
@@ -435,7 +758,7 @@ export class RuntimePluginContextService {
             })
         });
       },
-      createSession: async ({ requestedName, runtimeMode, initialInstruction, objective, owner, tags }) => {
+      createSession: async ({ requestedName, runtimeMode, initialInstruction, objective, owner, tags, externalResource, workItemId }) => {
         const safeRuntimeMode = parseRuntimeModeName(runtimeMode, 'runtime_mode');
         const created = await this.deps.workManagement.createManagedSession({
           actorId,
@@ -446,8 +769,162 @@ export class RuntimePluginContextService {
           owner,
           tags
         });
+        if (externalResource) {
+          this.deps.store.upsertExternalResource({ ...externalResource, nowIso: this.deps.now() });
+          this.deps.store.bindSessionToExternalResource({
+            sessionId: created.session.sessionId,
+            resource: externalResource,
+            relationship: 'source',
+            nowIso: this.deps.now()
+          });
+        }
+        if (workItemId) {
+          this.transitionWorkItem(actorId, workItemId, (current, nowIso) => ({
+            ...current,
+            sessionId: created.session.sessionId,
+            ...(externalResource ? { externalResource } : {}),
+            updatedAt: nowIso
+          }));
+        }
         return { session: created.session, spaceId: created.spaceId };
       },
+      runGate: async ({ gateId, command, args, cwd, required, workItemId, sessionId }) =>
+        await this.deps.runGuardedAction({
+          action: 'command.exec',
+          actor: actorId,
+          target: `${gateId}:${command}`,
+          payload: { args, cwd, required, workItemId, sessionId },
+          threadId: sessionId ? this.deps.store.getSession(sessionId)?.threadId : undefined,
+          title: 'Runtime gate blocked',
+          execute: async () => {
+            if (!this.deps.commandRunner) {
+              throw new Error('Runtime gates require a command runner.');
+            }
+            if (sessionId) {
+              this.requireSession(sessionId);
+            }
+            if (workItemId) {
+              this.requireOwnedWorkItem(actorId, workItemId);
+            }
+            const packageId = this.contextPackageId(actorId);
+            const startedAt = this.deps.now();
+            let gate: RuntimeGateRunRecord = this.deps.store.upsertGateRun({
+              gateRunId: randomUUID(),
+              gateId,
+              packageId,
+              ...(workItemId ? { workItemId } : {}),
+              ...(sessionId ? { sessionId } : {}),
+              command,
+              args: args ?? [],
+              ...(cwd ? { cwd } : {}),
+              required: required === true,
+              status: 'running',
+              exitCode: null,
+              stdout: '',
+              stderr: '',
+              startedAt,
+              completedAt: null
+            });
+            try {
+              const result = await this.deps.commandRunner.run(command, args ?? [], cwd);
+              gate = this.deps.store.upsertGateRun({
+                ...gate,
+                status: result.exitCode === 0 ? 'passed' : 'failed',
+                exitCode: result.exitCode,
+                stdout: result.stdout,
+                stderr: result.stderr,
+                completedAt: this.deps.now()
+              });
+              this.deps.appendAuditEvent(result.exitCode === 0 ? 'runtime.gate.passed' : 'runtime.gate.failed', {
+                actorId,
+                packageId,
+                gateRunId: gate.gateRunId,
+                gateId,
+                workItemId,
+                sessionId,
+                exitCode: result.exitCode
+              });
+              this.deps.recordRuntimeActivity({
+                ...this.activityTargetForSession(sessionId, 'runtime:gates'),
+                sourceEventId: gate.gateRunId,
+                kind: result.exitCode === 0 ? 'runtime.gate.passed' : 'runtime.gate.failed',
+                severity: result.exitCode === 0 ? 'info' : 'error',
+                title: result.exitCode === 0 ? 'Runtime gate passed' : 'Runtime gate failed',
+                detail: `${gate.gateId}: ${gate.command} ${(gate.args ?? []).join(' ')}`.trim(),
+                createdAt: gate.completedAt ?? this.deps.now()
+              });
+              return gate;
+            } catch (error) {
+              this.deps.store.upsertGateRun({
+                ...gate,
+                status: 'error',
+                exitCode: null,
+                stderr: error instanceof Error ? error.message : String(error),
+                completedAt: this.deps.now()
+              });
+              this.deps.recordRuntimeActivity({
+                ...this.activityTargetForSession(sessionId, 'runtime:gates'),
+                sourceEventId: gate.gateRunId,
+                kind: 'runtime.gate.error',
+                severity: 'error',
+                title: 'Runtime gate errored',
+                detail: error instanceof Error ? error.message : String(error),
+                createdAt: this.deps.now()
+              });
+              throw error;
+            }
+          }
+        }),
+      runHeadless: async ({ requestedName, runtimeMode, prompt, objective, owner, tags, externalResource, workItemId, outputSchema, requireStructuredOutput }) =>
+        await this.deps.runGuardedAction({
+          action: 'provider.headless.run',
+          actor: actorId,
+          target: `${this.contextPackageId(actorId)}:${requestedName}`,
+          payload: { requestedName, runtimeMode, objective, owner, tags, externalResource, workItemId },
+          title: 'Headless provider run blocked',
+          execute: async () => {
+            const context = this.createContext(actorId);
+            // First-pass headless runs are session-backed, so provider execution uses the managed session workspace.
+            const created = await context.createSession({
+              requestedName,
+              runtimeMode,
+              objective,
+              owner,
+              tags,
+              externalResource,
+              workItemId
+            });
+            const reply = await context.runAgent({
+              surface: 'session',
+              spaceId: created.spaceId,
+              actorId,
+              actorLabel: this.contextPackageId(actorId),
+              text: prompt,
+              session: created.session,
+              cwd: created.session.workspacePath,
+              runtimeMode,
+              basePromptSections: await this.loadSessionPromptSections(created.session),
+              promptSource: 'headless'
+            });
+            const text = reply.text ?? '';
+            let parsedOutput: unknown;
+            if (outputSchema || requireStructuredOutput) {
+              try {
+                parsedOutput = JSON.parse(text) as unknown;
+                this.validateStructuredOutput(parsedOutput, outputSchema);
+              } catch (error) {
+                if (requireStructuredOutput) {
+                  throw error;
+                }
+              }
+            }
+            return {
+              session: created.session,
+              reply,
+              ...(parsedOutput !== undefined ? { parsedOutput } : {})
+            };
+          }
+        }),
       directSession: async ({ sessionId, spaceId, instruction, reason }) =>
         await this.deps.workManagement.directManagedSession({
           actorId,
