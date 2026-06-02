@@ -4,6 +4,7 @@ import type { SkillRegistry } from '../../../extension/skills/skillRegistry.js';
 import type { RuntimeControlStatus } from '../../../runtime/supervision/runtimeControl.js';
 import type { SidecarManager } from '../../../runtime/supervision/sidecarManager.js';
 import type { RuntimeSnapshotQuery } from '../runtimeSnapshotQuery.js';
+import type { SqliteSessionStore } from '../../state/sqliteSessionStore.js';
 import type { PluginHost } from '../../../extension/plugins/pluginHost.js';
 import type { RuntimePluginContext } from '../../../../types/plugin.js';
 import type {
@@ -17,6 +18,7 @@ export interface ManagementReadModelServiceDeps {
   runtimeRoot: string;
   config: MoorlineConfig;
   snapshots: RuntimeSnapshotQuery;
+  store?: SqliteSessionStore;
   skills: SkillRegistry;
   provider: RuntimeProvider;
   sidecars: SidecarManager;

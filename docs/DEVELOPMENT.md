@@ -2,6 +2,8 @@
 
 This document is for contributors and maintainers working on Moorline after the package split.
 
+Moorline's core product shape is an operator-controlled runtime with explicit package boundaries. The host owns durable state, policy, audit, recovery, and orchestration. Packages supply API adapters, transports, providers, plugins, skills, and bundles.
+
 ## Local Dev Loop
 
 ```bash
@@ -43,7 +45,7 @@ Bundles are metadata packages that reference those runtime package kinds.
 
 `@moorline/http` is the only shipped API adapter. It exposes JSON routes under `/api/*`, uses bearer-token auth, defaults to loopback-only, and relies on deployment infrastructure for TLS.
 
-CLI commands can use a local connection record or explicit remote options:
+CLI commands can use an auto-discovered connection record or explicit remote options:
 - `--url`
 - `--token`
 - `MOORLINE_API_URL`

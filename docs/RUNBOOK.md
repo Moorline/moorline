@@ -4,7 +4,7 @@ This runbook covers the current Moorline operator flow.
 
 ## First Install
 
-Normal operator install uses a packaged CLI archive.
+Normal operator install uses a packaged CLI archive. Moorline may run on an operator machine, server, or other operator-controlled environment.
 
 Inside that archive you get:
 - `moorline`
@@ -52,6 +52,11 @@ Fresh `moorline init` installs and selects the bundled HTTP API adapter. Install
 Package families:
 - installables: API adapters, providers, transports, plugins
 - add-ons: skills
+
+Runtime package trust:
+- activated API adapter, provider, transport, and plugin packages execute as trusted runtime code
+- bundles are metadata-only package groups; their members carry runtime behavior
+- Moorline gates host-provided capabilities, but it does not sandbox arbitrary JavaScript package code
 
 ## Runtime Mode Matrix
 
@@ -226,9 +231,9 @@ Normal install sources:
 - local archive bundles
 - remote archive URLs
 
-## Local History
+## Runtime History
 
-Moorline local history is for tracked operator-owned files:
+Moorline history tracks operator-owned runtime files:
 
 ```bash
 moorline history list
@@ -274,7 +279,7 @@ Importing a backup:
 moorline configure import ~/moorline-backup.tgz
 ```
 
-If local runtime state is non-empty, import fails unless `--force` is provided:
+If runtime state is non-empty, import fails unless `--force` is provided:
 ```bash
 moorline configure import ~/moorline-backup.tgz --force
 ```

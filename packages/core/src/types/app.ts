@@ -5,6 +5,11 @@ import type { HistoryEntry, HistoryStatus } from './history.js';
 import type { JsonSchemaLike, PackageApplyPlan, PackageKind, PackageSurface } from './package.js';
 import type { RuntimeManagementContribution } from './plugin.js';
 import type { MoorlineReleaseManifest, MoorlineRuntimeMode, RuntimePackageLoadFailure } from './release.js';
+import type {
+  RuntimeExternalResourceRecord,
+  RuntimeGateRunRecord,
+  RuntimeWorkItemRecord
+} from './external.js';
 
 export interface RuntimeControlStatus {
   acceptingNewWork: boolean;
@@ -21,7 +26,10 @@ type ManagedObjectKind =
   | 'service'
   | 'pending_request'
   | 'provider_thread'
-  | 'sidecar';
+  | 'sidecar'
+  | 'external_resource'
+  | 'work_item'
+  | 'gate_run';
 
 export type ManagedObjectTrustLevel =
   | 'official'
@@ -93,6 +101,19 @@ export interface ManagedSessionRecord extends ManagedObjectBase {
   providerStatus: string | null;
   pendingRequestCount: number;
   recentActivityCount: number;
+  externalResources: RuntimeExternalResourceRecord[];
+}
+
+export interface ManagedExternalResourceRecord extends ManagedObjectBase {
+  resource: RuntimeExternalResourceRecord;
+}
+
+export interface ManagedWorkItemRecord extends ManagedObjectBase {
+  workItem: RuntimeWorkItemRecord;
+}
+
+export interface ManagedGateRunRecord extends ManagedObjectBase {
+  gateRun: RuntimeGateRunRecord;
 }
 
 export interface ManagedPluginRecord extends ManagedObjectBase {
@@ -462,6 +483,9 @@ export interface ManagementReadModel {
     services: number;
     providerThreads: number;
     sidecars: number;
+    externalResources: number;
+    workItems: number;
+    gateRuns: number;
   };
   objects: {
     sessions: ManagedSessionRecord[];
@@ -472,6 +496,9 @@ export interface ManagementReadModel {
     pendingRequests: ManagedPendingRequestRecord[];
     providerThreads: ManagedProviderThreadRecord[];
     sidecars: ManagedSidecarSummary[];
+    externalResources: ManagedExternalResourceRecord[];
+    workItems: ManagedWorkItemRecord[];
+    gateRuns: ManagedGateRunRecord[];
   };
 }
 

@@ -2,6 +2,8 @@
 
 This is the fastest way to run Moorline 0.0.x locally.
 
+This guide is for local development. Product docs should not describe Moorline as local-first; the runtime is operator-controlled and may run locally or in another controlled environment.
+
 ## Prerequisites
 
 - Bun 1.3.11+

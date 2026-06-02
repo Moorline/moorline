@@ -9,3 +9,4 @@ export * from './provider.js';
 export * from './transport.js';
 export * from './bundle.js';
 export * from './api-adapter.js';
+export * from './external.js';

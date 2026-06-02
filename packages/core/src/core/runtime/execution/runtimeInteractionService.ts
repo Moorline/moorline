@@ -1,5 +1,6 @@
 import type { AppliedMoorlineConfig } from '../../../types/config.js';
 import type { RuntimePluginContext } from '../../../types/plugin.js';
+import type { RuntimeExternalResourceRef } from '../../../types/external.js';
 import type { RuntimeActionDefinition, RuntimeMessagePayload, RuntimeTransportEvent } from '../../../types/transport.js';
 import type { PluginHost } from '../../extension/plugins/pluginHost.js';
 import type { RuntimeSnapshotQuery } from '../../system/projection/runtimeSnapshotQuery.js';
@@ -46,6 +47,7 @@ interface RuntimeInteractionServiceDeps {
   getAcceptingNewWork(): boolean;
   postTransportMessage(actor: string, spaceId: string, payload: RuntimeMessagePayload): Promise<void>;
   appendAuditEvent(event: string, payload: Record<string, unknown>): void;
+  upsertExternalResource(resource: RuntimeExternalResourceRef): void;
   createPluginContext(actorId: string): RuntimePluginContext;
   isAdminActor(input: RuntimeMessageReceivedEvent['actor']): boolean;
   respondToProviderRequest(
@@ -87,6 +89,9 @@ export class RuntimeInteractionService {
         await this.handleAction(event);
       });
       return;
+    }
+    if (event.type === 'external.event.received' && event.resource) {
+      this.deps.upsertExternalResource(event.resource);
     }
     await this.deps.getPluginHost().handleTransportEvent(event, (pluginId) =>
       this.deps.createPluginContext(`plugin:${pluginId}`)

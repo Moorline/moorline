@@ -1,4 +1,5 @@
 import type { Capability } from './capabilities.js';
+import type { JsonSchemaLike } from './package.js';
 import type { PluginManifest, RuntimeManagementContribution } from './plugin.js';
 import type { RuntimeProviderTestResult } from './provider.js';
 import type {
@@ -16,6 +17,14 @@ import type {
   ProviderThreadTokenUsage,
   RuntimeModeName
 } from './runtime.js';
+import type {
+  RuntimeExternalResourceRecord,
+  RuntimeExternalResourceRef,
+  RuntimeGateRunRecord,
+  RuntimeHeadlessRunResult,
+  RuntimeWorkItemRecord,
+  RuntimeWorkItemStatus
+} from './external.js';
 
 export interface RuntimeDomainEvent {
   eventId: string;
@@ -337,6 +346,72 @@ export interface RuntimeToolContext {
   }): Promise<RuntimePackageJobRecord>;
   cancelPackageJob(jobId: string): Promise<RuntimePackageJobRecord | null>;
   listPackageJobs(): RuntimePackageJobRecord[];
+  enqueueWorkItem(input: {
+    queue: string;
+    workItemId?: string;
+    idempotencyKey?: string;
+    externalResource?: RuntimeExternalResourceRef;
+    payload?: Record<string, unknown>;
+    priority?: number;
+    runAfter?: string | null;
+    maxAttempts?: number;
+  }): Promise<RuntimeWorkItemRecord>;
+  claimWorkItem(input: {
+    queue: string;
+    leaseSeconds?: number;
+    leaseOwner?: string;
+  }): Promise<RuntimeWorkItemRecord | null>;
+  completeWorkItem(input: { workItemId: string; phase?: string }): Promise<RuntimeWorkItemRecord>;
+  failWorkItem(input: {
+    workItemId: string;
+    error: string;
+    retryAfter?: string | null;
+    phase?: string;
+  }): Promise<RuntimeWorkItemRecord>;
+  deadLetterWorkItem(input: { workItemId: string; reason: string; phase?: string }): Promise<RuntimeWorkItemRecord>;
+  updateWorkItem(input: {
+    workItemId: string;
+    payload?: Record<string, unknown>;
+    phase?: string;
+    externalResource?: RuntimeExternalResourceRef;
+    sessionId?: string;
+  }): Promise<RuntimeWorkItemRecord>;
+  getWorkItem(workItemId: string): RuntimeWorkItemRecord | null;
+  listWorkItems(filter?: {
+    queue?: string;
+    status?: RuntimeWorkItemStatus;
+    externalResource?: RuntimeExternalResourceRef;
+    limit?: number;
+  }): RuntimeWorkItemRecord[];
+  upsertExternalResource(input: RuntimeExternalResourceRef & { state?: string }): Promise<RuntimeExternalResourceRecord>;
+  listExternalResources(filter?: { provider?: string; kind?: string; limit?: number }): RuntimeExternalResourceRecord[];
+  bindSessionToExternalResource(input: {
+    sessionId: string;
+    externalResource: RuntimeExternalResourceRef;
+    relationship?: string;
+  }): Promise<void>;
+  listSessionsForExternalResource(resource: RuntimeExternalResourceRef): RuntimeSessionSnapshot[];
+  runGate(input: {
+    gateId: string;
+    command: string;
+    args?: string[];
+    cwd?: string;
+    required?: boolean;
+    workItemId?: string;
+    sessionId?: string;
+  }): Promise<RuntimeGateRunRecord>;
+  runHeadless(input: {
+    requestedName: string;
+    runtimeMode: RuntimeModeName;
+    prompt: string;
+    objective?: string;
+    owner?: SessionOwnerLink;
+    tags?: string[];
+    externalResource?: RuntimeExternalResourceRef;
+    workItemId?: string;
+    outputSchema?: JsonSchemaLike;
+    requireStructuredOutput?: boolean;
+  }): Promise<RuntimeHeadlessRunResult>;
   querySessions(filter?: SessionQueryFilter): RuntimeSessionSnapshot[];
   createSession(input: {
     requestedName: string;
@@ -345,6 +420,8 @@ export interface RuntimeToolContext {
     objective?: string;
     owner?: SessionOwnerLink;
     tags?: string[];
+    externalResource?: RuntimeExternalResourceRef;
+    workItemId?: string;
   }): Promise<CreatedSessionResult>;
   directSession(input: {
     sessionId?: string;
@@ -528,6 +605,10 @@ export interface RuntimePlugin {
   onRuntimeStarted?(context: RuntimePluginContext): Promise<void> | void;
   onTransportEvent?(
     event: RuntimeTransportEvent,
+    context: RuntimePluginContext
+  ): Promise<RuntimeActionDispatchResult | boolean | void> | RuntimeActionDispatchResult | boolean | void;
+  onExternalEvent?(
+    event: Extract<RuntimeTransportEvent, { type: 'external.event.received' }>,
     context: RuntimePluginContext
   ): Promise<RuntimeActionDispatchResult | boolean | void> | RuntimeActionDispatchResult | boolean | void;
   onAction?(

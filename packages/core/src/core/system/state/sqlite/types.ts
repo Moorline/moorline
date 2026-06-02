@@ -1,5 +1,11 @@
 import type { PendingRuntimeRequestRecord, ProviderRuntimeEvent, ProviderSessionRecord, RuntimeModeName } from '../../../../types/runtime.js';
 import type { SessionOwnerKind } from '../../../../types/plugin.js';
+import type {
+  RuntimeExternalResourceRecord,
+  RuntimeExternalResourceRef,
+  RuntimeGateRunRecord,
+  RuntimeWorkItemRecord
+} from '../../../../types/external.js';
 import type { ProviderBindingRecord, RuntimeDomainEvent, RuntimeReceiptRecord } from '../../../runtime/execution/runtimeDomain.js';
 import type {
   ManagedSidecarRecord,
@@ -100,6 +106,72 @@ export interface RuntimePackageJobRow {
   updatedAt: string;
 }
 
+export interface RuntimeExternalResourceRow {
+  provider: string;
+  kind: string;
+  externalId: string;
+  url: string | null;
+  title: string | null;
+  state: string | null;
+  metadataJson: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export interface RuntimeWorkItemRow {
+  workItemId: string;
+  packageId: string;
+  queue: string;
+  status: RuntimeWorkItemRecord['status'];
+  priority: number;
+  idempotencyKey: string | null;
+  externalProvider: string | null;
+  externalKind: string | null;
+  externalId: string | null;
+  externalUrl: string | null;
+  externalTitle: string | null;
+  externalMetadataJson: string | null;
+  sessionId: string | null;
+  payloadJson: string;
+  phase: string | null;
+  attempts: number;
+  maxAttempts: number;
+  runAfter: string | null;
+  leaseOwner: string | null;
+  leaseExpiresAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+}
+
+export interface RuntimeSessionExternalResourceRow {
+  sessionId: string;
+  provider: string;
+  kind: string;
+  externalId: string;
+  relationship: string;
+  createdAt: string;
+}
+
+export interface RuntimeGateRunRow {
+  gateRunId: string;
+  gateId: string;
+  packageId: string;
+  workItemId: string | null;
+  sessionId: string | null;
+  command: string;
+  argsJson: string;
+  cwd: string | null;
+  required: number;
+  status: RuntimeGateRunRecord['status'];
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  startedAt: string;
+  completedAt: string | null;
+}
+
 export interface RuntimeEventRow {
   eventId: string;
   provider: string;
@@ -159,6 +231,87 @@ export function hydrateManagedSidecar(row: ManagedSidecarDbRow | undefined): Man
     env: safeReadJsonValue<Record<string, string>>(row.envJson).value ?? {},
     restartPolicy: row.restartPolicy as SidecarRestartPolicy,
     readiness: safeReadJsonValue<SidecarReadinessProbe>(row.readinessJson).value ?? { kind: 'none' }
+  };
+}
+
+export function hydrateExternalResource(row: RuntimeExternalResourceRow | undefined): RuntimeExternalResourceRecord | null {
+  if (!row) {
+    return null;
+  }
+  const metadata = safeReadJsonValue<Record<string, unknown>>(row.metadataJson).value ?? {};
+  return {
+    provider: row.provider,
+    kind: row.kind,
+    id: row.externalId,
+    ...(row.url ? { url: row.url } : {}),
+    ...(row.title ? { title: row.title } : {}),
+    ...(row.state ? { state: row.state } : {}),
+    ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+    firstSeenAt: row.firstSeenAt,
+    lastSeenAt: row.lastSeenAt
+  };
+}
+
+export function hydrateWorkItem(row: RuntimeWorkItemRow | undefined): RuntimeWorkItemRecord | null {
+  if (!row) {
+    return null;
+  }
+  const payload = safeReadJsonValue<Record<string, unknown>>(row.payloadJson).value ?? {};
+  const externalMetadata = safeReadJsonValue<Record<string, unknown>>(row.externalMetadataJson).value ?? {};
+  const externalResource: RuntimeExternalResourceRef | undefined =
+    row.externalProvider && row.externalKind && row.externalId
+      ? {
+          provider: row.externalProvider,
+          kind: row.externalKind,
+          id: row.externalId,
+          ...(row.externalUrl ? { url: row.externalUrl } : {}),
+          ...(row.externalTitle ? { title: row.externalTitle } : {}),
+          ...(Object.keys(externalMetadata).length > 0 ? { metadata: externalMetadata } : {})
+        }
+      : undefined;
+  return {
+    workItemId: row.workItemId,
+    packageId: row.packageId,
+    queue: row.queue,
+    status: row.status,
+    priority: row.priority,
+    ...(row.idempotencyKey ? { idempotencyKey: row.idempotencyKey } : {}),
+    ...(externalResource ? { externalResource } : {}),
+    ...(row.sessionId ? { sessionId: row.sessionId } : {}),
+    payload,
+    ...(row.phase ? { phase: row.phase } : {}),
+    attempts: row.attempts,
+    maxAttempts: row.maxAttempts,
+    runAfter: row.runAfter,
+    leaseOwner: row.leaseOwner,
+    leaseExpiresAt: row.leaseExpiresAt,
+    lastError: row.lastError,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    completedAt: row.completedAt
+  };
+}
+
+export function hydrateGateRun(row: RuntimeGateRunRow | undefined): RuntimeGateRunRecord | null {
+  if (!row) {
+    return null;
+  }
+  return {
+    gateRunId: row.gateRunId,
+    gateId: row.gateId,
+    packageId: row.packageId,
+    ...(row.workItemId ? { workItemId: row.workItemId } : {}),
+    ...(row.sessionId ? { sessionId: row.sessionId } : {}),
+    command: row.command,
+    args: safeReadJson(row.argsJson, isStringArray).value ?? [],
+    ...(row.cwd ? { cwd: row.cwd } : {}),
+    required: row.required !== 0,
+    status: row.status,
+    exitCode: row.exitCode,
+    stdout: row.stdout,
+    stderr: row.stderr,
+    startedAt: row.startedAt,
+    completedAt: row.completedAt
   };
 }
 
