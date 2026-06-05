@@ -138,7 +138,7 @@ function controlApiPresentation(): ManagementReadModelPresentation {
       },
       updates: {
         appUpdates: 'Operator triggered.',
-        officialPackageUpdates: 'Applied through package management and restart.',
+        packageUpdates: 'Applied through package management and restart.',
         localPackageHandling: 'Never overwrite local packages.',
         operatorTrigger: 'Use the Control API through the CLI.'
       }

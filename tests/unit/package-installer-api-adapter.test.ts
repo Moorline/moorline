@@ -92,8 +92,8 @@ function installedApiAdapterRecord(input: { runtimeRoot: string; packageId: stri
 function writeTransportPackage(root: string): void {
   mkdirSync(root, { recursive: true });
   const manifest = {
-    id: 'official/transport',
-    name: 'official/transport',
+    id: 'rync/transport',
+    name: 'rync/transport',
     version: '1.0.0',
     type: 'transport',
     entrypoint: 'index.mjs'
@@ -204,14 +204,14 @@ function writeBundlePackage(root: string): void {
     join(root, 'manifest.json'),
     JSON.stringify(
       {
-        id: 'official/basic-essentials',
-        name: 'official/basic-essentials',
+        id: 'rync/basic-essentials',
+        name: 'rync/basic-essentials',
         version: '1.0.0',
         type: 'bundle',
         description: 'Basic essentials.',
         members: [{
           kind: 'plugin',
-          packageId: 'official/status',
+          packageId: 'rync/status',
           version: '~1.0.0',
           activation: 'enable'
         }]
@@ -238,8 +238,8 @@ function writeBundlePackage(root: string): void {
     ),
     'utf8'
   );
-  writePluginPackage(join(root, 'packages', 'plugins', 'official', 'status'), {
-    packageId: 'official/status'
+  writePluginPackage(join(root, 'packages', 'plugins', 'rync', 'status'), {
+    packageId: 'rync/status'
   });
 }
 
@@ -289,7 +289,7 @@ describe('api-adapter package installation', () => {
       },
       surfaces: {
         apiAdapter: {
-          activePackageId: 'official/http',
+          activePackageId: 'moorline/http',
           config: defaultHttpApiAdapterConfig(),
           configByPackageId: {}
         },
@@ -325,24 +325,24 @@ describe('api-adapter package installation', () => {
       }
     });
 
-    expect(record.packageId).toBe('official/basic-essentials');
+    expect(record.packageId).toBe('rync/basic-essentials');
     const state = new PackageInventoryStore(runtimeRoot).load();
     expect(state.installed).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'bundle',
-        packageId: 'official/basic-essentials'
+        packageId: 'rync/basic-essentials'
       }),
       expect.objectContaining({
         kind: 'plugin',
-        packageId: 'official/status',
-        installedByPackageIds: ['official/basic-essentials'],
+        packageId: 'rync/status',
+        installedByPackageIds: ['rync/basic-essentials'],
         source: {
           kind: 'local_dir',
-          path: join(runtimeRoot, 'packages', 'bundles', 'official', 'basic-essentials', 'packages', 'plugins', 'official', 'status')
+          path: join(runtimeRoot, 'packages', 'bundles', 'rync', 'basic-essentials', 'packages', 'plugins', 'rync', 'status')
         }
       })
     ]));
-    expect(config.surfaces.plugins.enabledPackageIds).toContain('official/status');
+    expect(config.surfaces.plugins.enabledPackageIds).toContain('rync/status');
   });
 
   it('keeps api-adapter inventory records when reloaded', () => {
@@ -382,7 +382,7 @@ describe('api-adapter package installation', () => {
     });
   });
 
-  it('rejects official/http configuration before inventory installation', () => {
+  it('rejects moorline/http configuration before inventory installation', () => {
     const root = createTempRoot('moorline-http-package-config-');
     const runtimeRoot = join(root, 'runtime');
     mkdirSync(runtimeRoot, { recursive: true });
@@ -402,7 +402,7 @@ describe('api-adapter package installation', () => {
       },
       surfaces: {
         apiAdapter: {
-          activePackageId: 'official/http',
+          activePackageId: 'moorline/http',
           config: defaultHttpApiAdapterConfig(),
           configByPackageId: {}
         },
@@ -417,7 +417,7 @@ describe('api-adapter package installation', () => {
           configByPackageId: {}
         },
         plugins: {
-          enabledPackageIds: ['official/status'],
+          enabledPackageIds: ['rync/status'],
           configByPackageId: {}
         },
         skills: {
@@ -432,7 +432,7 @@ describe('api-adapter package installation', () => {
 
     expect(() => service.setPackageConfigValues({
       surface: 'api-adapter',
-      packageId: 'official/http',
+      packageId: 'moorline/http',
       values: {
         host: '127.0.0.1',
         port: '45678',
@@ -441,13 +441,13 @@ describe('api-adapter package installation', () => {
     })).toThrow(/not installed/i);
   });
 
-  it('does not copy custom api-adapter config back into official/http when reselected', () => {
+  it('does not copy custom api-adapter config back into moorline/http when reselected', () => {
     const root = createTempRoot('moorline-api-adapter-reselect-http-');
     const runtimeRoot = join(root, 'runtime');
     const sourceDir = join(root, 'source');
     const httpSourceDir = join(root, 'http-source');
     writeApiAdapterPackage(sourceDir);
-    writeApiAdapterPackage(httpSourceDir, 'official/http');
+    writeApiAdapterPackage(httpSourceDir, 'moorline/http');
     const surface = defaultSurfaceNames();
     const config: MoorlineConfig = {
       version: 4,
@@ -507,7 +507,7 @@ describe('api-adapter package installation', () => {
       version: 1,
       installed: [
         installedApiAdapterRecord({ runtimeRoot, packageId: 'acme/http-alt', sourceDir }),
-        installedApiAdapterRecord({ runtimeRoot, packageId: 'official/http', sourceDir: httpSourceDir })
+        installedApiAdapterRecord({ runtimeRoot, packageId: 'moorline/http', sourceDir: httpSourceDir })
       ],
       applied: {
         activated: []
@@ -515,9 +515,9 @@ describe('api-adapter package installation', () => {
     });
 
     const service = new OperatorPackageService(config, configPath, () => '2026-05-20T00:00:00.000Z', root);
-    service.setSelectedPackage('api-adapter', 'official/http');
+    service.setSelectedPackage('api-adapter', 'moorline/http');
 
-    expect(config.surfaces.apiAdapter.activePackageId).toBe('official/http');
+    expect(config.surfaces.apiAdapter.activePackageId).toBe('moorline/http');
     expect(config.surfaces.apiAdapter.config).toEqual({});
     expect(config.surfaces.apiAdapter.config).not.toMatchObject({
       host: '0.0.0.0',
@@ -527,13 +527,13 @@ describe('api-adapter package installation', () => {
     });
   });
 
-  it('preserves saved official/http package config while a custom api-adapter is selected', async () => {
+  it('preserves saved moorline/http package config while a custom api-adapter is selected', async () => {
     const root = createTempRoot('moorline-api-adapter-preserve-http-config-');
     const runtimeRoot = join(root, 'runtime');
     const sourceDir = join(root, 'source');
     const httpSourceDir = join(root, 'http-source');
     writeApiAdapterPackage(sourceDir);
-    writeApiAdapterPackage(httpSourceDir, 'official/http');
+    writeApiAdapterPackage(httpSourceDir, 'moorline/http');
     const surface = defaultSurfaceNames();
     const config: MoorlineConfig = {
       version: 4,
@@ -558,7 +558,7 @@ describe('api-adapter package installation', () => {
             token: 'custom-secret'
           },
           configByPackageId: {
-            'official/http': {
+            'moorline/http': {
               host: '127.0.0.1',
               port: 49000,
               exposure: 'remote',
@@ -600,7 +600,7 @@ describe('api-adapter package installation', () => {
       version: 1,
       installed: [
         installedApiAdapterRecord({ runtimeRoot, packageId: 'acme/http-alt', sourceDir }),
-        installedApiAdapterRecord({ runtimeRoot, packageId: 'official/http', sourceDir: httpSourceDir })
+        installedApiAdapterRecord({ runtimeRoot, packageId: 'moorline/http', sourceDir: httpSourceDir })
       ],
       applied: {
         activated: []
@@ -608,9 +608,9 @@ describe('api-adapter package installation', () => {
     });
 
     const service = new OperatorPackageService(config, configPath, () => '2026-05-20T00:00:00.000Z', root);
-    service.setSelectedPackage('api-adapter', 'official/http');
+    service.setSelectedPackage('api-adapter', 'moorline/http');
 
-    expect(config.surfaces.apiAdapter.configByPackageId['official/http']).toMatchObject({
+    expect(config.surfaces.apiAdapter.configByPackageId['moorline/http']).toMatchObject({
       port: 49000,
       exposure: 'remote'
     });
@@ -667,10 +667,10 @@ describe('api-adapter package installation', () => {
     });
   });
 
-  it('rejects a fresh setup with official/http absent from inventory', async () => {
+  it('rejects a fresh setup with moorline/http absent from inventory', async () => {
     const root = createTempRoot('moorline-http-package-apply-');
     const runtimeRoot = join(root, 'runtime');
-    const transportPath = join(runtimeRoot, 'packages', 'transports', 'official', 'transport');
+    const transportPath = join(runtimeRoot, 'packages', 'transports', 'rync', 'transport');
     writeTransportPackage(transportPath);
     const surface = defaultSurfaceNames();
     const config: MoorlineConfig = {
@@ -688,12 +688,12 @@ describe('api-adapter package installation', () => {
       },
       surfaces: {
         apiAdapter: {
-          activePackageId: 'official/http',
+          activePackageId: 'moorline/http',
           config: defaultHttpApiAdapterConfig(),
           configByPackageId: {}
         },
         transport: {
-          activePackageId: 'official/transport',
+          activePackageId: 'rync/transport',
           config: {
             accessToken: 'token',
             scopeId: 'scope',
@@ -728,8 +728,8 @@ describe('api-adapter package installation', () => {
           family: 'installable',
           kind: 'transport',
           surface: 'transport',
-          packageId: 'official/transport',
-          name: 'official/transport',
+          packageId: 'rync/transport',
+          name: 'rync/transport',
           version: '1.0.0',
           installPath: transportPath,
           source: { kind: 'local_dir', path: transportPath },
@@ -756,17 +756,17 @@ describe('api-adapter package installation', () => {
           family: 'installable',
           kind: 'plugin',
           surface: 'plugin',
-          packageId: 'official/status',
-          name: 'official/status',
+          packageId: 'rync/status',
+          name: 'rync/status',
           version: '1.0.0',
-          installPath: join(runtimeRoot, 'packages', 'plugins', 'official', 'status'),
+          installPath: join(runtimeRoot, 'packages', 'plugins', 'rync', 'status'),
           source: { kind: 'local_dir', path: join(root, 'status') },
           installedAt: '2026-05-20T00:00:00.000Z',
           manifestPath: join(root, 'status', 'manifest.json'),
           manifestHash: 'plugin-hash',
           dependencies: [{
             surface: 'api-adapter',
-            packageId: 'official/http',
+            packageId: 'moorline/http',
             requiredState: 'active'
           }]
         }
@@ -783,7 +783,7 @@ describe('api-adapter package installation', () => {
   it('rejects selected api-adapters with missing required config before apply completes', async () => {
     const root = createTempRoot('moorline-api-adapter-schema-');
     const runtimeRoot = join(root, 'runtime');
-    const transportPath = join(runtimeRoot, 'packages', 'transports', 'official', 'transport');
+    const transportPath = join(runtimeRoot, 'packages', 'transports', 'rync', 'transport');
     const adapterSourcePath = join(root, 'adapter-source');
     writeTransportPackage(transportPath);
     writeRequiredApiAdapterPackage(adapterSourcePath);
@@ -815,7 +815,7 @@ describe('api-adapter package installation', () => {
           configByPackageId: {}
         },
         transport: {
-          activePackageId: 'official/transport',
+          activePackageId: 'rync/transport',
           config: {
             accessToken: 'token',
             scopeId: 'scope',
@@ -849,8 +849,8 @@ describe('api-adapter package installation', () => {
         family: 'installable',
         kind: 'transport',
         surface: 'transport',
-        packageId: 'official/transport',
-        name: 'official/transport',
+        packageId: 'rync/transport',
+        name: 'rync/transport',
         version: '1.0.0',
         installPath: transportPath,
         source: { kind: 'local_dir', path: transportPath },
@@ -905,7 +905,7 @@ describe('api-adapter package installation', () => {
           configByPackageId: {}
         },
         transport: {
-          activePackageId: 'official/transport',
+          activePackageId: 'rync/transport',
           config: {},
           configByPackageId: {}
         },
@@ -932,10 +932,10 @@ describe('api-adapter package installation', () => {
           family: 'installable',
           kind: 'transport',
           surface: 'transport',
-          packageId: 'official/transport',
-          name: 'official/transport',
+          packageId: 'rync/transport',
+          name: 'rync/transport',
           version: '1.0.0',
-          installPath: join(runtimeRoot, 'packages', 'transports', 'official', 'transport'),
+          installPath: join(runtimeRoot, 'packages', 'transports', 'rync', 'transport'),
           source: { kind: 'local_dir', path: join(root, 'transport') },
           installedAt: '2026-05-20T00:00:00.000Z',
           manifestPath: join(root, 'transport', 'manifest.json'),
@@ -966,17 +966,17 @@ describe('api-adapter package installation', () => {
     expect(result.issues).toContain('No API adapter package is activated.');
   });
 
-  it('rejects schema-invalid official/http adapter config during startability checks', () => {
+  it('rejects schema-invalid moorline/http adapter config during startability checks', () => {
     const root = createTempRoot('moorline-http-startability-config-');
     const runtimeRoot = join(root, 'runtime');
-    const httpInstallPath = join(runtimeRoot, 'packages', 'api-adapters', 'official', 'http');
+    const httpInstallPath = join(runtimeRoot, 'packages', 'api-adapters', 'moorline', 'http');
     mkdirSync(httpInstallPath, { recursive: true });
     writeFileSync(
       join(httpInstallPath, 'manifest.json'),
       JSON.stringify(
         {
-          id: 'official/http',
-          name: 'official/http',
+          id: 'moorline/http',
+          name: 'moorline/http',
           version: '1.2.3',
           type: 'api-adapter',
           entrypoint: 'index.mjs',
@@ -1010,7 +1010,7 @@ describe('api-adapter package installation', () => {
       },
       surfaces: {
         apiAdapter: {
-          activePackageId: 'official/http',
+          activePackageId: 'moorline/http',
           config: {
             host: '127.0.0.1',
             port: '45173',
@@ -1019,7 +1019,7 @@ describe('api-adapter package installation', () => {
           configByPackageId: {}
         },
         transport: {
-          activePackageId: 'official/transport',
+          activePackageId: 'rync/transport',
           config: {},
           configByPackageId: {}
         },
@@ -1042,15 +1042,15 @@ describe('api-adapter package installation', () => {
     const result = evaluateRuntimeStartability(config, {
       version: 1,
       installed: [
-        installedApiAdapterRecord({ runtimeRoot, packageId: 'official/http', sourceDir: join(root, 'http') }),
+        installedApiAdapterRecord({ runtimeRoot, packageId: 'moorline/http', sourceDir: join(root, 'http') }),
         {
           family: 'installable',
           kind: 'transport',
           surface: 'transport',
-          packageId: 'official/transport',
-          name: 'official/transport',
+          packageId: 'rync/transport',
+          name: 'rync/transport',
           version: '1.0.0',
-          installPath: join(runtimeRoot, 'packages', 'transports', 'official', 'transport'),
+          installPath: join(runtimeRoot, 'packages', 'transports', 'rync', 'transport'),
           source: { kind: 'local_dir', path: join(root, 'transport') },
           installedAt: '2026-05-20T00:00:00.000Z',
           manifestPath: join(root, 'transport', 'manifest.json'),
@@ -1081,10 +1081,10 @@ describe('api-adapter package installation', () => {
     expect(result.issues.join('\n')).toMatch(/port must be a number|exposure must be one of/i);
   });
 
-  it('does not carry stale official/http config when selecting and configuring a custom api-adapter from fresh defaults', async () => {
+  it('does not carry stale moorline/http config when selecting and configuring a custom api-adapter from fresh defaults', async () => {
     const root = createTempRoot('moorline-api-adapter-switch-');
     const runtimeRoot = join(root, 'runtime');
-    const transportPath = join(runtimeRoot, 'packages', 'transports', 'official', 'transport');
+    const transportPath = join(runtimeRoot, 'packages', 'transports', 'rync', 'transport');
     const adapterSourcePath = join(root, 'adapter-source');
     writeTransportPackage(transportPath);
     writeRequiredApiAdapterPackage(adapterSourcePath);
@@ -1111,12 +1111,12 @@ describe('api-adapter package installation', () => {
       },
       surfaces: {
         apiAdapter: {
-          activePackageId: 'official/http',
+          activePackageId: 'moorline/http',
           config: defaultHttpApiAdapterConfig(),
           configByPackageId: {}
         },
         transport: {
-          activePackageId: 'official/transport',
+          activePackageId: 'rync/transport',
           config: {
             accessToken: 'token',
             scopeId: 'scope',
@@ -1150,8 +1150,8 @@ describe('api-adapter package installation', () => {
         family: 'installable',
         kind: 'transport',
         surface: 'transport',
-        packageId: 'official/transport',
-        name: 'official/transport',
+        packageId: 'rync/transport',
+        name: 'rync/transport',
         version: '1.0.0',
         installPath: transportPath,
         source: { kind: 'local_dir', path: transportPath },
@@ -1190,7 +1190,7 @@ describe('api-adapter package installation', () => {
     expect(config.surfaces.apiAdapter.config).toEqual({
       token: 'secret'
     });
-    expect(config.surfaces.apiAdapter.config).not.toHaveProperty('official/http');
+    expect(config.surfaces.apiAdapter.config).not.toHaveProperty('moorline/http');
     await expect(service.apply()).resolves.toMatchObject({
       errors: []
     });
@@ -1216,7 +1216,7 @@ describe('api-adapter package installation', () => {
       },
       surfaces: {
         apiAdapter: {
-          activePackageId: 'official/http',
+          activePackageId: 'moorline/http',
           config: defaultHttpApiAdapterConfig(),
           configByPackageId: {}
         },
@@ -1245,7 +1245,7 @@ describe('api-adapter package installation', () => {
     const service = new OperatorPackageService(config, configPath, () => '2026-05-20T00:00:00.000Z', root);
 
     expect(service.exportShareBundle().packages).toMatchObject({
-      selectedApiAdapterPackageId: 'official/http',
+      selectedApiAdapterPackageId: 'moorline/http',
       selectedTransportPackageId: null,
       selectedProviderPackageId: null
     });

@@ -1,7 +1,7 @@
 {
   "name": "@moorline/http",
   "version": "0.0.1",
-  "description": "Official Moorline HTTP API adapter",
+  "description": "Moorline HTTP API adapter",
   "type": "module",
   "private": false,
   "main": "./dist/index.js",
@@ -40,7 +40,7 @@
   },
   "moorline": {
     "schemaVersion": 1,
-    "packageId": "official/http",
+    "packageId": "moorline/http",
     "kind": "api-adapter",
     "manifestPath": "manifest.json",
     "distroPath": "moorline.dist.json"

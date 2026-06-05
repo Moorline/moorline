@@ -139,7 +139,7 @@ describe('external work spine storage', () => {
     store.enqueueWorkItem(queuedWorkItem({ workItemId: 'low', priority: 1 }));
     store.enqueueWorkItem(queuedWorkItem({ workItemId: 'future', priority: 100, runAfter: '2026-06-01T01:00:00.000Z' }));
     store.enqueueWorkItem(queuedWorkItem({ workItemId: 'high', priority: 50 }));
-    store.enqueueWorkItem(queuedWorkItem({ workItemId: 'other-package', packageId: 'official/other-worker', priority: 999 }));
+    store.enqueueWorkItem(queuedWorkItem({ workItemId: 'other-package', packageId: 'rync/other-worker', priority: 999 }));
 
     const claimed = store.claimWorkItem({
       packageId: 'acme/external-worker',
@@ -151,7 +151,7 @@ describe('external work spine storage', () => {
     expect(claimed?.workItemId).toBe('high');
 
     const other = store.claimWorkItem({
-      packageId: 'official/other-worker',
+      packageId: 'rync/other-worker',
       queue: 'items',
       leaseOwner: 'worker-b',
       leaseExpiresAt: '2026-06-01T00:05:00.000Z',
@@ -268,9 +268,9 @@ describe('external event plugin dispatch', () => {
   it('dispatches dedicated external hooks even when a transport hook handles first', async () => {
     const seen: string[] = [];
     const transportPlugin: RuntimePlugin = {
-      id: 'official/observer',
+      id: 'rync/observer',
       manifest: {
-        id: 'official/observer',
+        id: 'rync/observer',
         name: 'Observer',
         version: '1.0.0',
         type: 'plugin',

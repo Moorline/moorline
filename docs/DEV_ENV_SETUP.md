@@ -100,7 +100,7 @@ timeout 15s bun run moorline run || test $? -eq 124
 
 Notes:
 - with dummy transport values, `moorline configure apply` may log token/auth failures while deriving transport metadata; use real transport credentials when smoke-testing the full apply path
-- published releases install official bundles from public package artifacts; local archives from `Moorline/packages` remain the stable path for unreleased branch work
+- published releases install personal bundles from public package artifacts; local archives from `Moorline/packages` remain the stable path for unreleased branch work
 
 Clean up temp runtime state when done:
 

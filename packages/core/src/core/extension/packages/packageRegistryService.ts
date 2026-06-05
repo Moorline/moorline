@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import semver from 'semver';
 import type { PackageBundleMember, PackageKind } from '../../../types/package.js';
 import { writeFileAtomicSync } from '../../shared/fs/atomicWrite.js';
-import { NpmRegistryClient, npmNameForOfficialPackageId } from './npmRegistryClient.js';
+import { NpmRegistryClient, npmNameForPackageId } from './npmRegistryClient.js';
 import type { PackageRegistryEntry, PackageSearchInput } from './packageRegistryTypes.js';
 
 interface PackageRegistryCacheFile {
@@ -60,7 +60,6 @@ function matchesQuery(entry: PackageRegistryEntry, query: string | undefined): b
     entry.packageId,
     entry.name,
     entry.description,
-    entry.publisher,
     entry.kind,
     ...(entry.tags ?? [])
   ].some((value) => value.toLowerCase().includes(normalized));
@@ -179,13 +178,13 @@ export class PackageRegistryService {
     if (matches.length === 0) {
       throw new Error(`Unknown package ${packageId}.`);
     }
-    const expectedOfficialNpmName = npmNameForOfficialPackageId(packageId);
-    if (expectedOfficialNpmName) {
-      const official = matches.find((entry) => entry.npm?.packageName === expectedOfficialNpmName);
-      if (official) {
-        return official;
+    const expectedNpmName = npmNameForPackageId(packageId);
+    if (expectedNpmName) {
+      const matchingEntry = matches.find((entry) => entry.npm?.packageName === expectedNpmName);
+      if (matchingEntry) {
+        return matchingEntry;
       }
-      throw new Error(`Official package ${packageId} must be published as ${expectedOfficialNpmName}.`);
+      throw new Error(`Package ${packageId} must be published as ${expectedNpmName}.`);
     }
     const uniqueNames = [...new Set(matches.map((entry) => entry.npm?.packageName ?? entry.packageId))];
     if (uniqueNames.length > 1) {

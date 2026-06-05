@@ -1,14 +1,5 @@
 import type { PackageKind, PackageSourceDescriptor, PackageBundleMember } from '../../../types/package.js';
 
-export type PackageTrustLevel =
-  | 'official'
-  | 'verified'
-  | 'curated'
-  | 'community'
-  | 'local'
-  | 'direct_url'
-  | 'blocked';
-
 export type PackageRegistrySource = 'npm' | 'local_cache';
 
 export interface PackageCompatibility {
@@ -29,9 +20,7 @@ export interface PackageRegistryEntry {
   source: PackageSourceDescriptor;
   requires: string[];
   members?: PackageBundleMember[];
-  trustLevel: PackageTrustLevel;
   registrySource: PackageRegistrySource;
-  publisher: string;
   compatibility?: PackageCompatibility;
   npm?: {
     registryUrl: string;

@@ -15,8 +15,8 @@ function safeRelativePath(value: string): string {
   if (!normalized || normalized === '.' || normalized.endsWith('..')) {
     throw new Error(`Invalid skill resource path: ${value}`);
   }
-  if (normalized === 'official' || normalized.startsWith(`official/`) || normalized.startsWith(`official\\`)) {
-    throw new Error('Generated skills cannot write into skills/official');
+  if (normalized === 'moorline' || normalized.startsWith(`moorline/`) || normalized.startsWith(`moorline\\`)) {
+    throw new Error('Generated skills cannot write into skills/moorline');
   }
   return normalized;
 }

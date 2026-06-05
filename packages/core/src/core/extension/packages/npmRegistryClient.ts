@@ -116,13 +116,8 @@ function metadataKeywords(metadata: NpmPackageVersionMetadata, packageMetadata?:
   return [...new Set([...(metadata.keywords ?? []), ...(packageMetadata?.keywords ?? [])])];
 }
 
-function allowUnverifiedNpmPackages(): boolean {
-  return process.env.MOORLINE_ALLOW_UNVERIFIED_NPM_PACKAGE === '1';
-}
-
-function publisherFromPackageName(npmName: string): string {
-  const scope = npmName.split('/')[0]?.replace(/^@/u, '');
-  return scope === 'moorline' ? 'Moorline' : scope || 'Unknown';
+function allowNpmPackagesWithoutIntegrity(): boolean {
+  return process.env.MOORLINE_ALLOW_NPM_PACKAGE_WITHOUT_INTEGRITY === '1';
 }
 
 function displayNameFromPackageId(packageId: string): string {
@@ -134,8 +129,8 @@ function displayNameFromPackageId(packageId: string): string {
     .join(' ');
 }
 
-function officialNpmNameMatchesPackageId(npmName: string, packageId: string): boolean {
-  const expectedName = npmNameForOfficialPackageId(packageId);
+function moorlineNpmNameMatchesPackageId(npmName: string, packageId: string): boolean {
+  const expectedName = npmNameForPackageId(packageId);
   return expectedName !== null && npmName === expectedName;
 }
 
@@ -260,10 +255,10 @@ export class NpmRegistryClient {
     if (!moorline) {
       return null;
     }
-    if (npmName.startsWith('@moorline/') && !officialNpmNameMatchesPackageId(npmName, moorline.packageId)) {
+    if (npmName.startsWith('@moorline/') && !moorlineNpmNameMatchesPackageId(npmName, moorline.packageId)) {
       return null;
     }
-    if (moorline.packageId.startsWith('official/') && !officialNpmNameMatchesPackageId(npmName, moorline.packageId)) {
+    if (moorline.packageId.startsWith('moorline/') && !moorlineNpmNameMatchesPackageId(npmName, moorline.packageId)) {
       return null;
     }
     if (findPackageRegistryBlock({ packageId: moorline.packageId, npmName })) {
@@ -285,12 +280,9 @@ export class NpmRegistryClient {
     }
     const tarball = input.versionMetadata.dist?.tarball;
     const integrity = input.versionMetadata.dist?.integrity;
-    if (!tarball || (!integrity && !allowUnverifiedNpmPackages())) {
+    if (!tarball || (!integrity && !allowNpmPackagesWithoutIntegrity())) {
       return null;
     }
-    const trustLevel = officialNpmNameMatchesPackageId(npmName, moorline.packageId)
-      ? 'official'
-      : 'community';
     const description = input.versionMetadata.description ?? input.packageMetadata.description ?? moorline.packageId;
     return {
       schemaVersion: 1,
@@ -310,9 +302,7 @@ export class NpmRegistryClient {
       }),
       requires: [],
       ...(moorline.kind === 'bundle' ? { members: [] as PackageBundleMember[] } : {}),
-      trustLevel,
       registrySource: 'npm',
-      publisher: publisherFromPackageName(npmName),
       npm: {
         registryUrl: this.registryUrl,
         packageName: npmName,
@@ -347,9 +337,9 @@ export class NpmRegistryClient {
   }
 }
 
-export function npmNameForOfficialPackageId(packageId: string): string | null {
+export function npmNameForPackageId(packageId: string): string | null {
   const [surface, name] = packageId.split('/');
-  if (surface !== 'official' || !name) {
+  if (surface !== 'moorline' || !name) {
     return null;
   }
   return `@moorline/${name}`;

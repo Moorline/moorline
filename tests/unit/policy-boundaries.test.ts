@@ -10,7 +10,7 @@ describe('default actor policy boundaries', () => {
   it('does not grant removed local-management capabilities or third-party plugin actors', async () => {
     const policyPath = join(root, 'packages', 'core', 'resources', 'policies', 'default-secure.json');
     const rawPolicy = readFileSync(policyPath, 'utf8');
-    expect(rawPolicy).not.toContain('plugin:official/');
+    expect(rawPolicy).not.toContain('plugin:rync/');
 
     const profile = loadPolicyProfile(policyPath);
     const hook = createActorRulePolicyHook({ rules: profile.actorRules });
@@ -26,7 +26,7 @@ describe('default actor policy boundaries', () => {
 
     await expect(
       hook({
-        actor: 'plugin:official/session-orchestration',
+        actor: 'plugin:rync/session-orchestration',
         action: 'session.create'
       })
     ).resolves.toMatchObject({
@@ -50,7 +50,7 @@ describe('default actor policy boundaries', () => {
       rules: [
         ...profile.actorRules,
         {
-          actorPrefix: 'plugin:official/session-orchestration',
+          actorPrefix: 'plugin:rync/session-orchestration',
           allowCapabilities: ['session.create'],
           denyCapabilities: [],
           targetPrefixes: []
@@ -60,7 +60,7 @@ describe('default actor policy boundaries', () => {
 
     await expect(
       hook({
-        actor: 'plugin:official/session-orchestration',
+        actor: 'plugin:rync/session-orchestration',
         action: 'session.create'
       })
     ).resolves.toMatchObject({
@@ -69,7 +69,7 @@ describe('default actor policy boundaries', () => {
 
     await expect(
       hook({
-        actor: 'plugin:official/session-orchestration',
+        actor: 'plugin:rync/session-orchestration',
         action: 'session.delete'
       })
     ).resolves.toMatchObject({

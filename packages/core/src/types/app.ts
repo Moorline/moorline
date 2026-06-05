@@ -33,9 +33,7 @@ type ManagedObjectKind =
 
 export type ManagedObjectTrustLevel =
   | 'official'
-  | 'verified'
-  | 'curated'
-  | 'community'
+  | 'npm'
   | 'local'
   | 'direct_url'
   | 'operator';
@@ -123,7 +121,6 @@ export interface ManagedPluginRecord extends ManagedObjectBase {
   capabilities: string[];
   hooks: string[];
   commands: string[];
-  packageTrustLevel: ManagedObjectTrustLevel;
 }
 
 export interface ManagedSkillRecord extends ManagedObjectBase {
@@ -265,7 +262,7 @@ export interface ManagementLifecycleContract {
 
 export interface ManagementUpdateContract {
   appUpdates: string;
-  officialPackageUpdates: string;
+  packageUpdates: string;
   localPackageHandling: string;
   operatorTrigger: string;
 }

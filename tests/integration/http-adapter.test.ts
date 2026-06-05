@@ -119,7 +119,7 @@ function writeConfig(root: string, apiConfig: Record<string, unknown> = defaultH
     },
     surfaces: {
       apiAdapter: {
-        activePackageId: 'official/http',
+        activePackageId: 'moorline/http',
         config: apiConfig,
         configByPackageId: {}
       },
@@ -245,7 +245,7 @@ describe('HTTP API adapter behavior', () => {
         protocol: 'http',
         token: 'test-token',
         metadata: {
-          adapterPackageId: 'official/http'
+          adapterPackageId: 'moorline/http'
         }
       });
       const health = await fetch(`${started.endpoints[0]?.url}/healthz`);

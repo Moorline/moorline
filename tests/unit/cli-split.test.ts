@@ -532,9 +532,9 @@ describe('split-era CLI parser', () => {
       query: 'http',
       packageKind: 'api-adapter'
     });
-    expect(parseCliArgs(['package', 'install', 'official/http', '--kind', 'api-adapter'])).toMatchObject({
+    expect(parseCliArgs(['package', 'install', 'moorline/http', '--kind', 'api-adapter'])).toMatchObject({
       kind: 'package-install',
-      packageId: 'official/http',
+      packageId: 'moorline/http',
       packageKind: 'api-adapter'
     });
   });
@@ -610,7 +610,7 @@ describe('split-era CLI parser', () => {
     expect(existsSync(stopMarker)).toBe(true);
   });
 
-  it('does not fall back to official/http when the api-adapter selection is cleared', async () => {
+  it('does not fall back to moorline/http when the api-adapter selection is cleared', async () => {
     const root = createTempRoot('moorline-cli-no-api-adapter-');
     const config = customAdapterConfig(root);
     config.surfaces.apiAdapter.activePackageId = null;

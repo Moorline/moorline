@@ -1,10 +1,7 @@
-import type { ManagedObjectTrust, ManagedObjectTrustLevel } from '../../../../types/app.js';
+import type { ManagedObjectTrust } from '../../../../types/app.js';
 import type { PackageInstallRecord } from '../../../../types/package.js';
 
 function sourceLabel(entry: PackageInstallRecord): string {
-  if (entry.publisher) {
-    return entry.publisher;
-  }
   if (entry.source.kind === 'local_dir' || entry.source.kind === 'local_archive') {
     return entry.source.path;
   }
@@ -21,8 +18,20 @@ export function managedTrustForPackage(entry: PackageInstallRecord | null, fallb
       source: fallbackSource
     };
   }
+  if (entry.source.kind === 'local_dir' || entry.source.kind === 'local_archive') {
+    return {
+      level: 'local',
+      source: sourceLabel(entry)
+    };
+  }
+  if (entry.source.provenance?.type === 'npm') {
+    return {
+      level: 'npm',
+      source: sourceLabel(entry)
+    };
+  }
   return {
-    level: entry.trustLevel as ManagedObjectTrustLevel,
+    level: 'direct_url',
     source: sourceLabel(entry)
   };
 }

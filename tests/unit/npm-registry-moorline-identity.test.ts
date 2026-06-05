@@ -11,7 +11,6 @@ afterEach(() => {
 function npmEntry(input: {
   packageId: string;
   npmName: string;
-  trustLevel: PackageRegistryEntry['trustLevel'];
 }): PackageRegistryEntry {
   return {
     schemaVersion: 1,
@@ -28,9 +27,7 @@ function npmEntry(input: {
       integrity: 'sha512-test'
     },
     requires: [],
-    trustLevel: input.trustLevel,
     registrySource: 'npm',
-    publisher: input.npmName.split('/')[0]?.replace(/^@/u, '') ?? 'unknown',
     npm: {
       registryUrl: 'https://registry.example.test',
       packageName: input.npmName,
@@ -54,8 +51,8 @@ class FakeNpmClient {
   }
 }
 
-describe('npm official trust', () => {
-  it('rejects @moorline packages whose short npm name does not match the official package id', async () => {
+describe('npm Moorline-owned package identity', () => {
+  it('rejects @moorline packages whose short npm name does not match the package id', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const rawUrl = String(url);
       if (rawUrl.includes('/-/v1/search')) {
@@ -76,12 +73,12 @@ describe('npm official trust', () => {
         ok: true,
         json: async () => ({
           name: '@moorline/not-http-alt-for-test',
-          description: 'Mismatched official package.',
+          description: 'Mismatched package.',
           keywords: [
             'moorline-package',
             'moorline-kind-api-adapter',
-            'moorline-surface-official',
-            'moorline-id-official-http-alt-for-test'
+            'moorline-surface-moorline',
+            'moorline-id-moorline-http-alt-for-test'
           ],
           'dist-tags': {
             latest: '1.0.0'
@@ -93,8 +90,8 @@ describe('npm official trust', () => {
               keywords: [
                 'moorline-package',
                 'moorline-kind-api-adapter',
-                'moorline-surface-official',
-                'moorline-id-official-http-alt-for-test'
+                'moorline-surface-moorline',
+                'moorline-id-moorline-http-alt-for-test'
               ],
               dist: {
                 tarball: 'https://registry.example.test/@moorline/not-http-alt-for-test/-/pkg.tgz',
@@ -102,7 +99,7 @@ describe('npm official trust', () => {
               },
               moorline: {
                 schemaVersion: 1,
-                packageId: 'official/http-alt-for-test',
+                packageId: 'moorline/http-alt-for-test',
                 kind: 'api-adapter',
                 manifestPath: 'manifest.json',
                 distroPath: 'moorline.dist.json'
@@ -123,37 +120,35 @@ describe('npm official trust', () => {
     expect(results).toEqual([]);
   });
 
-  it('does not treat mismatched @moorline names as valid official package candidates', async () => {
+  it('does not treat mismatched @moorline names as valid package candidates', async () => {
     const service = new PackageRegistryService(new FakeNpmClient([
       npmEntry({
-        packageId: 'official/http-alt-for-test',
-        npmName: '@moorline/not-http-alt-for-test',
-        trustLevel: 'community'
+        packageId: 'moorline/http-alt-for-test',
+        npmName: '@moorline/not-http-alt-for-test'
       })
     ]) as never);
 
     await expect(service.getPackage({
       kind: 'api-adapter',
-      packageId: 'official/http-alt-for-test'
+      packageId: 'moorline/http-alt-for-test'
     })).rejects.toThrow(/must be published as @moorline\/http-alt-for-test/);
   });
 
-  it('does not let community npm packages claim official package ids', async () => {
+  it('does not let other npm scopes claim Moorline package ids', async () => {
     const service = new PackageRegistryService(new FakeNpmClient([
       npmEntry({
-        packageId: 'official/http-alt-for-test',
-        npmName: '@acme/http-alt',
-        trustLevel: 'community'
+        packageId: 'moorline/http-alt-for-test',
+        npmName: '@acme/http-alt'
       })
     ]) as never);
 
     await expect(service.getPackage({
       kind: 'api-adapter',
-      packageId: 'official/http-alt-for-test'
+      packageId: 'moorline/http-alt-for-test'
     })).rejects.toThrow(/must be published as @moorline\/http-alt-for-test/);
   });
 
-  it('reserves @moorline npm scope for matching official package ids', async () => {
+  it('reserves @moorline npm scope for matching package ids', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const rawUrl = String(url);
       if (rawUrl.includes('/-/v1/search')) {
@@ -174,7 +169,7 @@ describe('npm official trust', () => {
         ok: true,
         json: async () => ({
           name: '@moorline/acme-widget',
-          description: 'Mismatched community package.',
+          description: 'Mismatched package.',
           keywords: [
             'moorline-package',
             'moorline-kind-plugin',

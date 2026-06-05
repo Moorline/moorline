@@ -5,7 +5,6 @@ import type { MoorlineShareBundle } from '../../types/config.js';
 import type {
   JsonSchemaLike,
   PackageApplyPlan,
-  PackageInstallTrustLevel,
   PackageMetadataEntry,
   PackageKind,
   PackageSourceDescriptor,
@@ -385,25 +384,6 @@ export class OperatorPackageService {
     };
   }
 
-  private trustForEntry(entry: { trustLevel?: unknown; publisher?: unknown } | null | undefined): {
-    trustLevel?: PackageInstallTrustLevel;
-    publisher?: string;
-  } {
-    const trustLevel =
-      entry?.trustLevel === 'official' ||
-      entry?.trustLevel === 'verified' ||
-      entry?.trustLevel === 'curated' ||
-      entry?.trustLevel === 'community' ||
-      entry?.trustLevel === 'local' ||
-      entry?.trustLevel === 'direct_url'
-        ? entry.trustLevel
-        : undefined;
-    return {
-      ...(trustLevel ? { trustLevel } : {}),
-      ...(typeof entry?.publisher === 'string' && entry.publisher.trim() ? { publisher: entry.publisher } : {})
-    };
-  }
-
   private packageMetadataForEntry(entry: PackageRegistryEntry | PackageMetadataEntry): PackageMetadataEntry {
     return {
       kind: entry.kind,
@@ -414,7 +394,6 @@ export class OperatorPackageService {
       ...(entry.version ? { version: entry.version } : {}),
       tags: [...entry.tags],
       source: entry.source,
-      ...this.trustForEntry(entry),
       requires: [...entry.requires],
       ...(entry.members ? { members: [...entry.members] } : {}),
       ...('suggestedAfterInstall' in entry && entry.suggestedAfterInstall ? { suggestedAfterInstall: [...entry.suggestedAfterInstall] } : {})
@@ -444,7 +423,6 @@ export class OperatorPackageService {
           kind: 'local_dir',
           path: packageDir
         },
-        trustLevel: 'local',
         requires: ('dependencies' in loaded.manifest ? loaded.manifest.dependencies ?? [] : []).map((dependency) => dependency.packageId)
       });
     }
@@ -474,7 +452,6 @@ export class OperatorPackageService {
     const record = await this.installer.install({
       surface: kind,
       source,
-      ...this.trustForEntry(registryEntry),
       ...(registryEntry ? { expectedPackage: this.expectedPackageForEntry(registryEntry) } : {})
     });
     this.checkpoint({
@@ -564,7 +541,6 @@ export class OperatorPackageService {
     const record = await this.installer.install({
       surface: 'bundle',
       source: input.source,
-      ...this.trustForEntry(input.registryEntry),
       ...(input.registryEntry ? { expectedPackage: this.expectedPackageForEntry(input.registryEntry) } : {})
     });
     const bundle: PackageMetadataEntry = input.registryEntry
@@ -604,7 +580,6 @@ export class OperatorPackageService {
           version: member.version === '*' || member.version === 'latest' || member.version === 'stable' ? undefined : member.version,
           tags: ['member-source'],
           source: member.source!,
-          trustLevel: member.source.kind === 'remote_archive' ? 'direct_url' : 'local',
           requires: []
         }));
       const npmMembers = externalMembers.filter((member) => !member.source);
@@ -638,7 +613,6 @@ export class OperatorPackageService {
             surface: resolved.packageEntry.kind,
             source: resolved.packageEntry.source,
             installedByPackageId: record.packageId,
-            ...this.trustForEntry(resolved.packageEntry),
             expectedPackage: this.expectedPackageForEntry(resolved.packageEntry)
           });
         } else {
@@ -664,7 +638,6 @@ export class OperatorPackageService {
               surface: resolved.packageEntry.kind,
               source: resolved.packageEntry.source,
               installedByPackageId: record.packageId,
-              ...this.trustForEntry(resolved.packageEntry),
               expectedPackage: this.expectedPackageForEntry(resolved.packageEntry)
             });
           } else if (existing.installedByPackageIds && existing.installedByPackageIds.length > 0) {

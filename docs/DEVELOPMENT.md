@@ -19,16 +19,16 @@ bun run build
 - `packages/contracts`: shared package/runtime contracts.
 - `packages/core`: Moorline core runtime, config, state, policy, package services, and control-plane implementation.
 - `packages/control-api`: typed route table, validators, HTTP client, and local connection-record helpers.
-- `packages/http`: official HTTP API adapter.
+- `packages/http`: Moorline HTTP API adapter.
 - `packages/cli`: the unscoped `moorline` npm package and command.
 
-Official provider, transport, plugin, skill, and bundle packages live in `Moorline/packages`. Package authoring, validation, and bundling tools live in `Moorline/kit`.
+Personal provider, transport, plugin, skill, and bundle packages live in `Moorline/packages`. Package authoring, validation, and bundling tools live in `Moorline/kit`.
 
 The workspace root is private and exists for workspaces, scripts, and dev tooling only.
 
 ## Package Rules
 
-Official packages use short npm names like `@moorline/<package-name>`, while Moorline package identity lives in metadata as `official/<package-name>`.
+Packages use short npm names like `@moorline/<package-name>`, while Moorline package identity lives in metadata as `moorline/<package-name>`.
 
 Runtime package kinds are:
 - `api-adapter`

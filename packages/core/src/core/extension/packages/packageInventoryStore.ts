@@ -7,7 +7,6 @@ import {
   validatePackageId,
   type PackageAppliedState,
   type PackageInstallRecord,
-  type PackageInstallTrustLevel,
   type PackageKind,
   type PackageRef,
   type PackageSourceProvenance,
@@ -123,26 +122,6 @@ function normalizeSourceProvenance(value: unknown): PackageSourceProvenance | nu
   return null;
 }
 
-function normalizeTrustLevel(value: unknown, source: PackageInstallRecord['source']): PackageInstallTrustLevel {
-  if (
-    value === 'official' ||
-    value === 'verified' ||
-    value === 'curated' ||
-    value === 'community' ||
-    value === 'local' ||
-    value === 'direct_url'
-  ) {
-    return value;
-  }
-  if (source.kind === 'local_dir' || source.kind === 'local_archive') {
-    return 'local';
-  }
-  if (source.kind === 'remote_archive' && source.provenance?.type === 'npm') {
-    return 'community';
-  }
-  return 'direct_url';
-}
-
 function normalizeInstalledRecord(value: unknown): PackageInstallRecord | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
@@ -216,8 +195,6 @@ function normalizeInstalledRecord(value: unknown): PackageInstallRecord | null {
     installedAt: entry.installedAt,
     installPath: entry.installPath,
     source,
-    trustLevel: normalizeTrustLevel(entry.trustLevel, source),
-    ...(typeof entry.publisher === 'string' && entry.publisher.trim() ? { publisher: entry.publisher } : {}),
     manifestPath: entry.manifestPath,
     manifestHash: entry.manifestHash,
     dependencies,

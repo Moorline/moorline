@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import type { PackageSourceDescriptor } from '../../../types/package.js';
 import { extractArchive } from './archiveExtraction.js';
 import { findBundleRoot } from './packageBundleRoot.js';
-import { tryResolveBundledOfficialPackage } from './officialArchiveResolver.js';
+import { tryResolveBundledPackage } from './bundledArchiveResolver.js';
 import { downloadRemoteArchive, RemoteArchiveDownloadError } from './remoteArchiveDownloader.js';
 
 interface ResolvedPackageSource {
@@ -102,7 +102,7 @@ export async function resolvePackageSource(source: PackageSourceDescriptor): Pro
       if (!isBundledFallbackEligible(error)) {
         throw error;
       }
-      const bundledPath = tryResolveBundledOfficialPackage(source);
+      const bundledPath = tryResolveBundledPackage(source);
       if (!bundledPath) {
         throw error;
       }

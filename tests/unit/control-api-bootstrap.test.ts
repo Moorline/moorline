@@ -35,7 +35,7 @@ describe('Control API bootstrap records', () => {
     writeControlApiBootstrapRecord({
       version: 1,
       protocol: 'http',
-      adapterPackageId: 'official/http',
+      adapterPackageId: 'moorline/http',
       pid: 123,
       url: 'http://127.0.0.1:45173',
       token: 'secret',
@@ -56,7 +56,7 @@ describe('Control API bootstrap records', () => {
     writeControlApiBootstrapRecord({
       version: 1,
       protocol: 'http',
-      adapterPackageId: 'official/http',
+      adapterPackageId: 'moorline/http',
       pid: 123,
       url: 'http://127.0.0.1:45173',
       token: 'stale-token',
@@ -98,7 +98,7 @@ describe('Control API bootstrap records', () => {
     writeControlApiBootstrapRecord({
       version: 1,
       protocol: 'http',
-      adapterPackageId: 'official/http',
+      adapterPackageId: 'moorline/http',
       pid: 123,
       url: 'http://127.0.0.1:45173/',
       token: 'fresh-token',

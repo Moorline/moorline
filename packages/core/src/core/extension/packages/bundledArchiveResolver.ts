@@ -38,12 +38,12 @@ function findInstallableArchive(assetRoot: string, archiveName: string): string 
   );
 }
 
-function isOfficialReleaseArchiveUrl(url: string): boolean {
+function isMoorlineReleaseArchiveUrl(url: string): boolean {
   return /^https:\/\/github\.com\/Moorline\/(?:moorline|packages)\/releases\/download\//u.test(url);
 }
 
-export function tryResolveBundledOfficialPackage(source: PackageSourceDescriptor): string | null {
-  if (source.kind !== 'remote_archive' || !isOfficialReleaseArchiveUrl(source.url)) {
+export function tryResolveBundledPackage(source: PackageSourceDescriptor): string | null {
+  if (source.kind !== 'remote_archive' || !isMoorlineReleaseArchiveUrl(source.url)) {
     return null;
   }
   if (detectMoorlineRuntimeMode(import.meta.url) === 'packaged_release') {

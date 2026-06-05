@@ -1,11 +1,11 @@
 {
-  "id": "official/http",
-  "name": "official/http",
+  "id": "moorline/http",
+  "name": "moorline/http",
   "version": "0.0.1",
   "type": "api-adapter",
-  "description": "Official HTTP Control API adapter.",
+  "description": "Moorline HTTP Control API adapter.",
   "entrypoint": "index.mjs",
-  "displayCategory": "Official API Adapters",
+  "displayCategory": "Moorline API Adapters",
   "activation": {
     "uniqueKey": "api-adapter"
   },
