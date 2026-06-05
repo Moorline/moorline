@@ -321,7 +321,7 @@ export class OperatorPackageService {
     return await this.packageRegistry.getPackage(input);
   }
 
-  exportShareBundle(productVersion = process.env.npm_package_version ?? '0.0.1'): MoorlineShareBundle {
+  exportShareBundle(productVersion = process.env.npm_package_version ?? '0.0.2'): MoorlineShareBundle {
     const inventory = this.inventory.load();
     const notes: string[] = [
       'Secrets are excluded from this bundle.',

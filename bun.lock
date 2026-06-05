@@ -23,33 +23,33 @@
     },
     "packages/cli": {
       "name": "moorline",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "bin": {
         "moorline": "dist/main.js",
       },
       "dependencies": {
-        "@moorline/contracts": "0.0.1",
-        "@moorline/control-api": "0.0.1",
-        "@moorline/core": "0.0.1",
-        "@moorline/http": "0.0.1",
+        "@moorline/contracts": "0.0.2",
+        "@moorline/control-api": "0.0.2",
+        "@moorline/core": "0.0.2",
+        "@moorline/http": "0.0.2",
       },
     },
     "packages/contracts": {
       "name": "@moorline/contracts",
-      "version": "0.0.1",
+      "version": "0.0.2",
     },
     "packages/control-api": {
       "name": "@moorline/control-api",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "dependencies": {
-        "@moorline/contracts": "0.0.1",
+        "@moorline/contracts": "0.0.2",
       },
     },
     "packages/core": {
       "name": "@moorline/core",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "dependencies": {
-        "@moorline/contracts": "0.0.1",
+        "@moorline/contracts": "0.0.2",
         "semver": "^7.7.4",
         "tar": "^7.4.3",
         "yauzl": "^3.2.0",
@@ -57,11 +57,11 @@
     },
     "packages/http": {
       "name": "@moorline/http",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "dependencies": {
-        "@moorline/contracts": "0.0.1",
-        "@moorline/control-api": "0.0.1",
-        "@moorline/core": "0.0.1",
+        "@moorline/contracts": "0.0.2",
+        "@moorline/control-api": "0.0.2",
+        "@moorline/core": "0.0.2",
       },
     },
   },
@@ -356,7 +356,7 @@
 
     "balanced-match": ["balanced-match@1.0.2", "", {}, "sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw=="],
 
-    "brace-expansion": ["brace-expansion@1.1.15", "", { "dependencies": { "balanced-match": "^1.0.0", "concat-map": "0.0.1" } }, "sha512-EwOCDEex4quD37XhqM3omwtMoJjr//isUZz1JopUNWms+4Z2ViyM/k1YIRePpoVNnQhENnxtFjLaxNHrT7xIUg=="],
+    "brace-expansion": ["brace-expansion@1.1.15", "", { "dependencies": { "balanced-match": "^1.0.0", "concat-map": "0.0.2" } }, "sha512-EwOCDEex4quD37XhqM3omwtMoJjr//isUZz1JopUNWms+4Z2ViyM/k1YIRePpoVNnQhENnxtFjLaxNHrT7xIUg=="],
 
     "braces": ["braces@3.0.3", "", { "dependencies": { "fill-range": "^7.1.1" } }, "sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA=="],
 
@@ -378,7 +378,7 @@
 
     "color-name": ["color-name@1.1.4", "", {}, "sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA=="],
 
-    "concat-map": ["concat-map@0.0.1", "", {}, "sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg=="],
+    "concat-map": ["concat-map@0.0.2", "", {}, "sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg=="],
 
     "cross-spawn": ["cross-spawn@7.0.6", "", { "dependencies": { "path-key": "^3.1.0", "shebang-command": "^2.0.0", "which": "^2.0.1" } }, "sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA=="],
 

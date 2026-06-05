@@ -11,7 +11,7 @@ function synthesizeSourceReleaseManifest(assetRoot: string): MoorlineReleaseMani
   const packageJson =
     existsSync(packageJsonPath) ? (JSON.parse(readFileSync(packageJsonPath, 'utf8')) as { version?: unknown }) : {};
   return {
-    version: typeof packageJson.version === 'string' ? packageJson.version : '0.0.1',
+    version: typeof packageJson.version === 'string' ? packageJson.version : '0.0.2',
     gitCommit: process.env.MOORLINE_GIT_COMMIT ?? null,
     builtAt: process.env.MOORLINE_BUILT_AT ?? 'source-checkout',
     platform: process.platform,

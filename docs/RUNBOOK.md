@@ -326,7 +326,7 @@ Package npm-compatible artifacts live in `Moorline/packages`.
 
 Initial public npm artifacts include:
 
-- `@rync/moorline-basic-essentials@0.0.1`
+- `@rync/moorline-basic-essentials@0.0.2`
 - provider-specific default bundles from the packages repo
 - transport-specific default bundles from the packages repo
 

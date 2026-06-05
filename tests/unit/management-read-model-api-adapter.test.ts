@@ -152,7 +152,7 @@ describe('management read model api-adapter config', () => {
         {
           id: 'moorline/http',
           name: 'moorline/http',
-          version: '0.0.1',
+          version: '0.0.2',
           type: 'api-adapter',
           entrypoint: 'index.mjs',
           configSchema: {
@@ -177,7 +177,7 @@ describe('management read model api-adapter config', () => {
         surface: 'api-adapter',
         packageId: 'moorline/http',
         name: 'moorline/http',
-        version: '0.0.1',
+        version: '0.0.2',
         installedAt: '2026-05-20T00:00:00.000Z',
         installPath: httpInstallPath,
         source: { kind: 'local_dir', path: httpInstallPath },

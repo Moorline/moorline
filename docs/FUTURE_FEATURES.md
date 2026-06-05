@@ -1,10 +1,10 @@
 # Future Features
 
-This file tracks deferred product work that should stay visible after `0.0.1`.
+This file tracks deferred product work that should stay visible after `0.0.2`.
 
 ## Setup Sharing
 
-Status: deferred after `0.0.1`
+Status: deferred after `0.0.2`
 
 Desired behavior:
 - publish a shareable setup bundle to an operator-chosen location
