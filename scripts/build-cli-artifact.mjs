@@ -124,7 +124,7 @@ async function main() {
   writeFileSync(
     join(bundleRoot, 'INSTALL.txt'),
     [
-      'Moorline 0.0.1 packaged CLI',
+      'Moorline 0.0.2 packaged CLI',
       '',
       platformLabel.startsWith('windows') ? 'Run moorline.cmd' : 'Run ./moorline',
       'Resources: ./resources',

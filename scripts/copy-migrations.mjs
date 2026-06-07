@@ -40,7 +40,7 @@ async function main() {
   });
 
   writeJson(releaseManifestPath, {
-    version: typeof packageJson.version === 'string' ? packageJson.version : '0.0.1',
+    version: typeof packageJson.version === 'string' ? packageJson.version : '0.0.2',
     gitCommit: process.env.MOORLINE_GIT_COMMIT ?? null,
     builtAt: process.env.MOORLINE_BUILT_AT ?? new Date().toISOString(),
     platform: process.env.MOORLINE_TARGET_PLATFORM ?? process.platform,

@@ -46,7 +46,7 @@ These are the safest default words for product copy.
 - `skill`
   - A package that adds reusable skill content.
 - `bundle`
-  - A package that installs and activates a curated set of other packages.
+  - A package that installs and activates a declared set of other packages.
 - `recommended`
   - Preferred for optional package or bundle suggestions.
 - `installed`
@@ -78,10 +78,10 @@ These are acceptable in runbooks, setup guidance, and API/CLI-oriented admin doc
   - The CLI or another API client used to manage Moorline.
 - `package search`
   - The npm-backed package discovery surface shown by Moorline.
-- `official package`
+- `package`
   - A package shipped and maintained by Moorline.
 - `custom package`
-  - A non-official package installed by the operator.
+  - A non-package installed by the operator.
 - `release asset`
   - A downloadable archive published for a package release.
 - `remote archive`
@@ -232,8 +232,8 @@ Use these precisely:
 - UI-specific control-plane framing
   - Avoid making one operator interface sound like the product boundary.
 - `bundled defaults`
-  - Avoid. Prefer `recommended bundles` or `recommended official packages`.
-- `seeded official packages`
+  - Avoid. Prefer `recommended bundles` or `recommended packages`.
+- `seeded packages`
   - Avoid. Packages are installed explicitly through setup or package management.
 - `catalog`
   - Avoid for Moorline package discovery. Prefer `package search`, `registry metadata`, or `package cache`.

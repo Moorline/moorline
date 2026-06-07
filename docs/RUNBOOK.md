@@ -138,9 +138,9 @@ Use these checks to verify:
 - recorded package load failures
 
 Source-checkout note:
-- missing official package archives no longer blocks basic commands.
+- missing package archives no longer blocks basic commands.
 - package installs by id resolve through npm metadata.
-- build official package archives in `Moorline/packages` before archive-based release validation:
+- build package archives in `Moorline/packages` before archive-based release validation:
 ```bash
 cd ../packages
 bun run build
@@ -240,7 +240,7 @@ moorline history list
 moorline history snapshot "before policy edit"
 moorline history diff
 moorline history restore <commit-ish>
-moorline history discard --path runtime/packages/plugins/official/persona/SOUL.md
+moorline history discard --path runtime/packages/plugins/rync/persona/SOUL.md
 ```
 
 Tracked by default:
@@ -320,21 +320,21 @@ That command must pass on the Node runtime being bundled or used for release val
 
 If startup reports missing `node:sqlite` support, fix the runtime before opening an issue against runtime behavior.
 
-## Official npm Package Artifacts
+## Personal npm Package Artifacts
 
-Official package npm-compatible artifacts live in `Moorline/packages`.
+Package npm-compatible artifacts live in `Moorline/packages`.
 
 Initial public npm artifacts include:
 
-- `@moorline/basic-essentials@0.0.1`
+- `@rync/moorline-basic-essentials@0.0.2`
 - provider-specific default bundles from the packages repo
 - transport-specific default bundles from the packages repo
 
-Build official npm-compatible package directories and tarballs:
+Build personal npm-compatible package directories and tarballs:
 
 ```bash
 cd ../packages
-bun run build:official-npm-packages
+bun run build:personal-npm-packages
 ```
 
 Outputs:

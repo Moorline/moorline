@@ -4,7 +4,6 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
   packageFamilyForKind,
   type PackageInstallRecord,
-  type PackageInstallTrustLevel,
   type PackageKind,
   type PackageSourceDescriptor
 } from '../../../types/package.js';
@@ -41,16 +40,6 @@ function packageInstallPath(runtimeRoot: string, surface: PackageKind, packageId
   const target = resolve(root, ...packageId.split('/'));
   assertWithinRoot(root, target, `Package ${packageId}`);
   return target;
-}
-
-function trustLevelForSource(source: PackageSourceDescriptor): PackageInstallTrustLevel {
-  if (source.kind === 'local_dir' || source.kind === 'local_archive') {
-    return 'local';
-  }
-  if (source.kind === 'remote_archive' && source.provenance?.type === 'npm') {
-    return 'community';
-  }
-  return 'direct_url';
 }
 
 function assertReplacementSatisfiesExistingBundleOwners(input: {
@@ -111,8 +100,6 @@ export class PackageInstaller {
       packageId: string;
       version?: string;
     };
-    trustLevel?: PackageInstallTrustLevel;
-    publisher?: string;
   }): Promise<PackageInstallRecord> {
     const resolved = await resolvePackageSource(input.source);
     const stagingId = randomUUID();
@@ -159,8 +146,6 @@ export class PackageInstaller {
         installedAt: this.now(),
         installPath: targetPath,
         source: input.source,
-        trustLevel: input.trustLevel ?? trustLevelForSource(input.source),
-        ...(input.publisher ? { publisher: input.publisher } : {}),
         manifestPath: join(targetPath, 'manifest.json'),
         manifestHash: loaded.manifestHash,
         dependencies: loaded.manifest.dependencies ?? [],

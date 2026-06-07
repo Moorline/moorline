@@ -12,7 +12,7 @@ import {
 import { createTempRoot } from '../helpers/temp.js';
 
 describe('ControlPlane API adapter state projection', () => {
-  it('does not validate custom API adapter config as official/http while building state', async () => {
+  it('does not validate custom API adapter config as moorline/http while building state', async () => {
     const root = createTempRoot('moorline-control-plane-custom-api-adapter-');
     const runtimeRoot = join(root, 'runtime');
     mkdirSync(runtimeRoot, { recursive: true });

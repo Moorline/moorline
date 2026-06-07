@@ -67,15 +67,15 @@ describe('host repository split contract', () => {
     expect(source).not.toMatch(/from ['"][^'"]*packages\/(cli|http|provider|transport)/);
   });
 
-  it('ships official/http as the default api-adapter package', () => {
+  it('ships moorline/http as the default api-adapter package', () => {
     const manifest = JSON.parse(readFileSync(join(root, 'packages', 'http', 'manifest.json'), 'utf8')) as Record<string, unknown>;
-    expect(manifest.id).toBe('official/http');
+    expect(manifest.id).toBe('moorline/http');
     expect(manifest.type).toBe('api-adapter');
     expect(manifest.entrypoint).toBe('index.mjs');
     expect(existsSync(join(root, 'packages', 'http', 'index.mjs'))).toBe(true);
     expect(packageJson('http').files).toEqual(expect.arrayContaining(['index.mjs']));
     expect(packageJson('http').moorline).toMatchObject({
-      packageId: 'official/http',
+      packageId: 'moorline/http',
       kind: 'api-adapter'
     });
   });
@@ -91,8 +91,8 @@ describe('host repository split contract', () => {
     expect(source).toContain('loadConfiguredApiAdapterPackage');
     expect(source).toContain('adapterPackage.createAdapter');
     expect(source).not.toContain('new ControlApiServer');
-    expect(source).not.toContain("adapterPackageId: 'official/http'");
-    expect(source).not.toContain("selectedPackageId === 'official/http'");
+    expect(source).not.toContain("adapterPackageId: 'moorline/http'");
+    expect(source).not.toContain("selectedPackageId === 'moorline/http'");
     expect(source).not.toContain('@moorline/http');
   });
 
@@ -104,15 +104,15 @@ describe('host repository split contract', () => {
       readSourceTree(join(root, 'packages', 'http', 'src'))
     ].join('\n');
     const staticPolicy = readFileSync(join(root, 'packages', 'core', 'resources', 'policies', 'default-secure.json'), 'utf8');
-    expect(staticPolicy).not.toContain('plugin:official/');
-    expect(productionSource).not.toContain('plugin:official/');
-    expect(productionSource).not.toContain("selectedPackageId === 'official/http'");
-    expect(productionSource).not.toContain("activePackageId !== 'official/http'");
-    expect(productionSource).not.toContain("input.packageId === 'official/http'");
-    expect(productionSource).not.toContain("packageId: 'official/http'");
-    expect(productionSource).not.toContain('isOfficialPluginId');
-    expect(productionSource).not.toContain("packageGroup === 'official'");
-    expect(productionSource).not.toContain("segments[packagesIndex + 2] === 'official'");
+    expect(staticPolicy).not.toContain('plugin:rync/');
+    expect(productionSource).not.toContain('plugin:rync/');
+    expect(productionSource).not.toContain("selectedPackageId === 'moorline/http'");
+    expect(productionSource).not.toContain("activePackageId !== 'moorline/http'");
+    expect(productionSource).not.toContain("input.packageId === 'moorline/http'");
+    expect(productionSource).not.toContain("packageId: 'moorline/http'");
+    expect(productionSource).not.toContain('isPrivilegedPluginId');
+    expect(productionSource).not.toContain("packageGroup === 'moorline'");
+    expect(productionSource).not.toContain("segments[packagesIndex + 2] === 'moorline'");
   });
 
   it('keeps release automation manual and non-publishing', () => {
@@ -132,12 +132,12 @@ describe('host repository split contract', () => {
       expect(workflow).toContain(`npm pack ./packages/${name}`);
     }
     expect(workflow).not.toContain('packages/package-kit');
-    expect(workflow).not.toContain('build:official-npm-packages');
+    expect(workflow).not.toContain('build:personal-npm-packages');
   });
 
-  it('does not keep an official/http inventory bypass', () => {
+  it('does not keep an moorline/http inventory bypass', () => {
     const source = readFileSync(join(root, 'packages', 'core', 'src', 'app', 'bootstrap', 'operatorPackageService.ts'), 'utf8');
-    expect(source).not.toContain("this.config.surfaces.apiAdapter.activePackageId !== 'official/http'");
+    expect(source).not.toContain("this.config.surfaces.apiAdapter.activePackageId !== 'moorline/http'");
     expect(source).toContain('installPackage');
     expect(source).toContain('setSelectedPackage');
   });
@@ -153,20 +153,20 @@ describe('host repository split contract', () => {
     expect(existsSync(join(root, 'packages', 'core', 'resources', 'policies', 'default-secure.json'))).toBe(true);
   });
 
-  it('does not ship a tracked official catalog', () => {
-    expect(existsSync(join(root, 'packages', 'core', 'resources', 'official-catalog.json'))).toBe(false);
+  it('does not ship a tracked host package catalog', () => {
+    expect(existsSync(join(root, 'packages', 'core', 'resources', 'host-package-catalog.json'))).toBe(false);
     const source = readSourceTree(join(root, 'packages', 'core', 'src', 'core', 'extension', 'packages'));
-    expect(source).not.toContain('officialCatalog');
-    expect(source).not.toContain('official_catalog');
+    expect(source).not.toContain('hostPackageCatalog');
+    expect(source).not.toContain('host_package_catalog');
     expect(source).not.toContain(legacyRepoSlug);
   });
 
-  it('does not depend on local package-kit or official package source directories', () => {
+  it('does not depend on local package-kit or package source directories', () => {
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
       scripts: Record<string, string>;
     };
     expect(pkg.scripts['build:installables']).toBeUndefined();
-    expect(pkg.scripts['build:official-npm-packages']).toBeUndefined();
+    expect(pkg.scripts['build:personal-npm-packages']).toBeUndefined();
     expect(pkg.scripts['validate:installables']).toBeUndefined();
     expect(pkg.scripts['test:full']).not.toContain('validate:installables');
     expect(existsSync(join(root, 'packages', 'package-kit'))).toBe(false);
@@ -228,8 +228,8 @@ describe('host repository split contract', () => {
     const source = readFileSync(join(root, 'packages', 'core', 'src', 'core', 'system', 'projection', 'managementReadModelService.ts'), 'utf8');
     expect(source).toContain("input.surface === 'api-adapter'");
     expect(source).toContain('input.config.surfaces.apiAdapter.config');
-    expect(source).not.toContain("input.packageId === 'official/http'");
-    expect(source).not.toContain("packageId: 'official/http'");
+    expect(source).not.toContain("input.packageId === 'moorline/http'");
+    expect(source).not.toContain("packageId: 'moorline/http'");
     expect(source).toContain('this.deps.config.surfaces.apiAdapter.activePackageId === entry.packageId');
   });
 

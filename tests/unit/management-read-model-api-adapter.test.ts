@@ -29,7 +29,7 @@ function freshInitConfig(runtimeRoot: string): MoorlineConfig {
     },
     surfaces: {
       apiAdapter: {
-        activePackageId: 'official/http',
+        activePackageId: 'moorline/http',
         config: {
           host: '0.0.0.0',
           port: 49000,
@@ -120,9 +120,7 @@ function installedPackage(input: {
   runtimeRoot: string;
   kind: PackageInstallRecord['kind'];
   packageId: string;
-  trustLevel: PackageInstallRecord['trustLevel'];
   installPath?: string;
-  publisher?: string;
 }): PackageInstallRecord {
   const family = input.kind === 'api-adapter' ? 'api-adapters' : input.kind === 'bundle' ? 'bundles' : `${input.kind}s`;
   const installPath = input.installPath ?? join(input.runtimeRoot, 'packages', family, ...input.packageId.split('/'));
@@ -136,8 +134,6 @@ function installedPackage(input: {
     installedAt: '2026-05-20T00:00:00.000Z',
     installPath,
     source: { kind: 'local_dir', path: installPath },
-    trustLevel: input.trustLevel,
-    ...(input.publisher ? { publisher: input.publisher } : {}),
     manifestPath: join(installPath, 'manifest.json'),
     manifestHash: `${input.packageId}-hash`,
     dependencies: []
@@ -145,18 +141,18 @@ function installedPackage(input: {
 }
 
 describe('management read model api-adapter config', () => {
-  it('projects fresh-init official/http config for configure state', () => {
+  it('projects fresh-init moorline/http config for configure state', () => {
     const root = createTempRoot('moorline-read-model-http-config-');
     const runtimeRoot = join(root, 'runtime');
-    const httpInstallPath = join(runtimeRoot, 'packages', 'api-adapters', 'official', 'http');
+    const httpInstallPath = join(runtimeRoot, 'packages', 'api-adapters', 'moorline', 'http');
     mkdirSync(httpInstallPath, { recursive: true });
     writeFileSync(
       join(httpInstallPath, 'manifest.json'),
       JSON.stringify(
         {
-          id: 'official/http',
-          name: 'official/http',
-          version: '0.0.1',
+          id: 'moorline/http',
+          name: 'moorline/http',
+          version: '0.0.2',
           type: 'api-adapter',
           entrypoint: 'index.mjs',
           configSchema: {
@@ -179,15 +175,14 @@ describe('management read model api-adapter config', () => {
         family: 'api-adapters',
         kind: 'api-adapter',
         surface: 'api-adapter',
-        packageId: 'official/http',
-        name: 'official/http',
-        version: '0.0.1',
+        packageId: 'moorline/http',
+        name: 'moorline/http',
+        version: '0.0.2',
         installedAt: '2026-05-20T00:00:00.000Z',
         installPath: httpInstallPath,
         source: { kind: 'local_dir', path: httpInstallPath },
-        trustLevel: 'local',
         manifestPath: join(httpInstallPath, 'manifest.json'),
-        manifestHash: 'official-http-hash',
+        manifestHash: 'moorline-http-hash',
         dependencies: []
       }],
       applied: { activated: [] }
@@ -195,7 +190,7 @@ describe('management read model api-adapter config', () => {
     const config = freshInitConfig(runtimeRoot);
     const readModel = buildReadModel({ root, runtimeRoot, config });
 
-    const record = readModel.packages.config.find((entry) => entry.surface === 'api-adapter' && entry.packageId === 'official/http');
+    const record = readModel.packages.config.find((entry) => entry.surface === 'api-adapter' && entry.packageId === 'moorline/http');
     expect(record).toMatchObject({
       selected: true,
       active: true
@@ -216,21 +211,21 @@ describe('management read model api-adapter config', () => {
     });
   });
 
-  it('projects package trust from inventory instead of official-looking ids or paths', () => {
-    const root = createTempRoot('moorline-read-model-trust-');
+  it('projects package source from inventory instead of inferring from Moorline-looking ids or paths', () => {
+    const root = createTempRoot('moorline-read-model-source-');
     const runtimeRoot = join(root, 'runtime');
     const config = freshInitConfig(runtimeRoot);
-    config.surfaces.transport.activePackageId = 'official/transportish';
+    config.surfaces.transport.activePackageId = 'rync/transportish';
     config.surfaces.provider.activePackageId = 'acme/provider';
-    config.surfaces.plugins.enabledPackageIds = ['official/status'];
+    config.surfaces.plugins.enabledPackageIds = ['rync/status'];
 
-    const pluginPath = join(runtimeRoot, 'packages', 'plugins', 'official', 'status');
+    const pluginPath = join(runtimeRoot, 'packages', 'plugins', 'rync', 'status');
     mkdirSync(pluginPath, { recursive: true });
     writeFileSync(
       join(pluginPath, 'manifest.json'),
       JSON.stringify(
         {
-          id: 'official/status',
+          id: 'rync/status',
           name: 'Status',
           version: '1.0.0',
           type: 'plugin',
@@ -245,9 +240,9 @@ describe('management read model api-adapter config', () => {
     new PackageInventoryStore(runtimeRoot).save({
       version: 1,
       installed: [
-        installedPackage({ runtimeRoot, kind: 'transport', packageId: 'official/transportish', trustLevel: 'community', publisher: 'Community Publisher' }),
-        installedPackage({ runtimeRoot, kind: 'provider', packageId: 'acme/provider', trustLevel: 'official', publisher: 'Moorline' }),
-        installedPackage({ runtimeRoot, kind: 'plugin', packageId: 'official/status', trustLevel: 'community', installPath: pluginPath, publisher: 'Community Publisher' })
+        installedPackage({ runtimeRoot, kind: 'transport', packageId: 'rync/transportish' }),
+        installedPackage({ runtimeRoot, kind: 'provider', packageId: 'acme/provider' }),
+        installedPackage({ runtimeRoot, kind: 'plugin', packageId: 'rync/status', installPath: pluginPath })
       ],
       applied: { activated: [] }
     });
@@ -258,7 +253,7 @@ describe('management read model api-adapter config', () => {
       config,
       sidecars: [{
         sidecarId: 'sidecar-1',
-        pluginId: 'official/status',
+        pluginId: 'rync/status',
         name: 'Status sidecar',
         status: 'running',
         scopeKind: 'global',
@@ -276,24 +271,23 @@ describe('management read model api-adapter config', () => {
       }]
     });
 
-    expect(readModel.objects.services.find((entry) => entry.id === 'transport-official/transportish')?.trust).toMatchObject({
-      level: 'community',
-      source: 'Community Publisher'
+    expect(readModel.objects.services.find((entry) => entry.id === 'transport-rync/transportish')?.trust).toMatchObject({
+      level: 'local',
+      source: join(runtimeRoot, 'packages', 'transports', 'rync', 'transportish')
     });
     expect(readModel.objects.services.find((entry) => entry.id === 'provider-acme/provider')?.trust).toMatchObject({
-      level: 'official',
-      source: 'Moorline'
+      level: 'local',
+      source: join(runtimeRoot, 'packages', 'providers', 'acme', 'provider')
     });
-    expect(readModel.objects.plugins.find((entry) => entry.pluginId === 'official/status')).toMatchObject({
-      packageTrustLevel: 'community',
+    expect(readModel.objects.plugins.find((entry) => entry.pluginId === 'rync/status')).toMatchObject({
       trust: {
-        level: 'community',
-        source: 'Community Publisher'
+        level: 'local',
+        source: pluginPath
       }
     });
     expect(readModel.objects.sidecars[0]?.trust).toMatchObject({
-      level: 'community',
-      source: 'Community Publisher'
+      level: 'local',
+      source: pluginPath
     });
   });
 });

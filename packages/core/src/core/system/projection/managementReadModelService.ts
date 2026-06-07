@@ -79,7 +79,7 @@ function dataOnlyPresentation(runtimeRoot: string): ManagementReadModelPresentat
       },
       updates: {
         appUpdates: '',
-        officialPackageUpdates: '',
+        packageUpdates: '',
         localPackageHandling: '',
         operatorTrigger: ''
       }
@@ -617,8 +617,7 @@ export class ManagementReadModelService {
           pluginType: 'invalid',
           capabilities: [],
           hooks: [],
-          commands: [],
-          packageTrustLevel: trust.level
+          commands: []
         };
       }
 
@@ -659,8 +658,7 @@ export class ManagementReadModelService {
         pluginType: record.manifest.type,
         capabilities: [...record.manifest.capabilities],
         hooks: [...(record.manifest.hooks ?? [])],
-        commands: [],
-        packageTrustLevel: trust.level
+        commands: []
       };
     });
   }

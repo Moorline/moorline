@@ -34,8 +34,6 @@ import type {
   PackageSurface
 } from '@moorline/contracts';
 
-export type PackageInstallTrustLevel = 'official' | 'verified' | 'curated' | 'community' | 'local' | 'direct_url';
-
 export interface PackageInstallRecord {
   family: PackageFamily;
   kind: PackageKind;
@@ -48,8 +46,6 @@ export interface PackageInstallRecord {
   installedAt: string;
   installPath: string;
   source: PackageSourceDescriptor;
-  trustLevel: PackageInstallTrustLevel;
-  publisher?: string;
   manifestPath: string;
   manifestHash: string;
   dependencies: PackageDependency[];
@@ -68,8 +64,6 @@ export interface PackageMetadataEntry {
   version?: string;
   tags: string[];
   source: PackageSourceDescriptor;
-  trustLevel?: PackageInstallTrustLevel;
-  publisher?: string;
   requires: string[];
   members?: PackageBundleMember[];
   suggestedAfterInstall?: string[];

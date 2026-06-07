@@ -28,7 +28,7 @@ function v4Config(overrides: Record<string, unknown> = {}): Record<string, unkno
     },
     surfaces: {
       apiAdapter: {
-        activePackageId: 'official/http',
+        activePackageId: 'moorline/http',
         config: {
           enabled: true,
           host: '127.0.0.1',
@@ -64,10 +64,10 @@ function v4Config(overrides: Record<string, unknown> = {}): Record<string, unkno
 }
 
 describe('config v4 api adapter state', () => {
-  it('parses v4 defaults with official/http as the selected HTTP api-adapter', () => {
+  it('parses v4 defaults with moorline/http as the selected HTTP api-adapter', () => {
     const parsed = parseMoorlineConfig(v4Config());
     expect(parsed.version).toBe(4);
-    expect(parsed.surfaces.apiAdapter.activePackageId).toBe('official/http');
+    expect(parsed.surfaces.apiAdapter.activePackageId).toBe('moorline/http');
     expect(parsed).not.toHaveProperty('clients');
     expect(parsed).not.toHaveProperty('api');
     expect(parsed).not.toHaveProperty('namespace');
@@ -89,7 +89,7 @@ describe('config v4 api adapter state', () => {
     const parsed = parseMoorlineConfig(v4Config({
       surfaces: {
         apiAdapter: {
-          activePackageId: 'official/http',
+          activePackageId: 'moorline/http',
           config: {
             port: 45174,
             exposure: 'remote',
@@ -132,7 +132,7 @@ describe('config v4 api adapter state', () => {
   it('enforces loopback-only HTTP config unless remote exposure is explicit', () => {
     const remoteHost = {
       apiAdapter: {
-        activePackageId: 'official/http',
+        activePackageId: 'moorline/http',
         config: {
           host: '0.0.0.0',
           port: 45173,
@@ -188,10 +188,10 @@ describe('config v4 api adapter state', () => {
         runtimeRoot: join(root, 'runtime'),
         surfaces: {
           apiAdapter: {
-            activePackageId: 'official/http',
+            activePackageId: 'moorline/http',
             config: {},
             configByPackageId: {
-              'official/http': {
+              'moorline/http': {
                 host: '127.0.0.1',
                 port: 45173,
                 token: 'secret-token'

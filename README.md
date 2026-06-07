@@ -16,10 +16,10 @@ Source is split by platform boundary:
 - `packages/contracts/`: shared runtime, package, provider, transport, plugin, skill, and API-adapter contracts
 - `packages/core/`: Moorline engine code only, grouped into `runtime/`, `domain/`, `system/`, `extension/`, and `shared/`
 - `packages/control-api/`: typed route table, request validation, client, and local connection discovery
-- `packages/http/`: official HTTP API adapter
+- `packages/http/`: Moorline HTTP API adapter
 - `packages/cli/`: the unscoped `moorline` npm package and command
 
-Official provider, transport, plugin, skill, and bundle packages live in `Moorline/packages`. Package authoring tooling lives in `Moorline/kit`.
+Personal provider, transport, plugin, skill, and bundle packages live in `Moorline/packages`. Package authoring tooling lives in `Moorline/kit`.
 
 ## Quickstart
 
@@ -69,7 +69,7 @@ Package trust note:
 - install third-party runtime packages only from sources you are willing to execute in the operator-controlled environment
 
 Source-checkout note for unreleased branches:
-- published releases install official bundles from the public package artifacts
+- published releases install personal bundles from the public package artifacts
 - unreleased branch work can still build `Moorline/packages` locally and install from its `dist/installable-archives/` output via:
   - `bun run moorline configure package install --kind bundle --source <path-to-bundle-archive>`
   - `bun run moorline configure package install --kind transport --source <path-to-transport-archive>`
@@ -207,7 +207,7 @@ Use local history to inspect, snapshot, restore, and discard tracked changes:
 bun run moorline history status
 bun run moorline history snapshot "before provider edit"
 bun run moorline history restore <commit-ish>
-bun run moorline history discard --path runtime/packages/plugins/official/persona/SOUL.md
+bun run moorline history discard --path runtime/packages/plugins/rync/persona/SOUL.md
 ```
 
 Config is separate by default:

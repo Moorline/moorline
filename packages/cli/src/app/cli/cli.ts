@@ -72,10 +72,10 @@ function formatHuman(value: unknown): string {
 
 function sourceLabel(entry: Record<string, unknown>): string {
   if (entry.registrySource === 'npm') {
-    return entry.trustLevel === 'official' ? 'Moorline official' : 'npm-backed community';
+    return 'npm';
   }
   if (entry.registrySource === 'local_cache') {
-    return entry.trustLevel === 'official' ? 'cached Moorline official' : 'cached npm result';
+    return 'cached npm';
   }
   return 'unknown';
 }
@@ -87,7 +87,7 @@ function renderPackageRows(value: unknown, output: OutputWriter): void {
     return;
   }
   for (const entry of entries) {
-    output.write(`${entry.packageId}  ${entry.kind}  ${entry.version ?? 'unknown'}  ${entry.trustLevel ?? 'unknown'}  ${sourceLabel(entry)}`);
+    output.write(`${entry.packageId}  ${entry.kind}  ${entry.version ?? 'unknown'}  ${sourceLabel(entry)}`);
     if (typeof entry.description === 'string') {
       output.write(`  ${entry.description}`);
     }
@@ -104,8 +104,6 @@ function renderPackageInfo(value: unknown, output: OutputWriter): void {
   output.write(`Name: ${entry.name ?? entry.packageId}`);
   output.write(`Kind: ${entry.kind}`);
   output.write(`Version: ${entry.version ?? 'unknown'}`);
-  output.write(`Trust: ${entry.trustLevel ?? 'unknown'}`);
-  output.write(`Publisher: ${entry.publisher ?? 'unknown'}`);
   output.write(`Source: ${sourceLabel(entry)}`);
   if (entry.npm && typeof entry.npm === 'object') {
     const npm = entry.npm as Record<string, unknown>;
