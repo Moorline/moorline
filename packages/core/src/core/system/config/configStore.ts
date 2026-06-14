@@ -291,11 +291,16 @@ function secretKeysForSurface(input: {
   packageId: string | null;
   publicRoot: Record<string, unknown>;
 }): string[] {
-  const schema = resolvePackageConfigSchema({
-    runtimeRoot: input.runtimeRoot,
-    surface: input.surface,
-    packageId: input.packageId
-  });
+  let schema;
+  try {
+    schema = resolvePackageConfigSchema({
+      runtimeRoot: input.runtimeRoot,
+      surface: input.surface,
+      packageId: input.packageId
+    });
+  } catch {
+    schema = undefined;
+  }
   const keys = new Set<string>([
     ...BASELINE_SECRET_KEYS_BY_SURFACE[input.surface],
     ...secretConfigKeys(schema),

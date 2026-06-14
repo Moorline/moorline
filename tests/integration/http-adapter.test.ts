@@ -9,15 +9,19 @@ import {
   type MoorlineConfig
 } from '../../packages/core/src/types/config.js';
 import { saveMoorlineConfig } from '../../packages/core/src/core/system/config/configStore.js';
+import { readControlApiBootstrapRecord } from '../../packages/control-api/src/bootstrap.js';
 import { createTempRoot } from '../helpers/temp.js';
 
 const controlPlaneState = vi.hoisted(() => ({
   backupPath: '',
   importBytes: 0,
+  importError: null as Error | null,
+  directSessionError: null as Error | null,
   accepting: null as boolean | null,
   leaseCounter: 0,
   starts: 0,
-  stops: 0
+  stops: 0,
+  stopGate: null as Promise<void> | null
 }));
 
 vi.mock('@moorline/core/app/control-api/services/controlPlane.js', () => ({
@@ -27,6 +31,9 @@ vi.mock('@moorline/core/app/control-api/services/controlPlane.js', () => ({
     }
     async stop() {
       controlPlaneState.stops += 1;
+      if (controlPlaneState.stopGate) {
+        await controlPlaneState.stopGate;
+      }
     }
     mode() {
       return 'management';
@@ -82,12 +89,21 @@ vi.mock('@moorline/core/app/control-api/services/controlPlane.js', () => ({
       };
     }
     async importBackupArchive(input: { archiveBytes: Buffer; force: boolean }) {
+      if (controlPlaneState.importError) {
+        throw controlPlaneState.importError;
+      }
       controlPlaneState.importBytes = input.archiveBytes.byteLength;
       return {
         imported: true,
         force: input.force,
         bytes: input.archiveBytes.byteLength
       };
+    }
+    async directSession() {
+      if (controlPlaneState.directSessionError) {
+        throw controlPlaneState.directSessionError;
+      }
+      return { directed: true };
     }
   }
 }));
@@ -152,6 +168,21 @@ async function readJson(response: Awaited<ReturnType<typeof fetch>>): Promise<Re
   return await response.json() as Record<string, unknown>;
 }
 
+async function waitForFetchFailure(url: string): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      const response = await fetch(url);
+      await response.arrayBuffer().catch(() => undefined);
+    } catch {
+      return;
+    }
+    await new Promise((resolve) => {
+      globalThis.setTimeout(resolve, 25);
+    });
+  }
+  throw new Error(`Endpoint still accepted requests: ${url}`);
+}
+
 function createFakeJsonResponse(): {
   response: {
     writeHead(statusCode: number, headers: Record<string, string>): void;
@@ -205,10 +236,12 @@ describe('HTTP API adapter behavior', () => {
     process.env.MOORLINE_API_TOKEN = 'test-token';
     controlPlaneState.backupPath = '';
     controlPlaneState.importBytes = 0;
+    controlPlaneState.importError = null;
     controlPlaneState.accepting = null;
     controlPlaneState.leaseCounter = 0;
     controlPlaneState.starts = 0;
     controlPlaneState.stops = 0;
+    controlPlaneState.stopGate = null;
   });
 
   afterEach(() => {
@@ -308,6 +341,30 @@ describe('HTTP API adapter behavior', () => {
     await expect(server.stop()).resolves.toBeUndefined();
   });
 
+  it('closes the HTTP listener before awaiting a slow control plane stop', async () => {
+    const root = createTempRoot('moorline-http-stop-order-');
+    const { ControlApiServer } = await importServer();
+    const server = new ControlApiServer({
+      host: '127.0.0.1',
+      port: 0,
+      configPath: writeConfig(root),
+      entrypoint: process.execPath
+    });
+    let releaseStop!: () => void;
+    controlPlaneState.stopGate = new Promise<void>((resolve) => {
+      releaseStop = resolve;
+    });
+
+    await server.start();
+    const url = server.getUrl();
+    expect(url).toBeTruthy();
+    const stopPromise = server.stop();
+    await waitForFetchFailure(`${url}/healthz`);
+    expect(controlPlaneState.stops).toBe(1);
+    releaseStop();
+    await expect(stopPromise).resolves.toBeUndefined();
+  });
+
   it('dispatches JSON API routes and lease commands', async () => {
     const root = createTempRoot('moorline-http-routes-');
     const { ControlApiServer } = await importServer();
@@ -368,10 +425,11 @@ describe('HTTP API adapter behavior', () => {
     controlPlaneState.backupPath = join(root, 'backup.tar.gz');
     writeFileSync(controlPlaneState.backupPath, Buffer.from([1, 2, 3, 4]));
     const { ControlApiServer } = await importServer();
+    const configPath = writeConfig(root);
     const server = new ControlApiServer({
       host: '127.0.0.1',
       port: 0,
-      configPath: writeConfig(root),
+      configPath,
       entrypoint: process.execPath
     });
     await server.start();
@@ -395,7 +453,100 @@ describe('HTTP API adapter behavior', () => {
       expect(imported.status).toBe(200);
       expect(await readJson(imported)).toMatchObject({ imported: true, force: true, bytes: 3 });
       expect(controlPlaneState.importBytes).toBe(3);
+      expect(readControlApiBootstrapRecord(configPath)).toMatchObject({
+        url: server.getUrl(),
+        token: 'test-token',
+        configPath
+      });
+
+      controlPlaneState.importError = new Error('Import target already contains state. Re-run with --force after confirming you want to delete existing local state.');
+      const nonForced = await fetch(`${server.getUrl()}/api/management/import`, {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-token'
+        },
+        body: Buffer.from([1])
+      });
+      expect(nonForced.status).toBe(409);
+
+      controlPlaneState.importError = new Error('TAR_BAD_ARCHIVE: Unrecognized archive format');
+      const malformed = await fetch(`${server.getUrl()}/api/management/import?force=1`, {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-token'
+        },
+        body: Buffer.from([1])
+      });
+      expect(malformed.status).toBe(400);
     } finally {
+      await server.stop();
+    }
+  });
+
+  it('preserves status-bearing runtime errors on session routes', async () => {
+    const root = createTempRoot('moorline-http-session-status-error-');
+    const { MoorlineStatusError } = await import('../../packages/core/src/core/shared/errors/statusError.js');
+    const { ControlApiServer } = await importServer();
+    const server = new ControlApiServer({
+      host: '127.0.0.1',
+      port: 0,
+      configPath: writeConfig(root),
+      entrypoint: process.execPath
+    });
+    controlPlaneState.directSessionError = new MoorlineStatusError(404, 'No matching managed worker session found.');
+    await server.start();
+    try {
+      const response = await fetch(`${server.getUrl()}/api/work/session/direct`, {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-token',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          sessionId: 'missing-session',
+          instruction: 'hello'
+        })
+      });
+      expect(response.status).toBe(404);
+      expect(await readJson(response)).toMatchObject({
+        error: 'No matching managed worker session found.'
+      });
+    } finally {
+      controlPlaneState.directSessionError = null;
+      await server.stop();
+    }
+  });
+
+  it('reports inactive runtime session operations as conflicts', async () => {
+    const root = createTempRoot('moorline-http-session-conflict-');
+    const { MoorlineStatusError } = await import('../../packages/core/src/core/shared/errors/statusError.js');
+    const { ControlApiServer } = await importServer();
+    const server = new ControlApiServer({
+      host: '127.0.0.1',
+      port: 0,
+      configPath: writeConfig(root),
+      entrypoint: process.execPath
+    });
+    controlPlaneState.directSessionError = new MoorlineStatusError(409, 'Main process is not active.');
+    await server.start();
+    try {
+      const response = await fetch(`${server.getUrl()}/api/work/session/direct`, {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-token',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          sessionId: 'missing-session',
+          instruction: 'hello'
+        })
+      });
+      expect(response.status).toBe(409);
+      expect(await readJson(response)).toMatchObject({
+        error: 'Main process is not active.'
+      });
+    } finally {
+      controlPlaneState.directSessionError = null;
       await server.stop();
     }
   });

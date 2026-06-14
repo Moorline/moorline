@@ -28,6 +28,25 @@ function selectedApiAdapterHostPort(config: ReturnType<typeof loadMoorlineConfig
   };
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, ms);
+  });
+}
+
+async function waitForEndpointClosed(url: string): Promise<void> {
+  const endpoint = url.replace(/\/+$/u, '');
+  while (true) {
+    await sleep(250);
+    try {
+      const response = await fetch(`${endpoint}/`);
+      await response.arrayBuffer().catch(() => undefined);
+    } catch {
+      return;
+    }
+  }
+}
+
 async function loadSelectedApiAdapterPackage(input: {
   config: ReturnType<typeof loadMoorlineConfig>;
   context: Parameters<RuntimeApiAdapterPackage['createAdapter']>[0];
@@ -94,7 +113,10 @@ export async function runApiForeground(command: Extract<CliCommand, { kind: 'api
     deps.output.write(`Moorline Control API token: ${httpEndpoint.token}`);
     deps.output.write('Use moorline ops/configure/history/requests/main commands against this API.');
     if (deps.waitForShutdown) {
-      await deps.waitForShutdown();
+      await Promise.race([
+        deps.waitForShutdown(),
+        waitForEndpointClosed(httpEndpoint.url)
+      ]);
       await adapter.stop();
       adapterStarted = false;
     }

@@ -3,7 +3,9 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import * as tar from 'tar';
 import { parseMoorlineConfig, type MoorlineConfig } from '../../../types/config.js';
-import { resolveSecretsPathForConfigPath } from '../config/configStore.js';
+import { resolveSecretsPathForConfigPath, runtimePaths } from '../config/configStore.js';
+import { PackageInventoryStore } from '../../extension/packages/packageInventoryStore.js';
+import { SqliteSessionStore } from '../state/sqliteSessionStore.js';
 
 const { dirname, join, resolve } = path;
 
@@ -286,6 +288,77 @@ function hasNonEmptyTargetState(input: {
   return existsSync(input.configPath) || existsSync(input.secretsPath) || isDirectoryNonEmpty(input.runtimeRoot);
 }
 
+function rewriteRestoredSessionWorkspacePaths(runtimeRoot: string): void {
+  const paths = runtimePaths(runtimeRoot);
+  if (!existsSync(paths.sqlitePath)) {
+    return;
+  }
+  mkdirSync(paths.workspacesDir, { recursive: true });
+  const store = new SqliteSessionStore(paths.sqlitePath);
+  try {
+    for (const session of store.listSessions()) {
+      const workspacePath = join(paths.workspacesDir, session.sessionId);
+      mkdirSync(workspacePath, { recursive: true });
+      store.upsertSession({
+        ...session,
+        workspacePath
+      });
+    }
+  } finally {
+    store.close();
+  }
+}
+
+function rewriteRuntimeRootPath(input: {
+  value: string;
+  sourceRuntimeRoot: string;
+  targetRuntimeRoot: string;
+}): string {
+  const sourceRoot = resolve(input.sourceRuntimeRoot);
+  const targetRoot = resolve(input.targetRuntimeRoot);
+  const value = resolve(input.value);
+  if (value === sourceRoot || isPathWithinDirectory(sourceRoot, value)) {
+    return join(targetRoot, path.relative(sourceRoot, value));
+  }
+  return input.value;
+}
+
+function rewriteRestoredPackageInventoryPaths(input: {
+  sourceRuntimeRoot: string;
+  targetRuntimeRoot: string;
+}): void {
+  const paths = runtimePaths(input.targetRuntimeRoot);
+  if (!existsSync(paths.packageInventoryPath)) {
+    return;
+  }
+  const inventory = new PackageInventoryStore(input.targetRuntimeRoot);
+  const state = inventory.load();
+  for (const record of state.installed) {
+    record.installPath = rewriteRuntimeRootPath({
+      value: record.installPath,
+      sourceRuntimeRoot: input.sourceRuntimeRoot,
+      targetRuntimeRoot: input.targetRuntimeRoot
+    });
+    record.manifestPath = rewriteRuntimeRootPath({
+      value: record.manifestPath,
+      sourceRuntimeRoot: input.sourceRuntimeRoot,
+      targetRuntimeRoot: input.targetRuntimeRoot
+    });
+    if (record.source.kind === 'local_dir' || record.source.kind === 'local_archive') {
+      record.source.path = rewriteRuntimeRootPath({
+        value: record.source.path,
+        sourceRuntimeRoot: input.sourceRuntimeRoot,
+        targetRuntimeRoot: input.targetRuntimeRoot
+      });
+    }
+  }
+  inventory.save(state);
+}
+
+function removeRestoredControlApiBootstrap(runtimeRoot: string): void {
+  rmSync(join(runtimePaths(runtimeRoot).stateDir, 'control-api-bootstrap.json'), { force: true });
+}
+
 export async function importRuntimeBackup(input: ImportRuntimeBackupInput): Promise<ImportRuntimeBackupResult> {
   const archivePath = resolve(input.archivePath);
   if (!existsSync(archivePath)) {
@@ -345,6 +418,12 @@ export async function importRuntimeBackup(input: ImportRuntimeBackupInput): Prom
       writeFileSync(targetSecretsPath, readFileSync(stagedSecretsPath));
     }
     cpSync(runtimeStage, targetRuntimeRoot, { recursive: true, force: true });
+    removeRestoredControlApiBootstrap(targetRuntimeRoot);
+    rewriteRestoredSessionWorkspacePaths(targetRuntimeRoot);
+    rewriteRestoredPackageInventoryPaths({
+      sourceRuntimeRoot: backupInfo.config.runtimeRoot,
+      targetRuntimeRoot
+    });
 
     const parsedConfig = parseMoorlineConfig(JSON.parse(readFileSync(targetConfigPath, 'utf8')) as unknown);
     const parsedRuntimeRoot = resolve(parsedConfig.runtimeRoot);

@@ -17,6 +17,7 @@ import { decodeOrchestrationPayload } from './runtimeOrchestrationRequests.js';
 import type { RuntimeAttachmentPayload, RuntimeMessagePayload } from '../../../types/transport.js';
 import type { RuntimeOrchestrationRequestRow, SqliteSessionStore } from '../../system/state/sqliteSessionStore.js';
 import type { RuntimeWorkManagementService } from '../../domain/sessions/runtimeWorkManagementService.js';
+import { errorStatusCode } from '../../shared/errors/statusError.js';
 
 const ORCHESTRATION_POLL_MS = 250;
 export const ORCHESTRATION_STUCK_RUNNING_THRESHOLD_MS = 5 * 60_000;
@@ -202,7 +203,7 @@ export class RuntimeOrchestrationRequestService {
         ...request,
         status: 'failed',
         resultJson: null,
-        error: error instanceof Error ? error.message : String(error),
+        error: formatOrchestrationError(error),
         completionToken: null,
         completedAt: this.deps.now(),
         updatedAt: this.deps.now()
@@ -428,4 +429,10 @@ export class RuntimeOrchestrationRequestService {
     this.deps.store.putMetadata('runtime.orchestration.last_forced_drain', signal, nowIso);
     this.deps.onForcedDrain?.(signal);
   }
+}
+
+function formatOrchestrationError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const statusCode = errorStatusCode(error);
+  return statusCode ? `[MOORLINE_STATUS_ERROR:${statusCode}] ${message}` : message;
 }

@@ -41,7 +41,11 @@ export class ProviderEventPipeline {
     await this.deps.compaction.handleEvent(event);
     await this.deps.getPluginHost().onRuntimeEvent(event, (pluginId) => this.deps.createPluginContext(`plugin:${pluginId}`));
 
-    if (event.type === 'session.state.changed' && (event.payload.state === 'closed' || event.payload.state === 'error')) {
+    if (
+      event.type === 'session.state.changed' &&
+      (event.payload.state === 'closed' || event.payload.state === 'error') &&
+      this.deps.turns.hasOpenTurn(event.threadId)
+    ) {
       this.deps.compaction.clearLatch(event.threadId);
       this.deps.turns.onProviderFailure(
         event.threadId,
@@ -91,7 +95,9 @@ export class ProviderEventPipeline {
       transportResourceId,
       runtimeMode: latestSession?.runtimeMode ?? null,
       workspacePath: latestSession?.workspacePath ?? null,
-      request: latestRequest
+      request: latestRequest,
+      receipt: this.deps.receiptBus.current(event.threadId),
+      activeTurnId: latestSession?.activeTurnId ?? null
     });
     for (const domainEvent of domainEvents) {
       await this.deps.handleDomainEvent(domainEvent);

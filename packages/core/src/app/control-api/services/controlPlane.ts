@@ -23,6 +23,7 @@ export class ControlPlane {
   private readonly runtimeHost: ControlApiRuntimeHostService;
   private readonly stateService: ControlApiStateService;
   private readonly actions: ControlApiActionsService;
+  private runtimeMutationQueue: Promise<unknown> = Promise.resolve();
 
   constructor(
     private readonly input: {
@@ -104,12 +105,18 @@ export class ControlPlane {
     return this.actions.exportSetupBundle();
   }
 
+  private async withRuntimeMutation<T>(operation: () => Promise<T> | T): Promise<T> {
+    const run = this.runtimeMutationQueue.catch(() => undefined).then(operation);
+    this.runtimeMutationQueue = run.catch(() => undefined);
+    return await run;
+  }
+
   async createBackupArchive(input: { includeWorkspaces: boolean }) {
     return await this.actions.createBackupArchive(input);
   }
 
   async importBackupArchive(input: { archiveBytes: Buffer; force: boolean }) {
-    return await this.actions.importBackupArchive(input);
+    return await this.withRuntimeMutation(async () => await this.actions.importBackupArchive(input));
   }
 
   async setDefaultModel(model: string) {
@@ -144,11 +151,13 @@ export class ControlPlane {
   }
 
   async installPackage(input: { kind?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; surface?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; packageId?: string; source?: string }) {
-    const record = await this.actions.installPackage(input);
-    return {
-      ...record,
-      message: `Installed ${record.kind ?? record.surface} package ${record.packageId}.`
-    };
+    return await this.withRuntimeMutation(async () => {
+      const record = await this.actions.installPackage(input);
+      return {
+        ...record,
+        message: `Installed ${record.kind ?? record.surface} package ${record.packageId}.`
+      };
+    });
   }
 
   async searchPackages(input: { query?: string; kind?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; compatibleOnly?: boolean }) {
@@ -159,47 +168,63 @@ export class ControlPlane {
     return await this.actions.packageInfo(input);
   }
 
-  removePackage(input: { kind?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; surface?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; packageId: string; cascade?: boolean }) {
-    this.actions.removePackage(input);
-    return { ok: true, message: `Removed ${input.kind ?? input.surface} package ${input.packageId}.` };
+  async removePackage(input: { kind?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; surface?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; packageId: string; cascade?: boolean }) {
+    return await this.withRuntimeMutation(async () => {
+      await this.actions.removePackage(input);
+      return { ok: true, message: `Removed ${input.kind ?? input.surface} package ${input.packageId}.` };
+    });
   }
 
-  enablePackage(input: { surface: 'plugin' | 'skill'; packageId: string }) {
-    this.actions.enablePackage(input);
-    return { ok: true, message: `Enabled ${input.surface} package ${input.packageId}.` };
+  async enablePackage(input: { surface: 'plugin' | 'skill'; packageId: string }) {
+    return await this.withRuntimeMutation(async () => {
+      await this.actions.enablePackage(input);
+      return { ok: true, message: `Enabled ${input.surface} package ${input.packageId}.` };
+    });
   }
 
-  disablePackage(input: { surface: 'plugin' | 'skill'; packageId: string }) {
-    this.actions.disablePackage(input);
-    return { ok: true, message: `Disabled ${input.surface} package ${input.packageId}.` };
+  async disablePackage(input: { surface: 'plugin' | 'skill'; packageId: string }) {
+    return await this.withRuntimeMutation(async () => {
+      await this.actions.disablePackage(input);
+      return { ok: true, message: `Disabled ${input.surface} package ${input.packageId}.` };
+    });
   }
 
-  activatePackage(input: { surface: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill'; packageId: string }) {
-    this.actions.activatePackage(input);
-    return { ok: true, message: `Activated ${input.surface} package ${input.packageId}.` };
+  async activatePackage(input: { surface: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill'; packageId: string }) {
+    return await this.withRuntimeMutation(async () => {
+      await this.actions.activatePackage(input);
+      return { ok: true, message: `Activated ${input.surface} package ${input.packageId}.` };
+    });
   }
 
-  deactivatePackage(input: { surface: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill'; packageId: string }) {
-    this.actions.deactivatePackage(input);
-    return { ok: true, message: `Deactivated ${input.surface} package ${input.packageId}.` };
+  async deactivatePackage(input: { surface: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill'; packageId: string }) {
+    return await this.withRuntimeMutation(async () => {
+      await this.actions.deactivatePackage(input);
+      return { ok: true, message: `Deactivated ${input.surface} package ${input.packageId}.` };
+    });
   }
 
-  selectPackage(input: { surface: 'api-adapter' | 'transport' | 'provider'; packageId: string | null }) {
-    this.actions.selectPackage(input);
-    return { ok: true, message: input.packageId ? `Selected ${input.surface} package ${input.packageId}.` : `Cleared selected ${input.surface} package.` };
+  async selectPackage(input: { surface: 'api-adapter' | 'transport' | 'provider'; packageId: string | null }) {
+    return await this.withRuntimeMutation(async () => {
+      await this.actions.selectPackage(input);
+      return { ok: true, message: input.packageId ? `Selected ${input.surface} package ${input.packageId}.` : `Cleared selected ${input.surface} package.` };
+    });
   }
 
-  setPackageConfig(input: Parameters<ControlApiActionsService['setPackageConfig']>[0]) {
-    this.actions.setPackageConfig(input);
-    return { ok: true, message: `Saved ${input.surface} package configuration${input.packageId ? ` for ${input.packageId}` : ''}.` };
+  async setPackageConfig(input: Parameters<ControlApiActionsService['setPackageConfig']>[0]) {
+    return await this.withRuntimeMutation(async () => {
+      await this.actions.setPackageConfig(input);
+      return { ok: true, message: `Saved ${input.surface} package configuration${input.packageId ? ` for ${input.packageId}` : ''}.` };
+    });
   }
 
   async applyPackages() {
-    const plan = await this.actions.applyPackages();
-    return {
-      ...plan,
-      message: plan.actions.length > 0 ? 'Package changes applied.' : 'No package changes were pending.'
-    };
+    return await this.withRuntimeMutation(async () => {
+      const plan = await this.actions.applyPackages();
+      return {
+        ...plan,
+        message: plan.actions.length > 0 ? 'Package changes applied.' : 'No package changes were pending.'
+      };
+    });
   }
 
   listPendingRequests() {
@@ -267,15 +292,15 @@ export class ControlPlane {
   }
 
   async startMain(): Promise<{ running: boolean; mode: 'runtime' | 'management_only'; detail: string }> {
-    return await this.runtimeHost.startMain();
+    return await this.withRuntimeMutation(async () => await this.runtimeHost.startMain());
   }
 
   async stopMain(): Promise<{ running: boolean; mode: 'runtime' | 'management_only'; detail: string }> {
-    return await this.runtimeHost.stopMain();
+    return await this.withRuntimeMutation(async () => await this.runtimeHost.stopMain());
   }
 
   async restartMain(): Promise<{ running: boolean; mode: 'runtime' | 'management_only'; detail: string }> {
-    return await this.runtimeHost.restartMain();
+    return await this.withRuntimeMutation(async () => await this.runtimeHost.restartMain());
   }
 
   async createLease(input: { client: string; policy?: MainLifecyclePolicy; ttlMs?: number }): Promise<ControlLeaseRecord> {

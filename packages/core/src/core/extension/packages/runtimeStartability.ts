@@ -58,6 +58,25 @@ function isMissingValue(value: unknown): boolean {
   return value === undefined || value === null || (typeof value === 'string' && value.trim().length === 0);
 }
 
+function scalarConfigInputText(value: unknown, label: string): string {
+  if (value === undefined || value === null) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      throw new Error(`${label} must be a finite number.`);
+    }
+    return String(value);
+  }
+  if (typeof value === 'boolean') {
+    return String(value);
+  }
+  throw new Error(`${label} must be a string, number, or boolean.`);
+}
+
 function effectiveSurfaceConfig(
   config: MoorlineConfig,
   surface: 'api-adapter' | 'transport' | 'provider',
@@ -133,10 +152,11 @@ export function coerceSurfaceConfigInput(input: {
   packageId: string;
   schema: JsonSchemaLike | undefined;
   key: string;
-  rawValue: string;
+  rawValue: unknown;
 }): string | boolean | number {
+  const rawText = scalarConfigInputText(input.rawValue, `${input.surface} config key ${input.key}`);
   if (!input.schema?.properties) {
-    return input.rawValue;
+    return rawText;
   }
 
   const property = input.schema.properties[input.key];
@@ -145,12 +165,12 @@ export function coerceSurfaceConfigInput(input: {
   }
 
   const required = new Set(input.schema.required ?? []);
-  const trimmed = input.rawValue.trim();
+  const trimmed = rawText.trim();
   if (required.has(input.key) && trimmed.length === 0) {
     throw new Error(`${input.surface} config key ${input.key} is required.`);
   }
 
-  let value: string | boolean | number = input.rawValue;
+  let value: string | boolean | number = rawText;
 
   if (property.type === 'boolean') {
     if (trimmed === 'true') {
@@ -235,7 +255,7 @@ export function evaluateRuntimeStartability(config: MoorlineConfig, inventory: P
         packageId: activeApiAdapter.packageId,
         schema,
         config: effectiveSurfaceConfig(config, 'api-adapter', activeApiAdapter.packageId),
-        allowUnknownConfigKeys: false
+        allowUnknownConfigKeys: true
       })) {
       addIssue(issue);
     }

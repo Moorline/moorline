@@ -14,6 +14,7 @@ import type { SessionRegistry } from './sessionState.js';
 import { slugifyResourceName, truncatePreview } from './workManagement/transportResourceNames.js';
 import { enforceManagedSessionLimit } from './workManagement/managedSessionLimit.js';
 import { buildManagedTransportResourceMetadata } from '../../runtime/hosting/managedTransportResourceMetadata.js';
+import { MoorlineStatusError } from '../../shared/errors/statusError.js';
 
 const INITIAL_KICKOFF_PREVIEW_LIMIT = 700;
 
@@ -75,6 +76,7 @@ export class RuntimeWorkManagementService {
       execute: async () => await this.createRuntimeTransportResource(transportResourceName, surface.sessionsCategoryId)
     });
     let session: RuntimeSessionRow;
+    let recoveredFromLifecycleRace = false;
     try {
       session = this.deps.reactor.createSession({
         scopeId: this.deps.config.transport.scopeId,
@@ -94,7 +96,19 @@ export class RuntimeWorkManagementService {
       // If adoption already persisted the session for this new resource, reuse it.
       const adopted = this.deps.sessionRegistry.getByTransportResourceId(resource.id);
       if (adopted) {
-        session = adopted;
+        recoveredFromLifecycleRace = adopted.createdBy === 'runtime:transport/resource-lifecycle';
+        session = this.deps.sessionRegistry.updateSession({
+          ...adopted,
+          runtimeMode: input.runtimeMode,
+          providerAutoStartEnabled: this.deps.getProviderAutoStartDefault(),
+          ownerKind: owner.kind,
+          ownerId: owner.id,
+          ownerLabel: owner.label,
+          objective: objective ?? adopted.objective,
+          tags: input.tags ?? adopted.tags ?? [],
+          createdBy: input.actorId,
+          updatedAt: this.deps.now()
+        });
       } else {
         await this.deleteRuntimeTransportResource(resource.id, 'best-effort');
         throw error;
@@ -110,7 +124,7 @@ export class RuntimeWorkManagementService {
       tags: session.tags ?? [],
       actorId: input.actorId
     });
-    if (session.createdBy === 'runtime:transport/resource-lifecycle') {
+    if (recoveredFromLifecycleRace) {
       this.deps.appendAuditEvent('session.created.race_recovered', {
         sessionId: session.sessionId,
         transportResourceId: session.transportResourceId,
@@ -170,7 +184,7 @@ export class RuntimeWorkManagementService {
   }): Promise<{ session: RuntimeSessionRow; reply: RuntimeMessagePayload }> {
     const session = this.resolveManagedWorkerSession(input);
     if (!session) {
-      throw new Error('No matching managed worker session found.');
+      throw new MoorlineStatusError(404, 'No matching managed worker session found.');
     }
     if (session.lifecycleStatus === 'archived') {
       throw new Error(`Session ${session.sessionId} is archived.`);
@@ -210,7 +224,7 @@ export class RuntimeWorkManagementService {
 
   async archiveManagedSession(input: {
     actorId: string;
-    transportResourceId: string;
+    transportResourceId?: string;
     sessionId?: string;
   }): Promise<RuntimeSessionRow | null> {
     const session = this.resolveManagedWorkerSession(input);
@@ -223,17 +237,6 @@ export class RuntimeWorkManagementService {
       actor: input.actorId,
       target: session.sessionId,
       execute: async () => undefined
-    });
-    await this.deps.getGuard().run({
-      action: 'transport.resource.update',
-      actor: input.actorId,
-      target: session.transportResourceId,
-      execute: async () =>
-        this.deps.getTransport().updateTransportResource?.({
-          scopeId: this.deps.config.transport.scopeId,
-          transportResourceId: session.transportResourceId,
-          parentId: surface.archiveCategoryId
-        })
     });
     this.deps.providerService.stopSession(session.threadId);
     this.deps.providerDirectory.delete(session.threadId);
@@ -250,6 +253,27 @@ export class RuntimeWorkManagementService {
       activeTurnId: null,
       updatedAt: nowIso
     });
+    await this.deps.getGuard().run({
+      action: 'transport.resource.update',
+      actor: input.actorId,
+      target: session.transportResourceId,
+      execute: async () => {
+        try {
+          await this.deps.getTransport().updateTransportResource?.({
+            scopeId: this.deps.config.transport.scopeId,
+            transportResourceId: session.transportResourceId,
+            parentId: surface.archiveCategoryId
+          });
+        } catch (error) {
+          this.deps.appendAuditEvent('session.archive.transport_update_failed', {
+            sessionId: session.sessionId,
+            transportResourceId: session.transportResourceId,
+            actorId: input.actorId,
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+      }
+    });
     this.deps.appendAuditEvent('session.archived', {
       sessionId: archived.sessionId,
       transportResourceId: archived.transportResourceId,
@@ -260,7 +284,7 @@ export class RuntimeWorkManagementService {
 
   async deleteManagedSession(input: {
     actorId: string;
-    transportResourceId: string;
+    transportResourceId?: string;
     sessionId?: string;
   }): Promise<RuntimeSessionRow | null> {
     const session = this.resolveManagedWorkerSession(input);
@@ -277,7 +301,7 @@ export class RuntimeWorkManagementService {
       action: 'transport.resource.delete',
       actor: input.actorId,
       target: session.transportResourceId,
-      execute: async () => await this.deleteRuntimeTransportResource(session.transportResourceId, 'strict')
+      execute: async () => await this.deleteRuntimeTransportResource(session.transportResourceId, 'best-effort')
     });
     this.deps.providerService.stopSession(session.threadId);
     this.deps.providerDirectory.delete(session.threadId);

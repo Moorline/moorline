@@ -14,6 +14,7 @@ import {
   securityHeaders
 } from './http.js';
 import { JsonBodyError } from '@moorline/control-api/errors.js';
+import { writeControlApiBootstrapRecord } from '@moorline/control-api/bootstrap.js';
 import {
   configuredApiAdapterConfig,
   defaultAdminConfig,
@@ -26,6 +27,7 @@ import {
 } from '@moorline/core/types/config.js';
 import { loadMoorlineConfig, resolveConfigPath, saveMoorlineConfig } from '@moorline/core/core/system/config/configStore.js';
 import { redactSensitiveText } from '@moorline/core/core/shared/utils/payloadRedaction.js';
+import { errorStatusCode } from '@moorline/core/core/shared/errors/statusError.js';
 import { ControlPlane } from '@moorline/core/app/control-api/services/controlPlane.js';
 import { projectConfigureState, projectOperationsState, type ControlApiState } from '@moorline/control-api/contracts/api.js';
 import {
@@ -66,6 +68,11 @@ export class ControlApiServer {
         respondJson(response, error.statusCode, { error: redactSensitiveText(error.message) });
         return;
       }
+      const statusCode = errorStatusCode(error);
+      if (statusCode) {
+        respondJson(response, statusCode, { error: redactSensitiveText(error instanceof Error ? error.message : String(error)) });
+        return;
+      }
       const name = error instanceof Error ? error.name : 'UnknownError';
       const detail = redactSensitiveText(error instanceof Error ? error.message : String(error));
       globalThis.console.error('[moorline:control-api] request failed', { name, detail });
@@ -75,6 +82,7 @@ export class ControlApiServer {
   private activePort: number | null = null;
   private controlPlaneStarted = false;
   private exposure: 'loopback' | 'remote' = 'loopback';
+  private stopPromise: Promise<void> | null = null;
 
   constructor(private readonly options: ControlApiServerOptions) {
     const preparedConfig = this.prepareConfigPath(options);
@@ -118,17 +126,53 @@ export class ControlApiServer {
   }
 
   async stop(): Promise<void> {
+    if (this.stopPromise) {
+      return await this.stopPromise;
+    }
+    this.stopPromise = this.stopInternal();
+    try {
+      await this.stopPromise;
+    } finally {
+      this.stopPromise = null;
+    }
+  }
+
+  private async stopInternal(): Promise<void> {
     if (this.activePort === null && !this.controlPlaneStarted) {
       this.cleanupTemporaryConfig();
       return;
+    }
+    if (this.activePort !== null) {
+      await this.closeServer();
     }
     if (this.controlPlaneStarted) {
       await this.controlPlane.stop();
       this.controlPlaneStarted = false;
     }
+    this.cleanupTemporaryConfig();
+  }
+
+  private async closeServer(): Promise<void> {
+    if (this.activePort === null) {
+      return;
+    }
     if (this.activePort !== null) {
       await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        let forceTimer: ReturnType<typeof globalThis.setTimeout> | null = globalThis.setTimeout(() => {
+          forceTimer = null;
+          this.server.closeAllConnections?.();
+        }, 2_000);
+        this.server.closeIdleConnections?.();
         this.server.close((error) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          if (forceTimer) {
+            globalThis.clearTimeout(forceTimer);
+            forceTimer = null;
+          }
           if (error) {
             reject(error);
             return;
@@ -138,7 +182,6 @@ export class ControlApiServer {
       });
       this.activePort = null;
     }
-    this.cleanupTemporaryConfig();
   }
 
   getUrl(): string | null {
@@ -286,7 +329,8 @@ export class ControlApiServer {
     if (url.pathname === '/api/management/import') {
       const force = url.searchParams.get('force') === '1';
       const body = await readRawBody(request, { errorLabel: 'backup archive' });
-      const payload = await this.controlPlane.importBackupArchive({ archiveBytes: body, force });
+      const payload = await this.importBackupArchive(body, force);
+      this.writeBootstrapRecord();
       respondJson(response, 200, payload);
       return;
     }
@@ -295,6 +339,38 @@ export class ControlApiServer {
     const body = await readJsonBody(request);
     const payload = await this.handleApiPost(request, url.pathname, body);
     respondJson(response, 200, payload === undefined ? { ok: true } : payload);
+  }
+
+  private async importBackupArchive(body: Buffer, force: boolean): Promise<unknown> {
+    try {
+      return await this.controlPlane.importBackupArchive({ archiveBytes: body, force });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/Import target already contains state/u.test(message)) {
+        throw new JsonBodyError(409, message);
+      }
+      if (/Backup archive|TAR_BAD_ARCHIVE|Unrecognized archive format|invalid.*archive|Unsupported backup manifest/iu.test(message)) {
+        throw new JsonBodyError(400, message);
+      }
+      throw error;
+    }
+  }
+
+  private writeBootstrapRecord(): void {
+    const url = this.getUrl();
+    if (!url) {
+      return;
+    }
+    writeControlApiBootstrapRecord({
+      version: 1,
+      protocol: 'http',
+      adapterPackageId: manifest.id,
+      pid: process.pid,
+      url,
+      token: this.apiToken,
+      startedAt: new Date().toISOString(),
+      configPath: this.configPath
+    });
   }
 
   private async handleApiGet(response: ServerResponse, url: URL): Promise<void> {

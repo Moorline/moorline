@@ -24,9 +24,14 @@ function cloneEntryForCache(entry: PackageRegistryEntry): PackageRegistryEntry {
   };
 }
 
+function cachedEntryMatchesExpectedNpmName(entry: PackageRegistryEntry): boolean {
+  const expectedNpmName = npmNameForPackageId(entry.packageId);
+  return !expectedNpmName || entry.npm?.packageName === expectedNpmName;
+}
+
 function dedupeEntries(entries: PackageRegistryEntry[]): PackageRegistryEntry[] {
   const byKey = new Map<string, PackageRegistryEntry>();
-  for (const entry of entries) {
+  for (const entry of entries.filter(cachedEntryMatchesExpectedNpmName)) {
     const key = `${entry.kind}:${entry.packageId}`;
     const existing = byKey.get(key);
     if (!existing) {
@@ -74,7 +79,9 @@ function loadCache(path: string, registryUrl: string): PackageRegistryEntry[] {
     if (parsed.version !== 1 || parsed.registryUrl !== registryUrl || !Array.isArray(parsed.entries)) {
       return [];
     }
-    return parsed.entries.map(cloneEntryForCache);
+    return parsed.entries
+      .map(cloneEntryForCache)
+      .filter(cachedEntryMatchesExpectedNpmName);
   } catch {
     return [];
   }
@@ -92,6 +99,9 @@ function saveCache(path: string, registryUrl: string, entries: PackageRegistryEn
 }
 
 function requireInstallableCachedEntry(entry: PackageRegistryEntry): PackageRegistryEntry {
+  if (!cachedEntryMatchesExpectedNpmName(entry)) {
+    throw new Error(`Cached package ${entry.packageId} does not match its expected npm package name.`);
+  }
   if (entry.source.kind !== 'remote_archive' || entry.source.provenance?.type !== 'npm' || !entry.source.integrity) {
     throw new Error(`Cached package ${entry.packageId} is not installable without refreshing npm metadata.`);
   }

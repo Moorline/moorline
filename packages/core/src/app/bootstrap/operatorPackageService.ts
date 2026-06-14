@@ -30,7 +30,7 @@ import { PackageRegistryService } from '../../core/extension/packages/packageReg
 import type { PackageRegistryEntry, PackageSearchInput } from '../../core/extension/packages/packageRegistryTypes.js';
 import { loadInstallablePackageManifest } from '../../core/extension/packages/packageManifest.js';
 
-type PackageConfigValues = Record<string, string>;
+type PackageConfigValues = Record<string, unknown>;
 type PackageConfigReplacement = {
   key: string;
   value: string;
@@ -101,12 +101,31 @@ function packageConfigRootIfPresent(
   return config.surfaces.skills.configByPackageId[packageId] ?? {};
 }
 
+function scalarPackageConfigInputText(value: unknown, label: string): string {
+  if (value === undefined || value === null) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      throw new Error(`${label} must be a finite number.`);
+    }
+    return String(value);
+  }
+  if (typeof value === 'boolean') {
+    return String(value);
+  }
+  throw new Error(`${label} must be a string, number, or boolean.`);
+}
+
 function coercePackageConfigValue(input: {
   surface: PackageSurface;
   packageId: string;
   schema: JsonSchemaLike | undefined;
   key: string;
-  rawValue: string;
+  rawValue: unknown;
 }): string | boolean | number {
   if (input.surface === 'transport' || input.surface === 'provider') {
     return coerceSurfaceConfigInput({
@@ -118,8 +137,9 @@ function coercePackageConfigValue(input: {
     });
   }
 
+  const rawText = scalarPackageConfigInputText(input.rawValue, `${input.surface} config key ${input.key}`);
   if (!input.schema?.properties) {
-    return input.rawValue;
+    return rawText;
   }
 
   const property = input.schema.properties[input.key];
@@ -128,12 +148,12 @@ function coercePackageConfigValue(input: {
   }
 
   const required = new Set(input.schema.required ?? []);
-  const trimmed = input.rawValue.trim();
+  const trimmed = rawText.trim();
   if (required.has(input.key) && trimmed.length === 0) {
     throw new Error(`${input.surface} config key ${input.key} is required.`);
   }
 
-  let value: string | boolean | number = input.rawValue;
+  let value: string | boolean | number = rawText;
   if (property.type === 'boolean') {
     if (trimmed === 'true') {
       value = true;
@@ -216,6 +236,17 @@ export class OperatorPackageService {
     rmSync(this.operationJournalPath(), { force: true });
   }
 
+  private markSetupIncomplete(): void {
+    const nextSetup = {
+      completed: false as const
+    };
+    if (JSON.stringify(this.config.setup) === JSON.stringify(nextSetup)) {
+      return;
+    }
+    this.config.setup = nextSetup;
+    saveMoorlineConfig(this.config, this.configPath);
+  }
+
   private withOperationJournal<T>(operation: 'remove' | 'apply', work: () => T): T {
     this.writeOperationJournal(operation);
     try {
@@ -224,6 +255,9 @@ export class OperatorPackageService {
       return result;
     } catch (error) {
       this.recoverInterruptedPackageOperation();
+      if (operation === 'apply') {
+        this.markSetupIncomplete();
+      }
       this.clearOperationJournal();
       throw error;
     }
@@ -237,6 +271,9 @@ export class OperatorPackageService {
       return result;
     } catch (error) {
       this.recoverInterruptedPackageOperation();
+      if (operation === 'apply') {
+        this.markSetupIncomplete();
+      }
       this.clearOperationJournal();
       throw error;
     }
@@ -474,6 +511,16 @@ export class OperatorPackageService {
     this.inventory.save(state);
   }
 
+  private addBundleActivationOwner(input: { kind: PackageKind; packageId: string; bundlePackageId: string }): void {
+    const state = this.inventory.load();
+    const record = state.installed.find((entry) => entry.kind === input.kind && entry.packageId === input.packageId);
+    if (!record) {
+      return;
+    }
+    record.activatedByPackageIds = [...new Set([...(record.activatedByPackageIds ?? []), input.bundlePackageId])].sort();
+    this.inventory.save(state);
+  }
+
   private removeBundleOwner(input: { kind: PackageKind; packageId: string; bundlePackageId: string }): void {
     const state = this.inventory.load();
     const record = state.installed.find((entry) => entry.kind === input.kind && entry.packageId === input.packageId);
@@ -487,6 +534,63 @@ export class OperatorPackageService {
       delete record.installedByPackageIds;
     }
     this.inventory.save(state);
+  }
+
+  private removeBundleActivationOwner(input: { kind: PackageKind; packageId: string; bundlePackageId: string }): string[] | null {
+    const state = this.inventory.load();
+    const record = state.installed.find((entry) => entry.kind === input.kind && entry.packageId === input.packageId);
+    if (!record?.activatedByPackageIds?.includes(input.bundlePackageId)) {
+      return null;
+    }
+    const nextOwners = record.activatedByPackageIds.filter((owner) => owner !== input.bundlePackageId);
+    if (nextOwners.length > 0) {
+      record.activatedByPackageIds = nextOwners;
+    } else {
+      delete record.activatedByPackageIds;
+    }
+    this.inventory.save(state);
+    return nextOwners;
+  }
+
+  private packageIsDesiredActive(input: { kind: PackageKind; packageId: string }): boolean {
+    if (input.kind === 'api-adapter') {
+      return this.config.surfaces.apiAdapter.activePackageId === input.packageId;
+    }
+    if (input.kind === 'transport') {
+      return this.config.surfaces.transport.activePackageId === input.packageId;
+    }
+    if (input.kind === 'provider') {
+      return this.config.surfaces.provider.activePackageId === input.packageId;
+    }
+    if (input.kind === 'plugin') {
+      return this.config.surfaces.plugins.enabledPackageIds.includes(input.packageId);
+    }
+    if (input.kind === 'skill') {
+      return this.config.surfaces.skills.enabledPackageIds.includes(input.packageId);
+    }
+    return false;
+  }
+
+  private activationIsBundleOwned(input: { kind: PackageKind; packageId: string }): boolean {
+    const record = this.inventory.get(input.kind, input.packageId);
+    return (record?.activatedByPackageIds?.length ?? 0) > 0;
+  }
+
+  private removeBundleOwnedActivation(input: { kind: PackageKind; packageId: string; bundlePackageId: string }): void {
+    const remainingOwners = this.removeBundleActivationOwner(input);
+    if (remainingOwners === null) {
+      return;
+    }
+    if (remainingOwners.length > 0 || !this.packageIsDesiredActive(input)) {
+      return;
+    }
+    if (input.kind === 'api-adapter' || input.kind === 'transport' || input.kind === 'provider') {
+      this.setSelectedPackage(input.kind, null);
+      return;
+    }
+    if (input.kind === 'plugin' || input.kind === 'skill') {
+      this.disablePackage(input.kind, input.packageId);
+    }
   }
 
   private bundleMemberDependents(input: { kind: PackageKind; packageId: string }): string[] {
@@ -649,9 +753,37 @@ export class OperatorPackageService {
           }
         }
         if (resolved.member.activation === 'select') {
+          const shouldTrackActivation = !this.packageIsDesiredActive({
+            kind: resolved.member.kind,
+            packageId: resolved.packageEntry.packageId
+          }) || this.activationIsBundleOwned({
+            kind: resolved.member.kind,
+            packageId: resolved.packageEntry.packageId
+          });
           this.setSelectedPackage(resolved.member.kind as 'transport' | 'provider', resolved.packageEntry.packageId);
+          if (shouldTrackActivation) {
+            this.addBundleActivationOwner({
+              kind: resolved.member.kind,
+              packageId: resolved.packageEntry.packageId,
+              bundlePackageId: record.packageId
+            });
+          }
         } else if (resolved.member.activation === 'enable') {
+          const shouldTrackActivation = !this.packageIsDesiredActive({
+            kind: resolved.member.kind,
+            packageId: resolved.packageEntry.packageId
+          }) || this.activationIsBundleOwned({
+            kind: resolved.member.kind,
+            packageId: resolved.packageEntry.packageId
+          });
           this.enablePackage(resolved.member.kind as 'plugin' | 'skill', resolved.packageEntry.packageId);
+          if (shouldTrackActivation) {
+            this.addBundleActivationOwner({
+              kind: resolved.member.kind,
+              packageId: resolved.packageEntry.packageId,
+              bundlePackageId: record.packageId
+            });
+          }
         }
       }
     } catch (error) {
@@ -709,6 +841,9 @@ export class OperatorPackageService {
         const installed = this.inventory.get(member.kind, member.packageId);
         if (!installed) {
           continue;
+        }
+        if (member.activation === 'select' || member.activation === 'enable') {
+          this.removeBundleOwnedActivation({ kind: member.kind, packageId: member.packageId, bundlePackageId: input.packageId });
         }
         const owners = installed.installedByPackageIds ?? [];
         if (!owners.includes(input.packageId)) {
@@ -831,6 +966,29 @@ export class OperatorPackageService {
         this.config.surfaces.provider.config = {};
         configChanged = true;
       }
+    }
+
+    if (
+      this.config.transport &&
+      (
+        !this.config.surfaces.transport.activePackageId ||
+        this.config.transport.packageId !== this.config.surfaces.transport.activePackageId ||
+        !installed.transport.has(this.config.transport.packageId)
+      )
+    ) {
+      delete this.config.transport;
+      configChanged = true;
+    }
+    if (
+      this.config.provider &&
+      (
+        !this.config.surfaces.provider.activePackageId ||
+        this.config.provider.packageId !== this.config.surfaces.provider.activePackageId ||
+        !installed.provider.has(this.config.provider.packageId)
+      )
+    ) {
+      delete this.config.provider;
+      configChanged = true;
     }
 
     for (const packageId of Object.keys(this.config.surfaces.apiAdapter.configByPackageId ?? {})) {
@@ -1133,16 +1291,23 @@ export class OperatorPackageService {
 
   async apply(): Promise<PackageApplyPlan> {
     return await this.withAsyncOperationJournal('apply', async () => {
-      this.reconcileDesiredAndAppliedState();
-      await this.completeSelectedTransportConfig();
-      const state = this.inventory.load();
-      const startability = evaluateRuntimeStartability(this.config, state);
-      if (!startability.startable) {
-        throw new Error(startability.issues.join('\n'));
-      }
-      const plan = createPackageApplyPlan(this.config, state);
-      if (plan.errors.length > 0) {
-        throw new Error(plan.errors.map((entry) => entry.detail).join('\n'));
+      let state = this.inventory.load();
+      let plan: PackageApplyPlan;
+      try {
+        this.reconcileDesiredAndAppliedState();
+        await this.completeSelectedTransportConfig();
+        state = this.inventory.load();
+        const startability = evaluateRuntimeStartability(this.config, state);
+        if (!startability.startable) {
+          throw new Error(startability.issues.join('\n'));
+        }
+        plan = createPackageApplyPlan(this.config, state);
+        if (plan.errors.length > 0) {
+          throw new Error(plan.errors.map((entry) => entry.detail).join('\n'));
+        }
+      } catch (error) {
+        this.markSetupIncomplete();
+        throw error;
       }
 
       const applied = buildRequiredAppliedSurfaceConfigs(this.config);

@@ -320,6 +320,7 @@ export interface RuntimeToolContext {
   getCurrentThreadId(): string;
   getCurrentWorkspacePath(): string;
   getCoordinationWorkspacePath(): string;
+  getRuntimeRootPath(): string;
   listSkills(): SkillCatalogEntry[];
   loadSkill(name: string): Promise<LoadedSkill | null>;
   writeSkill(input: {

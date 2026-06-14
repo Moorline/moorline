@@ -167,8 +167,10 @@ export function domainEventsFromProviderEvent(input: {
   runtimeMode: RuntimeModeName | null;
   workspacePath: string | null;
   request: PendingRuntimeRequestRecord | null;
+  receipt: RuntimeReceiptRecord | null;
+  activeTurnId: string | null;
 }): RuntimeDomainEvent[] {
-  const { event, sessionId, transportResourceId, runtimeMode, workspacePath, request } = input;
+  const { event, sessionId, transportResourceId, runtimeMode, workspacePath, request, receipt, activeTurnId } = input;
   const base = {
     eventId: event.eventId,
     threadId: event.threadId,
@@ -393,6 +395,14 @@ export function domainEventsFromProviderEvent(input: {
       return [];
     case 'session.state.changed':
       if (event.payload.state === 'closed' || event.payload.state === 'error') {
+        const active =
+          Boolean(activeTurnId ?? receipt?.activeTurnId) ||
+          receipt?.state === 'running' ||
+          receipt?.state === 'waiting_for_approval' ||
+          receipt?.state === 'waiting_for_input';
+        if (!active) {
+          return [];
+        }
         return [
           {
             ...base,

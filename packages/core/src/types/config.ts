@@ -185,8 +185,8 @@ export interface RuntimeSurfaceState {
   memberAccessGroupId?: string;
   adminAccessGroupName?: string;
   memberAccessGroupName?: string;
-  adminAccessGroupVerifiedAt?: string;
-  memberAccessGroupVerifiedAt?: string;
+  adminAccessGroupSyncedAt?: string;
+  memberAccessGroupSyncedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

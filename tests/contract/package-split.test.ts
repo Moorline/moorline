@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { validatePackageId } from '../../packages/contracts/src/package.js';
 
 const root = process.cwd();
 const hostPackages = ['cli', 'contracts', 'control-api', 'core', 'http'];
@@ -78,6 +79,10 @@ describe('host repository split contract', () => {
       packageId: 'moorline/http',
       kind: 'api-adapter'
     });
+  });
+
+  it('does not allow the retired official package namespace', () => {
+    expect(() => validatePackageId('official/http', 'package id')).toThrow(/retired official\/\*/u);
   });
 
   it('builds release CLI artifacts from the split CLI package entrypoint', () => {

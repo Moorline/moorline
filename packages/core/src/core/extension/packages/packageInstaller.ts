@@ -168,6 +168,9 @@ export class PackageInstaller {
         });
         record.installedByPackageIds = [...new Set(ownerPackageIds)].sort();
       }
+      if (previous?.activatedByPackageIds && previous.activatedByPackageIds.length > 0) {
+        record.activatedByPackageIds = [...new Set(previous.activatedByPackageIds)].sort();
+      }
       state.installed = state.installed.filter((entry) => !(entry.kind === input.surface && entry.packageId === loaded.manifest.id));
       state.installed.push(record);
       const errors = resolvePackageDependencyErrors({

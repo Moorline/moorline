@@ -160,6 +160,9 @@ export function validatePackageId(packageId: unknown, label: string): string {
       `${label} must match <surface>/<name> using lowercase letters, numbers, ".", "_" or "-". Received: ${packageId}`
     );
   }
+  if (normalized.startsWith('official/')) {
+    throw new Error(`${label} must not use the retired official/* package namespace. Received: ${packageId}`);
+  }
   return normalized;
 }
 

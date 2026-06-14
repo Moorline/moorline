@@ -52,6 +52,7 @@ export interface PackageInstallRecord {
   activation?: PackageActivationRule;
   members?: PackageBundleMember[];
   installedByPackageIds?: string[];
+  activatedByPackageIds?: string[];
 }
 
 export interface PackageMetadataEntry {
