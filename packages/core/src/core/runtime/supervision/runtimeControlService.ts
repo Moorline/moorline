@@ -181,7 +181,10 @@ export class RuntimeControlService {
       }
       return bridgeProviderResult('start', input, result.detail);
     }
-    return await this.applyStartProviderSessions(input);
+    return await this.applyStartProviderSessions({
+      ...input,
+      actorId: 'runtime:provider/control'
+    });
   }
 
   private async applyRuntimeAcceptingNewWork(input: {

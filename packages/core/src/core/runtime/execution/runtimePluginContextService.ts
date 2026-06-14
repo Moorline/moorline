@@ -287,6 +287,7 @@ export class RuntimePluginContextService {
       getCurrentThreadId: () => `coordination:${this.deps.getSurfaceState()?.coordinationResourceId ?? this.deps.config.transport.scopeId}`,
       getCurrentWorkspacePath: () => this.deps.coordinationWorkspacePath,
       getCoordinationWorkspacePath: () => this.deps.coordinationWorkspacePath,
+      getRuntimeRootPath: () => this.deps.runtimeRoot,
       listSkills: () => capabilities.memory.listSkills(),
       loadSkill: async (name) => await capabilities.memory.loadSkill(name),
       writeSkill: async (input) => await capabilities.memory.writeSkill(input),

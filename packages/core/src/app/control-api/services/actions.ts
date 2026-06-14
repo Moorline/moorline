@@ -32,6 +32,7 @@ import {
   type RuntimeSetAcceptingOrchestrationPayload
 } from '../../../core/runtime/execution/runtimeOrchestrationRequests.js';
 import { parseOrchestrationResult } from '../../../core/runtime/execution/runtimeOrchestrationResult.js';
+import { MoorlineStatusError } from '../../../core/shared/errors/statusError.js';
 import type { RuntimeOrchestrationRequestType } from '../../../core/system/state/sqlite/types.js';
 import type { MoorlineConfig } from '../../../types/config.js';
 import type { ControlApiRuntimeHostService } from './runtimeHost.js';
@@ -44,6 +45,7 @@ const ORCHESTRATION_TIMEOUT_MS = 180_000;
 
 export class ControlApiActionsService {
   private readonly history = new GitHistoryService();
+  private packageMutationQueue: Promise<unknown> = Promise.resolve();
 
   constructor(
     private readonly input: {
@@ -98,20 +100,23 @@ export class ControlApiActionsService {
     archiveBytes: Buffer;
     force: boolean;
   }): Promise<{ configPath: string; runtimeRoot: string; replacedExistingState: boolean }> {
-    const config = this.loadConfig();
-    const tempDir = mkdtempSync(join(tmpdir(), 'moorline-control-api-import-'));
-    const archivePath = join(tempDir, 'backup.tgz');
-    writeFileSync(archivePath, input.archiveBytes, { flag: 'wx' });
-    try {
-      return await importRuntimeBackup({
-        archivePath,
-        targetConfigPath: this.requireConfigPath(),
-        targetRuntimeRoot: config.runtimeRoot,
-        force: input.force
-      });
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
+    return await this.withPackageMutation(async () => {
+      await this.stopMainForPackageMutation();
+      const config = this.loadConfig();
+      const tempDir = mkdtempSync(join(tmpdir(), 'moorline-control-api-import-'));
+      const archivePath = join(tempDir, 'backup.tgz');
+      writeFileSync(archivePath, input.archiveBytes, { flag: 'wx' });
+      try {
+        return await importRuntimeBackup({
+          archivePath,
+          targetConfigPath: this.requireConfigPath(),
+          targetRuntimeRoot: config.runtimeRoot,
+          force: input.force
+        });
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
   }
 
   async setDefaultModel(model: string): Promise<void> {
@@ -174,12 +179,27 @@ export class ControlApiActionsService {
     return { ok: true };
   }
 
-  installPackage(input: { kind?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; surface?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; packageId?: string; source?: string }) {
-    const config = this.loadConfig();
-    return this.packageService(config).installPackage({
-      kind: input.kind ?? input.surface,
-      ...(input.packageId ? { packageId: input.packageId } : {}),
-      ...(input.source ? { source: parsePackageSource(input.source) } : {})
+  private async stopMainForPackageMutation(): Promise<void> {
+    if (this.input.runtimeHost.isRunning()) {
+      await this.input.runtimeHost.stop();
+    }
+  }
+
+  private async withPackageMutation<T>(operation: () => Promise<T> | T): Promise<T> {
+    const run = this.packageMutationQueue.catch(() => undefined).then(operation);
+    this.packageMutationQueue = run.catch(() => undefined);
+    return await run;
+  }
+
+  async installPackage(input: { kind?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; surface?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; packageId?: string; source?: string }) {
+    return await this.withPackageMutation(async () => {
+      await this.stopMainForPackageMutation();
+      const config = this.loadConfig();
+      return this.packageService(config).installPackage({
+        kind: input.kind ?? input.surface,
+        ...(input.packageId ? { packageId: input.packageId } : {}),
+        ...(input.source ? { source: parsePackageSource(input.source) } : {})
+      });
     });
   }
 
@@ -195,47 +215,71 @@ export class ControlApiActionsService {
     return this.packageService(this.loadConfig()).getPackageInfo(input);
   }
 
-  removePackage(input: { kind?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; surface?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; packageId: string; cascade?: boolean }) {
-    return this.packageService(this.loadConfig()).removePackage(input);
+  async removePackage(input: { kind?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; surface?: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill' | 'bundle'; packageId: string; cascade?: boolean }) {
+    return await this.withPackageMutation(async () => {
+      await this.stopMainForPackageMutation();
+      return this.packageService(this.loadConfig()).removePackage(input);
+    });
   }
 
-  enablePackage(input: { surface: 'plugin' | 'skill'; packageId: string }) {
-    return this.packageService(this.loadConfig()).enablePackage(input.surface, input.packageId);
+  async enablePackage(input: { surface: 'plugin' | 'skill'; packageId: string }) {
+    return await this.withPackageMutation(async () => {
+      await this.stopMainForPackageMutation();
+      return this.packageService(this.loadConfig()).enablePackage(input.surface, input.packageId);
+    });
   }
 
-  disablePackage(input: { surface: 'plugin' | 'skill'; packageId: string }) {
-    return this.packageService(this.loadConfig()).disablePackage(input.surface, input.packageId);
+  async disablePackage(input: { surface: 'plugin' | 'skill'; packageId: string }) {
+    return await this.withPackageMutation(async () => {
+      await this.stopMainForPackageMutation();
+      return this.packageService(this.loadConfig()).disablePackage(input.surface, input.packageId);
+    });
   }
 
-  activatePackage(input: { surface: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill'; packageId: string }) {
-    return this.packageService(this.loadConfig()).activatePackage(input.surface, input.packageId);
+  async activatePackage(input: { surface: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill'; packageId: string }) {
+    return await this.withPackageMutation(async () => {
+      await this.stopMainForPackageMutation();
+      return this.packageService(this.loadConfig()).activatePackage(input.surface, input.packageId);
+    });
   }
 
-  deactivatePackage(input: { surface: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill'; packageId: string }) {
-    return this.packageService(this.loadConfig()).deactivatePackage(input.surface, input.packageId);
+  async deactivatePackage(input: { surface: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill'; packageId: string }) {
+    return await this.withPackageMutation(async () => {
+      await this.stopMainForPackageMutation();
+      return this.packageService(this.loadConfig()).deactivatePackage(input.surface, input.packageId);
+    });
   }
 
-  selectPackage(input: { surface: 'api-adapter' | 'transport' | 'provider'; packageId: string | null }) {
-    return this.packageService(this.loadConfig()).setSelectedPackage(input.surface, input.packageId);
+  async selectPackage(input: { surface: 'api-adapter' | 'transport' | 'provider'; packageId: string | null }) {
+    return await this.withPackageMutation(async () => {
+      await this.stopMainForPackageMutation();
+      return this.packageService(this.loadConfig()).setSelectedPackage(input.surface, input.packageId);
+    });
   }
 
-  setPackageConfig(input: {
+  async setPackageConfig(input: {
     surface: 'api-adapter' | 'transport' | 'provider' | 'plugin' | 'skill';
     packageId: string;
-    values?: Record<string, string>;
+    values?: Record<string, unknown>;
     secretReplacements?: Array<{ key: string; value: string }>;
   }) {
-    const service = this.packageService(this.loadConfig());
-    return service.setPackageConfigValues({
-      surface: input.surface,
-      packageId: input.packageId,
-      values: input.values ?? {},
-      secretReplacements: input.secretReplacements ?? []
+    return await this.withPackageMutation(async () => {
+      await this.stopMainForPackageMutation();
+      const service = this.packageService(this.loadConfig());
+      return service.setPackageConfigValues({
+        surface: input.surface,
+        packageId: input.packageId,
+        values: input.values ?? {},
+        secretReplacements: input.secretReplacements ?? []
+      });
     });
   }
 
   async applyPackages() {
-    return await this.packageService(this.loadConfig()).apply();
+    return await this.withPackageMutation(async () => {
+      await this.stopMainForPackageMutation();
+      return await this.packageService(this.loadConfig()).apply();
+    });
   }
 
   listPendingRequests() {
@@ -297,7 +341,7 @@ export class ControlApiActionsService {
 
   private async runRuntimeRequest<TPayload>(type: RuntimeOrchestrationRequestType, payload: TPayload): Promise<unknown> {
     if (!this.input.runtimeHost.isRunning()) {
-      throw new Error('Main process is not active.');
+      throw new MoorlineStatusError(409, 'Main process is not active.');
     }
     const store = new SqliteSessionStore(runtimePaths(this.loadConfig().runtimeRoot).sqlitePath);
     try {

@@ -323,6 +323,15 @@ export class ProviderTurnBroker {
     this.rejectThread(threadId, reason);
   }
 
+  hasOpenTurn(threadId: string): boolean {
+    for (const key of this.turnWaiters.keys()) {
+      if (key.startsWith(`${threadId}:`)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   flushThread(threadId: string): void {
     for (const key of [...this.turnWaiters.keys()]) {
       if (key.startsWith(`${threadId}:`)) {

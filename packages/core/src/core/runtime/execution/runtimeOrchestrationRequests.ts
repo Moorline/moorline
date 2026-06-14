@@ -26,12 +26,12 @@ export interface DirectSessionOrchestrationPayload {
 
 export interface ArchiveSessionOrchestrationPayload {
   sessionId?: string;
-  transportResourceId: string;
+  transportResourceId?: string;
 }
 
 export interface DeleteSessionOrchestrationPayload {
   sessionId?: string;
-  transportResourceId: string;
+  transportResourceId?: string;
 }
 
 export interface PostMessageOrchestrationPayload {
@@ -236,17 +236,17 @@ function validatePayloadByType(
     }
     case 'archive_session':
     case 'delete_session': {
-      const transportResourceId = readTrimmedString(record, 'transportResourceId');
-      if (!transportResourceId) {
+      const sessionId = readOptionalTrimmedString(record, 'sessionId');
+      const transportResourceId = readOptionalTrimmedString(record, 'transportResourceId');
+      if (!sessionId && !transportResourceId) {
         return {
-          code: 'ORCH_SESSION_SPACE_REQUIRED',
-          message: `${type} payload requires non-empty transportResourceId.`
+          code: 'ORCH_SESSION_TARGET_REQUIRED',
+          message: `${type} payload requires sessionId or transportResourceId.`
         };
       }
-      const sessionId = readOptionalTrimmedString(record, 'sessionId');
       return {
-        transportResourceId,
-        ...(sessionId ? { sessionId } : {})
+        ...(sessionId ? { sessionId } : {}),
+        ...(transportResourceId ? { transportResourceId } : {})
       };
     }
     case 'post_message': {

@@ -26,7 +26,7 @@ const BASE_ENV_ALLOWLIST = new Set([
   'no_proxy'
 ]);
 
-const PREFIX_ALLOWLIST = ['MOORLINE_', 'CODEX_'];
+const PREFIX_ALLOWLIST = ['MOORLINE_'];
 
 function parseExtraAllowlist(raw: string | undefined): string[] {
   if (!raw) {

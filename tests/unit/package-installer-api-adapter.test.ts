@@ -1,10 +1,12 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { create } from 'tar';
+import { describe, expect, it, vi } from 'vitest';
 import { OperatorPackageService } from '../../packages/core/src/app/bootstrap/operatorPackageService.js';
 import { PackageInstaller } from '../../packages/core/src/core/extension/packages/packageInstaller.js';
 import { PackageInventoryStore } from '../../packages/core/src/core/extension/packages/packageInventoryStore.js';
-import { evaluateRuntimeStartability } from '../../packages/core/src/core/extension/packages/runtimeStartability.js';
+import { coerceSurfaceConfigInput, evaluateRuntimeStartability } from '../../packages/core/src/core/extension/packages/runtimeStartability.js';
 import { saveMoorlineConfig } from '../../packages/core/src/core/system/config/configStore.js';
 import {
   configuredApiAdapterConfig,
@@ -123,6 +125,40 @@ function writeTransportPackage(root: string): void {
   );
 }
 
+function writeProviderPackage(root: string): void {
+  mkdirSync(root, { recursive: true });
+  const manifest = {
+    id: 'acme/provider',
+    name: 'acme/provider',
+    version: '1.0.0',
+    type: 'provider',
+    entrypoint: 'index.mjs'
+  };
+  writeFileSync(join(root, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  writeFileSync(
+    join(root, 'moorline.dist.json'),
+    JSON.stringify(
+      {
+        schemaVersion: 1,
+        display: {
+          name: 'Example Provider',
+          description: 'Fake provider package.',
+          version: '1.0.0',
+          tags: ['provider']
+        }
+      },
+      null,
+      2
+    ),
+    'utf8'
+  );
+  writeFileSync(
+    join(root, 'index.mjs'),
+    `export default { manifest: ${JSON.stringify(manifest)}, createProviderFactory() { return () => ({}); } };\n`,
+    'utf8'
+  );
+}
+
 function writeRequiredApiAdapterPackage(root: string): void {
   mkdirSync(root, { recursive: true });
   const manifest = {
@@ -198,14 +234,14 @@ function writePluginPackage(root: string, input: { packageId: string; version?: 
   writeFileSync(join(root, 'index.mjs'), `export default { id: '${input.packageId}', manifest: ${JSON.stringify(manifest)} };\n`, 'utf8');
 }
 
-function writeBundlePackage(root: string): void {
+function writeBundlePackage(root: string, id = 'rync/basic-essentials'): void {
   mkdirSync(root, { recursive: true });
   writeFileSync(
     join(root, 'manifest.json'),
     JSON.stringify(
       {
-        id: 'rync/basic-essentials',
-        name: 'rync/basic-essentials',
+        id,
+        name: id,
         version: '1.0.0',
         type: 'bundle',
         description: 'Basic essentials.',
@@ -266,6 +302,188 @@ describe('api-adapter package installation', () => {
       version: '1.2.3',
       installPath: join(runtimeRoot, 'packages', 'api-adapters', 'acme', 'http-alt')
     });
+  });
+
+  it('skips workspace node_modules when installing local package directories', async () => {
+    const root = createTempRoot('moorline-local-package-node-modules-');
+    const runtimeRoot = join(root, 'runtime');
+    const sourceDir = join(root, 'source');
+    writeApiAdapterPackage(sourceDir);
+    const dependencyTarget = join(root, 'workspace-dependency');
+    mkdirSync(join(sourceDir, 'node_modules', '@moorline'), { recursive: true });
+    mkdirSync(dependencyTarget, { recursive: true });
+    symlinkSync(dependencyTarget, join(sourceDir, 'node_modules', '@moorline', 'contracts'), 'dir');
+
+    const record = await new PackageInstaller(runtimeRoot, () => '2026-05-20T00:00:00.000Z').install({
+      surface: 'api-adapter',
+      source: {
+        kind: 'local_dir',
+        path: sourceDir
+      }
+    });
+
+    expect(record.packageId).toBe('acme/http-alt');
+    expect(existsSync(join(record.installPath, 'node_modules'))).toBe(false);
+  });
+
+  it('skips source-checkout TypeScript baggage while preserving runtime JavaScript', async () => {
+    const root = createTempRoot('moorline-local-package-source-checkout-');
+    const runtimeRoot = join(root, 'runtime');
+    const sourceDir = join(root, 'source');
+    writeApiAdapterPackage(sourceDir);
+    mkdirSync(join(sourceDir, 'src'), { recursive: true });
+    mkdirSync(join(sourceDir, 'dist'), { recursive: true });
+    writeFileSync(join(sourceDir, 'src', 'http.ts'), 'export const sourceOnly = true;\n', 'utf8');
+    writeFileSync(join(sourceDir, 'src', 'runtime.mjs'), 'export const runtime = true;\n', 'utf8');
+    writeFileSync(join(sourceDir, 'tsconfig.json'), '{"compilerOptions":{}}\n', 'utf8');
+    writeFileSync(join(sourceDir, 'dist', 'index.js'), 'export {};\n', 'utf8');
+    writeFileSync(join(sourceDir, 'dist', 'index.js.map'), '{}\n', 'utf8');
+
+    const record = await new PackageInstaller(runtimeRoot, () => '2026-05-20T00:00:00.000Z').install({
+      surface: 'api-adapter',
+      source: {
+        kind: 'local_dir',
+        path: sourceDir
+      }
+    });
+
+    expect(record.packageId).toBe('acme/http-alt');
+    expect(existsSync(join(record.installPath, 'src', 'http.ts'))).toBe(false);
+    expect(existsSync(join(record.installPath, 'src', 'runtime.mjs'))).toBe(true);
+    expect(existsSync(join(record.installPath, 'tsconfig.json'))).toBe(false);
+    expect(existsSync(join(record.installPath, 'dist', 'index.js'))).toBe(true);
+    expect(existsSync(join(record.installPath, 'dist', 'index.js.map'))).toBe(false);
+  });
+
+  it('allows local packages to use a JavaScript entrypoint under src', async () => {
+    const root = createTempRoot('moorline-local-package-src-entrypoint-');
+    const runtimeRoot = join(root, 'runtime');
+    const sourceDir = join(root, 'source');
+    writeApiAdapterPackage(sourceDir);
+    const manifestPath = join(sourceDir, 'manifest.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
+    manifest.entrypoint = 'src/index.mjs';
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    mkdirSync(join(sourceDir, 'src'), { recursive: true });
+    writeFileSync(join(sourceDir, 'src', 'index.mjs'), "export default { createAdapter() { return {}; } };\n", 'utf8');
+    writeFileSync(join(sourceDir, 'src', 'index.ts'), 'export const sourceOnly = true;\n', 'utf8');
+
+    const record = await new PackageInstaller(runtimeRoot, () => '2026-05-20T00:00:00.000Z').install({
+      surface: 'api-adapter',
+      source: {
+        kind: 'local_dir',
+        path: sourceDir
+      }
+    });
+
+    expect(record.packageId).toBe('acme/http-alt');
+    expect(existsSync(join(record.installPath, 'src', 'index.mjs'))).toBe(true);
+    expect(existsSync(join(record.installPath, 'src', 'index.ts'))).toBe(false);
+  });
+
+  it('copies declared Moorline workspace dependencies for local package directories', async () => {
+    const root = createTempRoot('moorline-local-package-workspace-deps-');
+    const runtimeRoot = join(root, 'runtime');
+    const sourceDir = join(root, 'source');
+    const contractsDir = join(root, 'contracts');
+    const transitiveDir = join(root, 'transitive');
+    writeApiAdapterPackage(sourceDir);
+    writeFileSync(
+      join(sourceDir, 'package.json'),
+      JSON.stringify({
+        type: 'module',
+        dependencies: {
+          '@moorline/contracts': '0.0.2'
+        }
+      }, null, 2),
+      'utf8'
+    );
+    mkdirSync(join(sourceDir, 'node_modules', '@moorline'), { recursive: true });
+    mkdirSync(join(contractsDir, 'dist'), { recursive: true });
+    writeFileSync(
+      join(contractsDir, 'package.json'),
+      JSON.stringify({
+        name: '@moorline/contracts',
+        type: 'module',
+        dependencies: {
+          'moorline-transitive-test': '1.0.0'
+        },
+        exports: {
+          '.': './dist/index.js'
+        }
+      }, null, 2),
+      'utf8'
+    );
+    writeFileSync(join(contractsDir, 'dist', 'index.js'), 'export const ok = true;\n', 'utf8');
+    writeFileSync(join(contractsDir, 'dist', 'index.js.map'), '{}\n', 'utf8');
+    mkdirSync(join(contractsDir, 'src'), { recursive: true });
+    writeFileSync(join(contractsDir, 'src', 'index.ts'), 'export const sourceOnly = true;\n', 'utf8');
+    mkdirSync(join(contractsDir, 'node_modules'), { recursive: true });
+    mkdirSync(join(transitiveDir, 'dist'), { recursive: true });
+    writeFileSync(
+      join(transitiveDir, 'package.json'),
+      JSON.stringify({
+        name: 'moorline-transitive-test',
+        type: 'module',
+        exports: {
+          '.': './dist/index.js'
+        }
+      }, null, 2),
+      'utf8'
+    );
+    writeFileSync(join(transitiveDir, 'dist', 'index.js'), 'export const transitive = true;\n', 'utf8');
+    symlinkSync(transitiveDir, join(contractsDir, 'node_modules', 'moorline-transitive-test'), 'dir');
+    symlinkSync(contractsDir, join(sourceDir, 'node_modules', '@moorline', 'contracts'), 'dir');
+
+    const record = await new PackageInstaller(runtimeRoot, () => '2026-05-20T00:00:00.000Z').install({
+      surface: 'api-adapter',
+      source: {
+        kind: 'local_dir',
+        path: sourceDir
+      }
+    });
+
+    const installedDependency = join(record.installPath, 'node_modules', '@moorline', 'contracts');
+    expect(record.packageId).toBe('acme/http-alt');
+    expect(existsSync(join(installedDependency, 'package.json'))).toBe(true);
+    expect(existsSync(join(installedDependency, 'dist', 'index.js'))).toBe(true);
+    expect(existsSync(join(installedDependency, 'dist', 'index.js.map'))).toBe(false);
+    expect(existsSync(join(installedDependency, 'src', 'index.ts'))).toBe(false);
+    expect(existsSync(join(record.installPath, 'node_modules', 'moorline-transitive-test', 'dist', 'index.js'))).toBe(true);
+  });
+
+  it('verifies integrity before using bundled remote archive fallback', async () => {
+    const root = createTempRoot('moorline-bundled-fallback-integrity-');
+    const runtimeRoot = join(root, 'runtime');
+    const sourceDir = join(root, 'source');
+    writeApiAdapterPackage(sourceDir);
+    const archiveName = 'moorline-api-adapter-fallback-integrity-0.0.2.tar.gz';
+    const archiveDir = join(process.cwd(), 'packages', 'core', 'dist', 'installable-archives', 'api-adapters');
+    const archivePath = join(archiveDir, archiveName);
+    mkdirSync(archiveDir, { recursive: true });
+    try {
+      await create({
+        gzip: true,
+        file: archivePath,
+        cwd: sourceDir
+      }, ['.']);
+      const actualIntegrity = `sha512-${createHash('sha512').update(readFileSync(archivePath)).digest('base64')}`;
+      expect(actualIntegrity).not.toBe('sha512-not-real');
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('simulated network failure'));
+
+      await expect(new PackageInstaller(runtimeRoot, () => '2026-05-20T00:00:00.000Z').install({
+        surface: 'api-adapter',
+        source: {
+          kind: 'remote_archive',
+          url: `https://github.com/Moorline/moorline/releases/download/v0.0.2/${archiveName}`,
+          integrity: 'sha512-not-real'
+        }
+      })).rejects.toThrow(/Bundled archive integrity mismatch/u);
+      expect(existsSync(join(runtimeRoot, 'packages', 'api-adapters', 'acme', 'http-alt'))).toBe(false);
+    } finally {
+      vi.restoreAllMocks();
+      rmSync(archivePath, { force: true });
+    }
   });
 
   it('installs bundle members from embedded package directories', async () => {
@@ -336,6 +554,7 @@ describe('api-adapter package installation', () => {
         kind: 'plugin',
         packageId: 'rync/status',
         installedByPackageIds: ['rync/basic-essentials'],
+        activatedByPackageIds: ['rync/basic-essentials'],
         source: {
           kind: 'local_dir',
           path: join(runtimeRoot, 'packages', 'bundles', 'rync', 'basic-essentials', 'packages', 'plugins', 'rync', 'status')
@@ -343,6 +562,357 @@ describe('api-adapter package installation', () => {
       })
     ]));
     expect(config.surfaces.plugins.enabledPackageIds).toContain('rync/status');
+  });
+
+  it('removes bundle-owned activation while keeping a manually installed member package', async () => {
+    const root = createTempRoot('moorline-bundle-activation-owner-');
+    const runtimeRoot = join(root, 'runtime');
+    const pluginSourceDir = join(root, 'plugin-source');
+    const bundleSourceDir = join(root, 'bundle-source');
+    writePluginPackage(pluginSourceDir, {
+      packageId: 'rync/status'
+    });
+    writeBundlePackage(bundleSourceDir);
+    const surface = defaultSurfaceNames();
+    const config: MoorlineConfig = {
+      version: 4,
+      runtimeRoot,
+      admin: defaultAdminConfig(),
+      main: defaultMainProcessConfig(),
+      defaults: {
+        runtimeMode: 'full-access',
+        model: 'latest'
+      },
+      surface,
+      setup: {
+        completed: false
+      },
+      surfaces: {
+        apiAdapter: {
+          activePackageId: 'moorline/http',
+          config: defaultHttpApiAdapterConfig(),
+          configByPackageId: {}
+        },
+        transport: {
+          activePackageId: null,
+          config: {},
+          configByPackageId: {}
+        },
+        provider: {
+          activePackageId: null,
+          config: {},
+          configByPackageId: {}
+        },
+        plugins: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        },
+        skills: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        }
+      }
+    };
+    const configPath = join(root, 'config.json');
+    saveMoorlineConfig(config, configPath);
+    const service = new OperatorPackageService(config, configPath, () => '2026-05-20T00:00:00.000Z', root);
+
+    await service.installPackage({
+      kind: 'plugin',
+      source: {
+        kind: 'local_dir',
+        path: pluginSourceDir
+      }
+    });
+    await service.installPackage({
+      kind: 'bundle',
+      source: {
+        kind: 'local_dir',
+        path: bundleSourceDir
+      }
+    });
+    expect(config.surfaces.plugins.enabledPackageIds).toEqual(['rync/status']);
+    expect(new PackageInventoryStore(runtimeRoot).load().installed.find((entry) => entry.kind === 'plugin')).toMatchObject({
+      packageId: 'rync/status',
+      activatedByPackageIds: ['rync/basic-essentials']
+    });
+
+    service.removePackage({
+      kind: 'bundle',
+      packageId: 'rync/basic-essentials'
+    });
+
+    expect(config.surfaces.plugins.enabledPackageIds).toEqual([]);
+    const remainingPlugin = new PackageInventoryStore(runtimeRoot).load().installed[0];
+    expect(remainingPlugin).toMatchObject({
+      kind: 'plugin',
+      packageId: 'rync/status'
+    });
+    expect(remainingPlugin).not.toHaveProperty('activatedByPackageIds');
+    expect(remainingPlugin).not.toHaveProperty('installedByPackageIds');
+  });
+
+  it('preserves manual activation when removing a bundle that reused an active member package', async () => {
+    const root = createTempRoot('moorline-bundle-manual-activation-');
+    const runtimeRoot = join(root, 'runtime');
+    const pluginSourceDir = join(root, 'plugin-source');
+    const bundleSourceDir = join(root, 'bundle-source');
+    writePluginPackage(pluginSourceDir, {
+      packageId: 'rync/status'
+    });
+    writeBundlePackage(bundleSourceDir);
+    const surface = defaultSurfaceNames();
+    const config: MoorlineConfig = {
+      version: 4,
+      runtimeRoot,
+      admin: defaultAdminConfig(),
+      main: defaultMainProcessConfig(),
+      defaults: {
+        runtimeMode: 'full-access',
+        model: 'latest'
+      },
+      surface,
+      setup: {
+        completed: false
+      },
+      surfaces: {
+        apiAdapter: {
+          activePackageId: 'moorline/http',
+          config: defaultHttpApiAdapterConfig(),
+          configByPackageId: {}
+        },
+        transport: {
+          activePackageId: null,
+          config: {},
+          configByPackageId: {}
+        },
+        provider: {
+          activePackageId: null,
+          config: {},
+          configByPackageId: {}
+        },
+        plugins: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        },
+        skills: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        }
+      }
+    };
+    const configPath = join(root, 'config.json');
+    saveMoorlineConfig(config, configPath);
+    const service = new OperatorPackageService(config, configPath, () => '2026-05-20T00:00:00.000Z', root);
+
+    await service.installPackage({
+      kind: 'plugin',
+      source: {
+        kind: 'local_dir',
+        path: pluginSourceDir
+      }
+    });
+    service.enablePackage('plugin', 'rync/status');
+    await service.installPackage({
+      kind: 'bundle',
+      source: {
+        kind: 'local_dir',
+        path: bundleSourceDir
+      }
+    });
+
+    const activePlugin = new PackageInventoryStore(runtimeRoot).load().installed.find((entry) => entry.kind === 'plugin');
+    expect(activePlugin).toMatchObject({
+      packageId: 'rync/status'
+    });
+    expect(activePlugin).not.toHaveProperty('activatedByPackageIds');
+    service.removePackage({
+      kind: 'bundle',
+      packageId: 'rync/basic-essentials'
+    });
+
+    expect(config.surfaces.plugins.enabledPackageIds).toEqual(['rync/status']);
+    expect(new PackageInventoryStore(runtimeRoot).load().installed).toEqual([
+      expect.objectContaining({
+        kind: 'plugin',
+        packageId: 'rync/status'
+      })
+    ]);
+  });
+
+  it('preserves bundle activation ownership when replacing an activated member package', async () => {
+    const root = createTempRoot('moorline-bundle-activation-replace-');
+    const runtimeRoot = join(root, 'runtime');
+    const bundleSourceDir = join(root, 'bundle-source');
+    const replacementSourceDir = join(root, 'replacement-source');
+    writeBundlePackage(bundleSourceDir);
+    writePluginPackage(replacementSourceDir, {
+      packageId: 'rync/status'
+    });
+    const surface = defaultSurfaceNames();
+    const config: MoorlineConfig = {
+      version: 4,
+      runtimeRoot,
+      admin: defaultAdminConfig(),
+      main: defaultMainProcessConfig(),
+      defaults: {
+        runtimeMode: 'full-access',
+        model: 'latest'
+      },
+      surface,
+      setup: {
+        completed: false
+      },
+      surfaces: {
+        apiAdapter: {
+          activePackageId: 'moorline/http',
+          config: defaultHttpApiAdapterConfig(),
+          configByPackageId: {}
+        },
+        transport: {
+          activePackageId: null,
+          config: {},
+          configByPackageId: {}
+        },
+        provider: {
+          activePackageId: null,
+          config: {},
+          configByPackageId: {}
+        },
+        plugins: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        },
+        skills: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        }
+      }
+    };
+    const configPath = join(root, 'config.json');
+    saveMoorlineConfig(config, configPath);
+    const service = new OperatorPackageService(config, configPath, () => '2026-05-20T00:00:00.000Z', root);
+
+    await service.installPackage({
+      kind: 'bundle',
+      source: {
+        kind: 'local_dir',
+        path: bundleSourceDir
+      }
+    });
+    await service.installPackage({
+      kind: 'plugin',
+      source: {
+        kind: 'local_dir',
+        path: replacementSourceDir
+      }
+    });
+
+    expect(new PackageInventoryStore(runtimeRoot).load().installed.find((entry) => entry.kind === 'plugin')).toMatchObject({
+      packageId: 'rync/status',
+      installedByPackageIds: ['rync/basic-essentials'],
+      activatedByPackageIds: ['rync/basic-essentials']
+    });
+    service.removePackage({
+      kind: 'bundle',
+      packageId: 'rync/basic-essentials',
+      cascade: true
+    });
+
+    expect(config.surfaces.plugins.enabledPackageIds).toEqual([]);
+    expect(new PackageInventoryStore(runtimeRoot).load().installed).toEqual([]);
+  });
+
+  it('keeps shared bundle-owned activation until the last owning bundle is removed', async () => {
+    const root = createTempRoot('moorline-bundle-shared-activation-');
+    const runtimeRoot = join(root, 'runtime');
+    const firstBundleSourceDir = join(root, 'bundle-source-first');
+    const secondBundleSourceDir = join(root, 'bundle-source-second');
+    writeBundlePackage(firstBundleSourceDir, 'rync/basic-essentials');
+    writeBundlePackage(secondBundleSourceDir, 'rync/extra-essentials');
+    const surface = defaultSurfaceNames();
+    const config: MoorlineConfig = {
+      version: 4,
+      runtimeRoot,
+      admin: defaultAdminConfig(),
+      main: defaultMainProcessConfig(),
+      defaults: {
+        runtimeMode: 'full-access',
+        model: 'latest'
+      },
+      surface,
+      setup: {
+        completed: false
+      },
+      surfaces: {
+        apiAdapter: {
+          activePackageId: 'moorline/http',
+          config: defaultHttpApiAdapterConfig(),
+          configByPackageId: {}
+        },
+        transport: {
+          activePackageId: null,
+          config: {},
+          configByPackageId: {}
+        },
+        provider: {
+          activePackageId: null,
+          config: {},
+          configByPackageId: {}
+        },
+        plugins: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        },
+        skills: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        }
+      }
+    };
+    const configPath = join(root, 'config.json');
+    saveMoorlineConfig(config, configPath);
+    const service = new OperatorPackageService(config, configPath, () => '2026-05-20T00:00:00.000Z', root);
+
+    await service.installPackage({
+      kind: 'bundle',
+      source: {
+        kind: 'local_dir',
+        path: firstBundleSourceDir
+      }
+    });
+    await service.installPackage({
+      kind: 'bundle',
+      source: {
+        kind: 'local_dir',
+        path: secondBundleSourceDir
+      }
+    });
+
+    expect(new PackageInventoryStore(runtimeRoot).load().installed.find((entry) => entry.kind === 'plugin')).toMatchObject({
+      packageId: 'rync/status',
+      installedByPackageIds: ['rync/basic-essentials', 'rync/extra-essentials'],
+      activatedByPackageIds: ['rync/basic-essentials', 'rync/extra-essentials']
+    });
+    service.removePackage({
+      kind: 'bundle',
+      packageId: 'rync/basic-essentials'
+    });
+
+    expect(config.surfaces.plugins.enabledPackageIds).toEqual(['rync/status']);
+    expect(new PackageInventoryStore(runtimeRoot).load().installed.find((entry) => entry.kind === 'plugin')).toMatchObject({
+      packageId: 'rync/status',
+      installedByPackageIds: ['rync/extra-essentials'],
+      activatedByPackageIds: ['rync/extra-essentials']
+    });
+    service.removePackage({
+      kind: 'bundle',
+      packageId: 'rync/extra-essentials',
+      cascade: true
+    });
+
+    expect(config.surfaces.plugins.enabledPackageIds).toEqual([]);
+    expect(new PackageInventoryStore(runtimeRoot).load().installed).toEqual([]);
   });
 
   it('keeps api-adapter inventory records when reloaded', () => {
@@ -379,6 +949,51 @@ describe('api-adapter package installation', () => {
       kind: 'api-adapter',
       surface: 'api-adapter',
       packageId: 'acme/http-alt'
+    });
+  });
+
+  it('normalizes bundle owner package ids when inventory is reloaded', () => {
+    const root = createTempRoot('moorline-owner-id-inventory-');
+    const runtimeRoot = join(root, 'runtime');
+    const store = new PackageInventoryStore(runtimeRoot);
+    store.ensureInitialized();
+    writeFileSync(
+      store.path(),
+      JSON.stringify(
+        {
+          version: 1,
+          installed: [{
+            family: 'installable',
+            kind: 'plugin',
+            surface: 'plugin',
+            packageId: 'rync/status',
+            name: 'rync/status',
+            version: '1.0.0',
+            installPath: join(runtimeRoot, 'packages', 'plugins', 'rync', 'status'),
+            source: {
+              kind: 'local_dir',
+              path: join(root, 'source')
+            },
+            installedAt: '2026-05-20T00:00:00.000Z',
+            manifestPath: join(runtimeRoot, 'packages', 'plugins', 'rync', 'status', 'manifest.json'),
+            manifestHash: 'abc123',
+            dependencies: [],
+            installedByPackageIds: ['rync/basic-essentials', 'bad owner', 'rync/basic-essentials', 42],
+            activatedByPackageIds: ['rync/basic-essentials', '../bad', 'rync/extra-essentials']
+          }],
+          applied: {
+            activated: []
+          }
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+
+    expect(store.load().installed[0]).toMatchObject({
+      installedByPackageIds: ['rync/basic-essentials'],
+      activatedByPackageIds: ['rync/basic-essentials', 'rync/extra-essentials']
     });
   });
 
@@ -780,6 +1395,400 @@ describe('api-adapter package installation', () => {
     await expect(service.apply()).rejects.toThrow(/No API adapter package is activated|not installed|not declared/i);
   });
 
+  it('clears stale applied transport config when the active transport package is removed', () => {
+    const root = createTempRoot('moorline-remove-active-transport-');
+    const runtimeRoot = join(root, 'runtime');
+    const apiPath = join(runtimeRoot, 'packages', 'api-adapters', 'moorline', 'http');
+    const transportPath = join(runtimeRoot, 'packages', 'transports', 'rync', 'transport');
+    const providerPath = join(runtimeRoot, 'packages', 'providers', 'acme', 'provider');
+    writeApiAdapterPackage(apiPath, 'moorline/http');
+    writeTransportPackage(transportPath);
+    writeProviderPackage(providerPath);
+    const surface = defaultSurfaceNames();
+    const config: MoorlineConfig = {
+      version: 4,
+      runtimeRoot,
+      transport: {
+        kind: 'transport',
+        packageId: 'rync/transport',
+        config: {
+          scopeId: 'scope'
+        },
+        scopeId: 'scope'
+      },
+      provider: {
+        kind: 'provider',
+        packageId: 'acme/provider',
+        config: {}
+      },
+      admin: defaultAdminConfig(),
+      main: defaultMainProcessConfig(),
+      defaults: {
+        runtimeMode: 'full-access',
+        model: 'latest'
+      },
+      surface,
+      setup: {
+        completed: true,
+        completedAt: '2026-05-20T00:00:00.000Z'
+      },
+      surfaces: {
+        apiAdapter: {
+          activePackageId: 'moorline/http',
+          config: {},
+          configByPackageId: {}
+        },
+        transport: {
+          activePackageId: 'rync/transport',
+          config: {
+            scopeId: 'scope'
+          },
+          configByPackageId: {
+            'rync/transport': {
+              scopeId: 'scope'
+            }
+          }
+        },
+        provider: {
+          activePackageId: 'acme/provider',
+          config: {},
+          configByPackageId: {}
+        },
+        plugins: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        },
+        skills: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        }
+      }
+    };
+    const configPath = join(root, 'config.json');
+    saveMoorlineConfig(config, configPath);
+    const store = new PackageInventoryStore(runtimeRoot);
+    store.save({
+      version: 1,
+      installed: [
+        installedApiAdapterRecord({
+          runtimeRoot,
+          packageId: 'moorline/http',
+          sourceDir: apiPath
+        }),
+        {
+          family: 'installable',
+          kind: 'transport',
+          surface: 'transport',
+          packageId: 'rync/transport',
+          name: 'rync/transport',
+          version: '1.0.0',
+          installPath: transportPath,
+          source: { kind: 'local_dir', path: transportPath },
+          installedAt: '2026-05-20T00:00:00.000Z',
+          manifestPath: join(transportPath, 'manifest.json'),
+          manifestHash: 'transport-hash',
+          dependencies: []
+        },
+        {
+          family: 'installable',
+          kind: 'provider',
+          surface: 'provider',
+          packageId: 'acme/provider',
+          name: 'acme/provider',
+          version: '1.0.0',
+          installPath: providerPath,
+          source: { kind: 'local_dir', path: providerPath },
+          installedAt: '2026-05-20T00:00:00.000Z',
+          manifestPath: join(providerPath, 'manifest.json'),
+          manifestHash: 'provider-hash',
+          dependencies: []
+        }
+      ],
+      applied: {
+        activated: [
+          { surface: 'api-adapter', packageId: 'moorline/http' },
+          { surface: 'transport', packageId: 'rync/transport' },
+          { surface: 'provider', packageId: 'acme/provider' }
+        ]
+      }
+    });
+
+    const service = new OperatorPackageService(config, configPath, () => '2026-05-20T00:00:00.000Z', root);
+    service.removePackage({ kind: 'transport', packageId: 'rync/transport', cascade: true });
+
+    expect(config.surfaces.transport.activePackageId).toBeNull();
+    expect(config.transport).toBeUndefined();
+    expect(config.surfaces.transport.configByPackageId).not.toHaveProperty('rync/transport');
+    expect(config.setup.completed).toBe(false);
+    const persisted = JSON.parse(readFileSync(configPath, 'utf8')) as MoorlineConfig;
+    expect(persisted.transport).toBeUndefined();
+    expect(persisted.setup.completed).toBe(false);
+    expect(store.load().applied.activated).not.toContainEqual({ surface: 'transport', packageId: 'rync/transport' });
+  });
+
+  it('marks setup incomplete when apply fails while loading the selected transport package', async () => {
+    const root = createTempRoot('moorline-apply-corrupt-transport-');
+    const runtimeRoot = join(root, 'runtime');
+    const apiPath = join(runtimeRoot, 'packages', 'api-adapters', 'moorline', 'http');
+    const transportPath = join(runtimeRoot, 'packages', 'transports', 'rync', 'transport');
+    const providerPath = join(runtimeRoot, 'packages', 'providers', 'acme', 'provider');
+    writeApiAdapterPackage(apiPath, 'moorline/http');
+    writeTransportPackage(transportPath);
+    writeProviderPackage(providerPath);
+    const surface = defaultSurfaceNames();
+    const config: MoorlineConfig = {
+      version: 4,
+      runtimeRoot,
+      transport: {
+        kind: 'transport',
+        packageId: 'rync/transport',
+        config: {
+          scopeId: 'scope'
+        },
+        scopeId: 'scope'
+      },
+      provider: {
+        kind: 'provider',
+        packageId: 'acme/provider',
+        config: {}
+      },
+      admin: defaultAdminConfig(),
+      main: defaultMainProcessConfig(),
+      defaults: {
+        runtimeMode: 'full-access',
+        model: 'latest'
+      },
+      surface,
+      setup: {
+        completed: true,
+        completedAt: '2026-05-20T00:00:00.000Z'
+      },
+      surfaces: {
+        apiAdapter: {
+          activePackageId: 'moorline/http',
+          config: {},
+          configByPackageId: {}
+        },
+        transport: {
+          activePackageId: 'rync/transport',
+          config: {
+            scopeId: 'scope'
+          },
+          configByPackageId: {
+            'rync/transport': {
+              scopeId: 'scope'
+            }
+          }
+        },
+        provider: {
+          activePackageId: 'acme/provider',
+          config: {},
+          configByPackageId: {}
+        },
+        plugins: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        },
+        skills: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        }
+      }
+    };
+    const configPath = join(root, 'config.json');
+    saveMoorlineConfig(config, configPath);
+    new PackageInventoryStore(runtimeRoot).save({
+      version: 1,
+      installed: [
+        installedApiAdapterRecord({
+          runtimeRoot,
+          packageId: 'moorline/http',
+          sourceDir: apiPath
+        }),
+        {
+          family: 'installable',
+          kind: 'transport',
+          surface: 'transport',
+          packageId: 'rync/transport',
+          name: 'rync/transport',
+          version: '1.0.0',
+          installPath: transportPath,
+          source: { kind: 'local_dir', path: transportPath },
+          installedAt: '2026-05-20T00:00:00.000Z',
+          manifestPath: join(transportPath, 'manifest.json'),
+          manifestHash: 'transport-hash',
+          dependencies: []
+        },
+        {
+          family: 'installable',
+          kind: 'provider',
+          surface: 'provider',
+          packageId: 'acme/provider',
+          name: 'acme/provider',
+          version: '1.0.0',
+          installPath: providerPath,
+          source: { kind: 'local_dir', path: providerPath },
+          installedAt: '2026-05-20T00:00:00.000Z',
+          manifestPath: join(providerPath, 'manifest.json'),
+          manifestHash: 'provider-hash',
+          dependencies: []
+        }
+      ],
+      applied: {
+        activated: [
+          { surface: 'api-adapter', packageId: 'moorline/http' },
+          { surface: 'transport', packageId: 'rync/transport' },
+          { surface: 'provider', packageId: 'acme/provider' }
+        ]
+      }
+    });
+    const service = new OperatorPackageService(config, configPath, () => '2026-05-20T00:00:00.000Z', root);
+    writeFileSync(join(transportPath, 'manifest.json'), '{bad json', 'utf8');
+
+    await expect(service.apply()).rejects.toThrow(/JSON/);
+
+    expect(config.setup.completed).toBe(false);
+    const persisted = JSON.parse(readFileSync(configPath, 'utf8')) as MoorlineConfig;
+    expect(persisted.setup.completed).toBe(false);
+  });
+
+  it('keeps setup incomplete when selected transport completeConfig fails during apply', async () => {
+    const root = createTempRoot('moorline-apply-transport-complete-fail-');
+    const runtimeRoot = join(root, 'runtime');
+    const apiPath = join(runtimeRoot, 'packages', 'api-adapters', 'moorline', 'http');
+    const transportPath = join(runtimeRoot, 'packages', 'transports', 'rync', 'transport');
+    const providerPath = join(runtimeRoot, 'packages', 'providers', 'acme', 'provider');
+    writeApiAdapterPackage(apiPath, 'moorline/http');
+    writeTransportPackage(transportPath);
+    writeProviderPackage(providerPath);
+    writeFileSync(
+      join(transportPath, 'index.mjs'),
+      [
+        "import manifest from './manifest.json' with { type: 'json' };",
+        'export default {',
+        '  manifest,',
+        "  completeConfig() { throw new Error('transport complete failed'); },",
+        '  createTransport() { return {}; }',
+        '};'
+      ].join('\n'),
+      'utf8'
+    );
+    const surface = defaultSurfaceNames();
+    const config: MoorlineConfig = {
+      version: 4,
+      runtimeRoot,
+      transport: {
+        kind: 'transport',
+        packageId: 'rync/transport',
+        config: {
+          scopeId: 'scope'
+        },
+        scopeId: 'scope'
+      },
+      provider: {
+        kind: 'provider',
+        packageId: 'acme/provider',
+        config: {}
+      },
+      admin: defaultAdminConfig(),
+      main: defaultMainProcessConfig(),
+      defaults: {
+        runtimeMode: 'full-access',
+        model: 'latest'
+      },
+      surface,
+      setup: {
+        completed: true,
+        completedAt: '2026-05-20T00:00:00.000Z'
+      },
+      surfaces: {
+        apiAdapter: {
+          activePackageId: 'moorline/http',
+          config: {},
+          configByPackageId: {}
+        },
+        transport: {
+          activePackageId: 'rync/transport',
+          config: {
+            scopeId: 'scope'
+          },
+          configByPackageId: {
+            'rync/transport': {
+              scopeId: 'scope'
+            }
+          }
+        },
+        provider: {
+          activePackageId: 'acme/provider',
+          config: {},
+          configByPackageId: {}
+        },
+        plugins: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        },
+        skills: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        }
+      }
+    };
+    const configPath = join(root, 'config.json');
+    saveMoorlineConfig(config, configPath);
+    new PackageInventoryStore(runtimeRoot).save({
+      version: 1,
+      installed: [
+        installedApiAdapterRecord({
+          runtimeRoot,
+          packageId: 'moorline/http',
+          sourceDir: apiPath
+        }),
+        {
+          family: 'installable',
+          kind: 'transport',
+          surface: 'transport',
+          packageId: 'rync/transport',
+          name: 'rync/transport',
+          version: '1.0.0',
+          installPath: transportPath,
+          source: { kind: 'local_dir', path: transportPath },
+          installedAt: '2026-05-20T00:00:00.000Z',
+          manifestPath: join(transportPath, 'manifest.json'),
+          manifestHash: 'transport-hash',
+          dependencies: []
+        },
+        {
+          family: 'installable',
+          kind: 'provider',
+          surface: 'provider',
+          packageId: 'acme/provider',
+          name: 'acme/provider',
+          version: '1.0.0',
+          installPath: providerPath,
+          source: { kind: 'local_dir', path: providerPath },
+          installedAt: '2026-05-20T00:00:00.000Z',
+          manifestPath: join(providerPath, 'manifest.json'),
+          manifestHash: 'provider-hash',
+          dependencies: []
+        }
+      ],
+      applied: {
+        activated: [
+          { surface: 'api-adapter', packageId: 'moorline/http' },
+          { surface: 'transport', packageId: 'rync/transport' },
+          { surface: 'provider', packageId: 'acme/provider' }
+        ]
+      }
+    });
+    const service = new OperatorPackageService(config, configPath, () => '2026-05-20T00:00:00.000Z', root);
+
+    await expect(service.apply()).rejects.toThrow(/transport complete failed/u);
+
+    expect(config.setup.completed).toBe(false);
+    const persisted = JSON.parse(readFileSync(configPath, 'utf8')) as MoorlineConfig;
+    expect(persisted.setup.completed).toBe(false);
+  });
+
   it('rejects selected api-adapters with missing required config before apply completes', async () => {
     const root = createTempRoot('moorline-api-adapter-schema-');
     const runtimeRoot = join(root, 'runtime');
@@ -1079,6 +2088,139 @@ describe('api-adapter package installation', () => {
 
     expect(result.startable).toBe(false);
     expect(result.issues.join('\n')).toMatch(/port must be a number|exposure must be one of/i);
+  });
+
+  it('accepts default moorline/http adapter config against the real package schema', () => {
+    const root = createTempRoot('moorline-http-default-startability-config-');
+    const runtimeRoot = join(root, 'runtime');
+    const httpInstallPath = join(runtimeRoot, 'packages', 'api-adapters', 'moorline', 'http');
+    mkdirSync(httpInstallPath, { recursive: true });
+    writeFileSync(
+      join(httpInstallPath, 'manifest.json'),
+      readFileSync(join(process.cwd(), 'packages', 'http', 'manifest.json'), 'utf8'),
+      'utf8'
+    );
+    const surface = defaultSurfaceNames();
+    const config: MoorlineConfig = {
+      version: 4,
+      runtimeRoot,
+      admin: defaultAdminConfig(),
+      main: defaultMainProcessConfig(),
+      defaults: {
+        runtimeMode: 'full-access',
+        model: 'latest'
+      },
+      surface: surface,
+      setup: {
+        completed: false
+      },
+      surfaces: {
+        apiAdapter: {
+          activePackageId: 'moorline/http',
+          config: defaultHttpApiAdapterConfig(),
+          configByPackageId: {}
+        },
+        transport: {
+          activePackageId: 'rync/transport',
+          config: {},
+          configByPackageId: {}
+        },
+        provider: {
+          activePackageId: 'acme/provider',
+          config: {},
+          configByPackageId: {}
+        },
+        plugins: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        },
+        skills: {
+          enabledPackageIds: [],
+          configByPackageId: {}
+        }
+      }
+    };
+
+    const result = evaluateRuntimeStartability(config, {
+      version: 1,
+      installed: [
+        installedApiAdapterRecord({ runtimeRoot, packageId: 'moorline/http', sourceDir: join(root, 'http') }),
+        {
+          family: 'installable',
+          kind: 'transport',
+          surface: 'transport',
+          packageId: 'rync/transport',
+          name: 'rync/transport',
+          version: '1.0.0',
+          installPath: join(runtimeRoot, 'packages', 'transports', 'rync', 'transport'),
+          source: { kind: 'local_dir', path: join(root, 'transport') },
+          installedAt: '2026-05-20T00:00:00.000Z',
+          manifestPath: join(root, 'transport', 'manifest.json'),
+          manifestHash: 'transport-hash',
+          dependencies: []
+        },
+        {
+          family: 'installable',
+          kind: 'provider',
+          surface: 'provider',
+          packageId: 'acme/provider',
+          name: 'acme/provider',
+          version: '1.0.0',
+          installPath: join(runtimeRoot, 'packages', 'providers', 'acme', 'provider'),
+          source: { kind: 'local_dir', path: join(root, 'provider') },
+          installedAt: '2026-05-20T00:00:00.000Z',
+          manifestPath: join(root, 'provider', 'manifest.json'),
+          manifestHash: 'provider-hash',
+          dependencies: []
+        }
+      ],
+      applied: {
+        activated: []
+      }
+    });
+
+    expect(result.startable).toBe(true);
+    expect(result.issues).toEqual([]);
+  });
+
+  it('coerces JSON scalar package config input before schema validation', () => {
+    const schema = {
+      type: 'object' as const,
+      properties: {
+        port: { type: 'number' as const },
+        enabled: { type: 'boolean' as const },
+        label: { type: 'string' as const }
+      }
+    };
+
+    expect(coerceSurfaceConfigInput({
+      surface: 'transport',
+      packageId: 'rync/transport',
+      schema,
+      key: 'port',
+      rawValue: 4536
+    })).toBe(4536);
+    expect(coerceSurfaceConfigInput({
+      surface: 'transport',
+      packageId: 'rync/transport',
+      schema,
+      key: 'enabled',
+      rawValue: true
+    })).toBe(true);
+    expect(coerceSurfaceConfigInput({
+      surface: 'transport',
+      packageId: 'rync/transport',
+      schema,
+      key: 'label',
+      rawValue: 123
+    })).toBe('123');
+    expect(() => coerceSurfaceConfigInput({
+      surface: 'transport',
+      packageId: 'rync/transport',
+      schema,
+      key: 'label',
+      rawValue: { value: 'bad' }
+    })).toThrow(/must be a string, number, or boolean/u);
   });
 
   it('does not carry stale moorline/http config when selecting and configuring a custom api-adapter from fresh defaults', async () => {

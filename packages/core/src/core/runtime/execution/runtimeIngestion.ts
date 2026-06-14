@@ -254,14 +254,16 @@ export class RuntimeIngestion {
         };
         break;
       case 'provider.closed':
-        nextReceipt = {
-          ...receipt,
-          state: 'interrupted',
-          waitReason: null,
-          pendingRequestId: null,
-          activeTurnId: null,
-          updatedAt: event.createdAt
-        };
+        if (receipt.activeTurnId || receipt.state === 'running' || receipt.state === 'waiting_for_approval' || receipt.state === 'waiting_for_input') {
+          nextReceipt = {
+            ...receipt,
+            state: 'interrupted',
+            waitReason: null,
+            pendingRequestId: null,
+            activeTurnId: null,
+            updatedAt: event.createdAt
+          };
+        }
         break;
       default:
         break;

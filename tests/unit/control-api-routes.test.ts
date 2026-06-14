@@ -33,4 +33,29 @@ describe('Control API route contract', () => {
       payload: heartbeat
     });
   });
+
+  it('accepts session ids for managed session archive and delete routes', () => {
+    expect(parseControlApiPostRoute('/api/work/session/archive', {
+      sessionId: 'session-1'
+    })).toMatchObject({
+      path: '/api/work/session/archive',
+      payload: {
+        sessionId: 'session-1'
+      }
+    });
+
+    expect(parseControlApiPostRoute('/api/work/session/delete', {
+      sessionId: 'session-1'
+    })).toMatchObject({
+      path: '/api/work/session/delete',
+      payload: {
+        sessionId: 'session-1'
+      }
+    });
+  });
+
+  it('still rejects managed session archive and delete routes without a target', () => {
+    expect(() => parseControlApiPostRoute('/api/work/session/archive', {})).toThrow(/Either sessionId or transportResourceId is required/);
+    expect(() => parseControlApiPostRoute('/api/work/session/delete', {})).toThrow(/Either sessionId or transportResourceId is required/);
+  });
 });

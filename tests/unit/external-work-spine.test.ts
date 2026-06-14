@@ -2,6 +2,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { validatePluginRuntimeContract } from '../../packages/core/src/core/extension/plugins/pluginManifest.js';
 import { PluginHost } from '../../packages/core/src/core/extension/plugins/pluginHost.js';
+import { RuntimeWorkManagementService } from '../../packages/core/src/core/domain/sessions/runtimeWorkManagementService.js';
+import { SessionRegistry } from '../../packages/core/src/core/domain/sessions/sessionState.js';
 import { runMigrations } from '../../packages/core/src/core/system/state/migrationRunner.js';
 import { SqliteSessionStore } from '../../packages/core/src/core/system/state/sqliteSessionStore.js';
 import type { RuntimeWorkItemRecord } from '../../packages/core/src/types/external.js';
@@ -14,6 +16,13 @@ function createStore(): SqliteSessionStore {
   const sqlitePath = join(root, 'runtime.sqlite');
   runMigrations(sqlitePath, join(process.cwd(), 'packages', 'core', 'resources', 'migrations'));
   return new SqliteSessionStore(sqlitePath);
+}
+
+function createStoreWithRoot(): { root: string; store: SqliteSessionStore } {
+  const root = createTempRoot('moorline-external-work-spine-');
+  const sqlitePath = join(root, 'runtime.sqlite');
+  runMigrations(sqlitePath, join(process.cwd(), 'packages', 'core', 'resources', 'migrations'));
+  return { root, store: new SqliteSessionStore(sqlitePath) };
 }
 
 function queuedWorkItem(input: Partial<RuntimeWorkItemRecord> & { workItemId: string; packageId?: string }): RuntimeWorkItemRecord {
@@ -215,6 +224,227 @@ describe('external work spine storage', () => {
       status: 'passed',
       required: true,
       args: ['run', 'lint']
+    });
+  });
+});
+
+describe('managed session creation', () => {
+  it('preserves explicit session metadata when lifecycle adoption wins creation race', async () => {
+    const { root, store } = createStoreWithRoot();
+    const registry = new SessionRegistry(store, join(root, 'workspaces'), 'pi/default');
+    const auditEvents: Array<{ event: string; payload: Record<string, unknown> }> = [];
+    const resource = {
+      id: 'resource-race',
+      scopeId: 'runtime',
+      name: 'session-race-case',
+      kind: 'conversation' as const,
+      metadata: {},
+      parentId: 'sessions'
+    };
+    const nowValues = ['2026-06-07T00:00:00.000Z', '2026-06-07T00:00:01.000Z'];
+    const now = () => nowValues.shift() ?? '2026-06-07T00:00:02.000Z';
+    const service = new RuntimeWorkManagementService({
+      config: {
+        transport: {
+          packageId: 'discord/default',
+          scopeId: 'runtime',
+          config: {}
+        }
+      },
+      getTransport: () => ({
+        capabilities: () => ({
+          resources: { create: true, update: true, delete: true },
+          messages: { send: true },
+          events: { subscribe: true }
+        }),
+        createTransportResource: async () => resource,
+        deleteTransportResource: async () => undefined
+      }),
+      getGuard: () => ({
+        run: async ({ execute }: { execute: () => unknown }) => await execute()
+      }),
+      requireSurfaceState: () => ({ sessionsCategoryId: 'sessions', archiveCategoryId: 'archive' }),
+      sessionRegistry: registry,
+      snapshots: { querySessions: () => [] },
+      reactor: {
+        createSession: () => {
+          registry.create({
+            scopeId: 'runtime',
+            transportResourceId: resource.id,
+            transportResourceName: resource.name,
+            requestedName: 'race case',
+            runtimeMode: 'read-only',
+            nowIso: '2026-06-07T00:00:00.500Z',
+            createdBy: 'runtime:transport/resource-lifecycle'
+          });
+          throw new Error('already adopted');
+        }
+      },
+      providerService: { stopSession: () => undefined },
+      providerDirectory: { delete: () => undefined },
+      getProviderAutoStartDefault: () => false,
+      defaultSessionOwner: () => ({ kind: 'user', id: 'actor-1', label: 'Actor One' }),
+      queue: async (_key: string, work: () => Promise<unknown>) => await work(),
+      now,
+      postTransportMessage: async () => undefined,
+      sendStatusUpdate: async () => undefined,
+      appendAuditEvent: (event: string, payload: Record<string, unknown>) => auditEvents.push({ event, payload }),
+      runOrchestrationTurn: async () => ({ text: 'ok' }),
+      rejectTurnWaitersForThread: () => undefined,
+      cleanupScopedSidecars: async () => undefined
+    } as never);
+
+    const created = await service.createManagedSession({
+      actorId: 'actor-1',
+      requestedName: 'race case',
+      runtimeMode: 'full-access',
+      objective: 'Preserve the user objective',
+      tags: ['smoke', 'race']
+    });
+
+    expect(created.transportResourceId).toBe(resource.id);
+    expect(created.session).toMatchObject({
+      transportResourceId: resource.id,
+      runtimeMode: 'full-access',
+      providerAutoStartEnabled: false,
+      ownerKind: 'user',
+      ownerId: 'actor-1',
+      ownerLabel: 'Actor One',
+      objective: 'Preserve the user objective',
+      tags: ['smoke', 'race'],
+      createdBy: 'actor-1'
+    });
+    expect(registry.getByTransportResourceId(resource.id)).toMatchObject({
+      objective: 'Preserve the user objective',
+      tags: ['smoke', 'race'],
+      createdBy: 'actor-1'
+    });
+    expect(auditEvents.map((entry) => entry.event)).toContain('session.created.race_recovered');
+  });
+
+  it('archives and deletes persisted sessions when ephemeral transport resources are already gone', async () => {
+    const { root, store } = createStoreWithRoot();
+    const registry = new SessionRegistry(store, join(root, 'workspaces'), 'pi/default');
+    let sessionWasArchivedBeforeTransportUpdate = false;
+    const session = registry.create({
+      scopeId: 'runtime',
+      transportResourceId: 'missing-resource',
+      transportResourceName: 'missing-resource',
+      requestedName: 'stale resource',
+      runtimeMode: 'full-access',
+      nowIso: '2026-06-07T00:00:00.000Z',
+      owner: { kind: 'user', id: 'actor-1', label: 'Actor One' },
+      createdBy: 'actor-1'
+    });
+    const auditEvents: Array<{ event: string; payload: Record<string, unknown> }> = [];
+    const service = new RuntimeWorkManagementService({
+      config: {
+        transport: {
+          packageId: 'discord/default',
+          scopeId: 'runtime',
+          config: {}
+        }
+      },
+      getTransport: () => ({
+        capabilities: () => ({
+          resources: { create: true, update: true, delete: true },
+          messages: { send: true },
+          events: { subscribe: true }
+        }),
+        updateTransportResource: async () => {
+          sessionWasArchivedBeforeTransportUpdate =
+            registry.getByTransportResourceId('missing-resource')?.lifecycleStatus === 'archived';
+          throw new Error('Unknown discord resource: missing-resource');
+        },
+        deleteTransportResource: async () => {
+          throw new Error('Unknown discord resource: missing-resource');
+        }
+      }),
+      getGuard: () => ({
+        run: async ({ execute }: { execute: () => unknown }) => await execute()
+      }),
+      requireSurfaceState: () => ({ sessionsCategoryId: 'sessions', archiveCategoryId: 'archive' }),
+      sessionRegistry: registry,
+      snapshots: { querySessions: () => [] },
+      reactor: { createSession: () => session },
+      providerService: { stopSession: () => undefined },
+      providerDirectory: { delete: () => undefined },
+      getProviderAutoStartDefault: () => true,
+      defaultSessionOwner: () => ({ kind: 'user', id: 'actor-1', label: 'Actor One' }),
+      queue: async (_key: string, work: () => Promise<unknown>) => await work(),
+      now: () => '2026-06-07T00:00:01.000Z',
+      postTransportMessage: async () => undefined,
+      sendStatusUpdate: async () => undefined,
+      appendAuditEvent: (event: string, payload: Record<string, unknown>) => auditEvents.push({ event, payload }),
+      runOrchestrationTurn: async () => ({ text: 'ok' }),
+      rejectTurnWaitersForThread: () => undefined,
+      cleanupScopedSidecars: async () => undefined
+    } as never);
+
+    await expect(service.archiveManagedSession({ actorId: 'actor-1', sessionId: session.sessionId })).resolves.toMatchObject({
+      sessionId: session.sessionId,
+      lifecycleStatus: 'archived',
+      providerStatus: 'closed'
+    });
+    expect(auditEvents.map((entry) => entry.event)).toContain('session.archive.transport_update_failed');
+    expect(sessionWasArchivedBeforeTransportUpdate).toBe(true);
+    await expect(service.deleteManagedSession({ actorId: 'actor-1', sessionId: session.sessionId })).resolves.toMatchObject({
+      sessionId: session.sessionId,
+      lifecycleStatus: 'archived'
+    });
+    expect(registry.list()).toHaveLength(0);
+  });
+
+  it('reports missing managed sessions as a not-found error when directing work', async () => {
+    const { root, store } = createStoreWithRoot();
+    const registry = new SessionRegistry(store, join(root, 'workspaces'), 'pi/default');
+    const service = new RuntimeWorkManagementService({
+      config: {
+        transport: {
+          packageId: 'discord/default',
+          scopeId: 'runtime',
+          config: {}
+        }
+      },
+      getTransport: () => ({
+        capabilities: () => ({
+          resources: { create: true, update: true, delete: true },
+          messages: { send: true },
+          events: { subscribe: true }
+        })
+      }),
+      getGuard: () => ({
+        run: async ({ execute }: { execute: () => unknown }) => await execute()
+      }),
+      requireSurfaceState: () => ({ sessionsCategoryId: 'sessions', archiveCategoryId: 'archive' }),
+      sessionRegistry: registry,
+      snapshots: { querySessions: () => [] },
+      reactor: {
+        createSession: () => {
+          throw new Error('unused');
+        }
+      },
+      providerService: { stopSession: () => undefined },
+      providerDirectory: { delete: () => undefined },
+      getProviderAutoStartDefault: () => true,
+      defaultSessionOwner: () => ({ kind: 'user', id: 'actor-1', label: 'Actor One' }),
+      queue: async (_key: string, work: () => Promise<unknown>) => await work(),
+      now: () => '2026-06-07T00:00:01.000Z',
+      postTransportMessage: async () => undefined,
+      sendStatusUpdate: async () => undefined,
+      appendAuditEvent: () => undefined,
+      runOrchestrationTurn: async () => ({ text: 'ok' }),
+      rejectTurnWaitersForThread: () => undefined,
+      cleanupScopedSidecars: async () => undefined
+    } as never);
+
+    await expect(service.directManagedSession({
+      actorId: 'actor-1',
+      sessionId: 'missing-session',
+      instruction: 'hello'
+    })).rejects.toMatchObject({
+      statusCode: 404,
+      message: 'No matching managed worker session found.'
     });
   });
 });

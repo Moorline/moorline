@@ -185,6 +185,9 @@ async function main(): Promise<void> {
     const { ChildProcessRunner } = await import('@moorline/core/core/shared/utils/commandRunner.js');
     const exitCode = await cli.executeCli(command, cli.cliDefaults(writer, prompt, new ChildProcessRunner()));
     process.exitCode = exitCode;
+    if (command.kind === 'api-run-foreground') {
+      process.exit(exitCode);
+    }
   } catch (error) {
     let message = error instanceof Error ? error.message : String(error);
     if (typeof process.versions.bun === 'string' && /node:sqlite|sqlite/i.test(message)) {

@@ -73,7 +73,6 @@ export type ControlApiPostPath =
   | '/api/management/config-migration-warning/acknowledge';
 
 type SessionTargetPayload = { sessionId?: string; transportResourceId?: string };
-type TransportResourceSessionTargetPayload = { sessionId?: string; transportResourceId: string };
 type RuntimeReloadMode = 'graceful' | 'force';
 
 export type ControlApiPayloadForPath<Path extends ControlApiPostPath> =
@@ -87,7 +86,7 @@ export type ControlApiPayloadForPath<Path extends ControlApiPostPath> =
   Path extends '/api/provider/start' | '/api/provider/stop' ? { threadId?: string } :
   Path extends '/api/work/session/create' ? { requestedName: string; runtimeMode: ReturnType<typeof parseControlApiRuntimeMode>; initialInstruction?: string; objective?: string } :
   Path extends '/api/work/session/direct' ? SessionTargetPayload & { instruction: string; reason?: string } :
-  Path extends '/api/work/session/archive' | '/api/work/session/delete' ? TransportResourceSessionTargetPayload :
+  Path extends '/api/work/session/archive' | '/api/work/session/delete' ? SessionTargetPayload :
   Path extends '/api/packages/install' ? { kind: PackageKind; surface?: PackageKind; packageId?: string; source?: string } :
   Path extends '/api/packages/remove' ? { kind: PackageKind; surface?: PackageKind; packageId: string; cascade?: boolean } :
   Path extends '/api/packages/enable' | '/api/packages/disable' ? { surface: 'plugin' | 'skill'; packageId: string } :
@@ -203,17 +202,6 @@ function parseSessionTarget(body: Record<string, unknown>): { sessionId?: string
   return {
     ...(sessionId ? { sessionId } : {}),
     ...(transportResourceId ? { transportResourceId } : {})
-  };
-}
-
-function parseTransportResourceSessionTarget(body: Record<string, unknown>): TransportResourceSessionTargetPayload {
-  const target = parseSessionTarget(body);
-  if (!target.transportResourceId) {
-    throw new JsonBodyError(422, 'transportResourceId is required.');
-  }
-  return {
-    ...(target.sessionId ? { sessionId: target.sessionId } : {}),
-    transportResourceId: target.transportResourceId
   };
 }
 
@@ -445,14 +433,14 @@ export function parseControlApiPostRoute(pathname: string, rawBody: unknown): Co
       return {
         kind: 'api',
         path,
-        payload: parseTransportResourceSessionTarget(body)
+        payload: parseSessionTarget(body)
       };
 
     case '/api/work/session/delete':
       return {
         kind: 'api',
         path,
-        payload: parseTransportResourceSessionTarget(body)
+        payload: parseSessionTarget(body)
       };
 
     case '/api/packages/install': {

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseCliArgs } from '../../packages/cli/src/app/cli/cliCommands.js';
 import { executeCli } from '../../packages/cli/src/app/cli/cli.js';
 import { runApiForeground } from '../../packages/cli/src/app/cli/cliForegroundCommands.js';
+import { readControlApiBootstrapRecord } from '../../packages/control-api/src/bootstrap.js';
 import { defaultAdminConfig, defaultMainProcessConfig, defaultSurfaceNames, type MoorlineConfig } from '../../packages/core/src/types/config.js';
 import { saveMoorlineConfig } from '../../packages/core/src/core/system/config/configStore.js';
 import { createTempRoot } from '../helpers/temp.js';
@@ -608,6 +609,35 @@ describe('split-era CLI parser', () => {
     }
 
     expect(existsSync(stopMarker)).toBe(true);
+  });
+
+  it('clears bootstrap metadata when the api-adapter endpoint closes before a signal', async () => {
+    const root = createTempRoot('moorline-cli-api-adapter-endpoint-closed-');
+    const config = customAdapterConfig(root);
+    const stopMarker = join(root, 'adapter-stopped.txt');
+    config.surfaces.apiAdapter.config.stopMarker = stopMarker;
+    const configPath = join(root, 'config.json');
+    writeCustomApiAdapter(join(config.runtimeRoot, 'packages', 'api-adapters', 'acme', 'http-alt'));
+    saveMoorlineConfig(config, configPath);
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('endpoint closed'));
+
+    await expect(runApiForeground({
+      kind: 'api-run-foreground',
+      configPath
+    }, {
+      output: {
+        write() {}
+      },
+      commandRunner: async () => ({
+        code: 0,
+        stdout: '',
+        stderr: ''
+      }),
+      waitForShutdown: async () => await new Promise<void>(() => {})
+    } as never)).resolves.toBe(0);
+
+    expect(existsSync(stopMarker)).toBe(true);
+    expect(readControlApiBootstrapRecord(configPath)).toBeNull();
   });
 
   it('does not fall back to moorline/http when the api-adapter selection is cleared', async () => {

@@ -31,7 +31,7 @@ export interface RuntimeAccessGroupRecord {
   id: string;
   kind: RuntimeAccessGroupKind;
   name: string;
-  verifiedAt?: string;
+  syncedAt?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -54,8 +54,8 @@ export interface RuntimeSurfaceState {
   memberAccessGroupId?: string;
   adminAccessGroupName?: string;
   memberAccessGroupName?: string;
-  adminAccessGroupVerifiedAt?: string;
-  memberAccessGroupVerifiedAt?: string;
+  adminAccessGroupSyncedAt?: string;
+  memberAccessGroupSyncedAt?: string;
   createdAt: string;
   updatedAt: string;
   metadata?: Record<string, unknown>;

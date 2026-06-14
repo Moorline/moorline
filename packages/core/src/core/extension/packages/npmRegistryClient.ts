@@ -79,7 +79,7 @@ function packageIdKeyword(packageId: string): string {
   return `moorline-id-${packageId.replace('/', '-')}`;
 }
 
-function packageSurface(packageId: string): string {
+function packageNamespace(packageId: string): string {
   return packageId.split('/')[0] ?? '';
 }
 
@@ -255,10 +255,7 @@ export class NpmRegistryClient {
     if (!moorline) {
       return null;
     }
-    if (npmName.startsWith('@moorline/') && !moorlineNpmNameMatchesPackageId(npmName, moorline.packageId)) {
-      return null;
-    }
-    if (moorline.packageId.startsWith('moorline/') && !moorlineNpmNameMatchesPackageId(npmName, moorline.packageId)) {
+    if (!moorlineNpmNameMatchesPackageId(npmName, moorline.packageId)) {
       return null;
     }
     if (findPackageRegistryBlock({ packageId: moorline.packageId, npmName })) {
@@ -268,7 +265,7 @@ export class NpmRegistryClient {
     const requiredKeywords = [
       MOORLINE_KEYWORD,
       `moorline-kind-${moorline.kind}`,
-      `moorline-surface-${packageSurface(moorline.packageId)}`,
+      `moorline-namespace-${packageNamespace(moorline.packageId)}`,
       packageIdKeyword(moorline.packageId)
     ];
     if (!requiredKeywords.every((keyword) => keywords.includes(keyword))) {
@@ -338,9 +335,9 @@ export class NpmRegistryClient {
 }
 
 export function npmNameForPackageId(packageId: string): string | null {
-  const [surface, name] = packageId.split('/');
-  if (surface !== 'moorline' || !name) {
+  const [namespace, name] = packageId.split('/');
+  if (!namespace || !name) {
     return null;
   }
-  return `@moorline/${name}`;
+  return namespace === 'moorline' ? `@moorline/${name}` : `@${namespace}/moorline-${name}`;
 }

@@ -122,6 +122,22 @@ function normalizeSourceProvenance(value: unknown): PackageSourceProvenance | nu
   return null;
 }
 
+function normalizeOwnerPackageIds(value: unknown, label: string): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return [...new Set(value.flatMap((entry) => {
+    if (typeof entry !== 'string' || entry.trim().length === 0) {
+      return [];
+    }
+    try {
+      return [validatePackageId(entry, label)];
+    } catch {
+      return [];
+    }
+  }))].sort();
+}
+
 function normalizeInstalledRecord(value: unknown): PackageInstallRecord | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
@@ -181,9 +197,8 @@ function normalizeInstalledRecord(value: unknown): PackageInstallRecord | null {
       return [];
     }
   })();
-  const installedByPackageIds = Array.isArray(entry.installedByPackageIds)
-    ? entry.installedByPackageIds.filter((value): value is string => typeof value === 'string' && value.trim().length > 0).sort()
-    : [];
+  const installedByPackageIds = normalizeOwnerPackageIds(entry.installedByPackageIds, `package inventory entry ${packageId}.installedByPackageIds`);
+  const activatedByPackageIds = normalizeOwnerPackageIds(entry.activatedByPackageIds, `package inventory entry ${packageId}.activatedByPackageIds`);
   return {
     family: packageFamilyForKind(kind),
     kind,
@@ -202,7 +217,8 @@ function normalizeInstalledRecord(value: unknown): PackageInstallRecord | null {
       ? { activation: { ...(typeof (entry.activation as Record<string, unknown>).uniqueKey === 'string' ? { uniqueKey: (entry.activation as Record<string, string>).uniqueKey } : {}) } }
       : {}),
     ...(members ? { members } : {}),
-    ...(installedByPackageIds.length > 0 ? { installedByPackageIds } : {})
+    ...(installedByPackageIds.length > 0 ? { installedByPackageIds } : {}),
+    ...(activatedByPackageIds.length > 0 ? { activatedByPackageIds } : {})
   };
 }
 

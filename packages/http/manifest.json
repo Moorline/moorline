@@ -12,6 +12,12 @@
   "configSchema": {
     "type": "object",
     "properties": {
+      "enabled": {
+        "type": "boolean",
+        "title": "Enabled",
+        "description": "Whether the HTTP adapter should listen for control API requests.",
+        "default": true
+      },
       "host": {
         "type": "string",
         "title": "Host",

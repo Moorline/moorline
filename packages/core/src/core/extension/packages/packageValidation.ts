@@ -26,7 +26,7 @@ function assertNoTypeScriptSources(packageDir: string): void {
         continue;
       }
       if (entry.isFile() && /\.tsx?$/u.test(entry.name) && !/\.d\.ts$/u.test(entry.name)) {
-        throw new Error(`Installable bundles must not include raw TypeScript source files: ${child}`);
+        throw new Error(`Installable packages must not include raw TypeScript source files: ${child}`);
       }
     }
   }
