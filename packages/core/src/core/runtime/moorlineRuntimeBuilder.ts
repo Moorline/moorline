@@ -84,7 +84,13 @@ import {
   pruneProviderInputImages,
   validateLocalRuntimeFiles
 } from '../shared/utils/runtimeMessageUtils.js';
-import type { RuntimeEnvironmentVerifier, RuntimeProvider, RuntimeProviderFactory } from '../../types/provider.js';
+import {
+  DEFAULT_PROVIDER_TOOL_POLICY,
+  type ProviderToolPolicyConfig,
+  type RuntimeEnvironmentVerifier,
+  type RuntimeProvider,
+  type RuntimeProviderFactory
+} from '../../types/provider.js';
 import type { RuntimeCommandRunner } from '../../types/runtime.js';
 import { prepareMoorlineRuntimeLayout, resolveRuntimeMigrationsDir } from './graph/runtimePaths.js';
 
@@ -111,6 +117,7 @@ export interface MoorlineRuntimeDeps {
   now?: () => string;
   provider?: RuntimeProvider;
   providerFactory?: RuntimeProviderFactory;
+  providerToolPolicy?: ProviderToolPolicyConfig;
   verifyEnvironment?: RuntimeEnvironmentVerifier;
   supervised?: boolean;
   providerTurnWaitTimeoutMs?: number;
@@ -262,7 +269,8 @@ export function buildMoorlineRuntimeServiceGraph(
     main: deps.config.main ?? defaultMainProcessConfig(),
     surface: deps.config.surface
   };
-  const normalizedDeps = { ...deps, transport, config: normalizedConfig };
+  const providerToolPolicy = deps.providerToolPolicy ?? DEFAULT_PROVIDER_TOOL_POLICY;
+  const normalizedDeps = { ...deps, transport, config: normalizedConfig, providerToolPolicy };
   const paths = ensureRuntimePaths(normalizedConfig.runtimeRoot);
   const homeRoot = homeRootForRuntime(paths.runtimeRoot);
   const providerPackageId = normalizedConfig.provider.packageId ?? normalizedConfig.provider.kind;
@@ -455,6 +463,7 @@ export function buildMoorlineRuntimeServiceGraph(
   };
   const providerSessionOrchestrator = new ProviderSessionOrchestrator({
     config: normalizedConfig,
+    providerToolPolicy,
     runtimeRoot: paths.runtimeRoot,
     provider: providerService,
     connections: providerDirectory,
@@ -684,6 +693,7 @@ export function buildMoorlineRuntimeServiceGraph(
   });
   pluginContexts = new RuntimePluginContextService({
     config: normalizedConfig,
+    providerToolPolicy,
     configPath: normalizedDeps.configPath,
     runtimeRoot: paths.runtimeRoot,
     homeRoot,

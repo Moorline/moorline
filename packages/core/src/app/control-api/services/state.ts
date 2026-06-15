@@ -9,10 +9,10 @@ import { computeRuntimeStatus } from '../../../core/runtime/runtimeStatus.js';
 import { SidecarManager } from '../../../core/runtime/supervision/sidecarManager.js';
 import type { RuntimeProvider, RuntimeProviderDiagnostics } from '../../../types/provider.js';
 import type { ProviderInputImage, ProviderRuntimeEvent, ProviderSessionRecord } from '../../../types/runtime.js';
+import type { RuntimeProviderSessionInput } from '../../../types/provider.js';
 import type { ManagementReadModel, ManagementReadModelPresentation } from '../../../types/app.js';
 import { homeRootForRuntime, type MoorlineConfig } from '../../../types/config.js';
 import { ProviderSessionDirectory } from '../../../core/runtime/execution/providerSessionDirectory.js';
-import type { RuntimeSessionRow } from '../../../core/system/state/sqlite/types.js';
 
 class SnapshotRuntimeProvider extends EventEmitter<{
   providerEvent: [event: ProviderRuntimeEvent];
@@ -27,7 +27,8 @@ class SnapshotRuntimeProvider extends EventEmitter<{
       provider: binding.providerPackageId,
       threadId: binding.threadId,
       runtimeMode: binding.runtimeMode,
-      cwd: binding.workspacePath,
+      agentKind: binding.agentKind,
+      cwd: binding.providerCwd ?? binding.workspacePath ?? '',
       model: binding.model ?? undefined,
       status: binding.status,
       resumeCursor: binding.providerThreadId ? { threadId: binding.providerThreadId } : undefined,
@@ -54,7 +55,7 @@ class SnapshotRuntimeProvider extends EventEmitter<{
   }
 
   async startOrResumeSession(_: {
-    session: RuntimeSessionRow;
+    session: RuntimeProviderSessionInput;
     runtimeRoot: string;
     actor: string;
     model?: string;
@@ -62,11 +63,11 @@ class SnapshotRuntimeProvider extends EventEmitter<{
     throw new Error('Provider session start is only available from the running main process.');
   }
 
-  async recoverSessions(_: { sessions: RuntimeSessionRow[]; runtimeRoot: string; model?: string }): Promise<void> {
+  async recoverSessions(_: { sessions: RuntimeProviderSessionInput[]; runtimeRoot: string; model?: string }): Promise<void> {
     throw new Error('Provider recovery is only available from the running main process.');
   }
 
-  async sendTurn(_: string, __: { text: string; images?: ProviderInputImage[] }, ___?: string): Promise<{ turnId: string }> {
+  async sendTurn(_: string, __: { text: string; images?: ProviderInputImage[]; context?: unknown[] }, ___?: string): Promise<{ turnId: string }> {
     throw new Error('Provider turns are only available from the running main process.');
   }
 

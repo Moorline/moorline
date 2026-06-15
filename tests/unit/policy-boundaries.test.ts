@@ -26,7 +26,7 @@ describe('default actor policy boundaries', () => {
 
     await expect(
       hook({
-        actor: 'plugin:rync/session-orchestration',
+        actor: 'plugin:rync/retired-session-plugin',
         action: 'session.create'
       })
     ).resolves.toMatchObject({
@@ -35,7 +35,7 @@ describe('default actor policy boundaries', () => {
 
     await expect(
       hook({
-        actor: 'plugin:acme/session-orchestration',
+        actor: 'plugin:acme/session-plugin',
         action: 'session.create'
       })
     ).resolves.toMatchObject({
@@ -50,7 +50,7 @@ describe('default actor policy boundaries', () => {
       rules: [
         ...profile.actorRules,
         {
-          actorPrefix: 'plugin:rync/session-orchestration',
+          actorPrefix: 'plugin:rync/example-session-plugin',
           allowCapabilities: ['session.create'],
           denyCapabilities: [],
           targetPrefixes: []
@@ -60,7 +60,7 @@ describe('default actor policy boundaries', () => {
 
     await expect(
       hook({
-        actor: 'plugin:rync/session-orchestration',
+        actor: 'plugin:rync/example-session-plugin',
         action: 'session.create'
       })
     ).resolves.toMatchObject({
@@ -69,7 +69,7 @@ describe('default actor policy boundaries', () => {
 
     await expect(
       hook({
-        actor: 'plugin:rync/session-orchestration',
+        actor: 'plugin:rync/example-session-plugin',
         action: 'session.delete'
       })
     ).resolves.toMatchObject({

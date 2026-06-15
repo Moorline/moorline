@@ -30,9 +30,11 @@ export class ProviderSessionDirectory implements ProviderConnectionStore {
   upsert(input: ProviderConnectionRecord): ProviderConnectionRecord {
     const capabilityMetadata = input.capabilityMetadata ?? {};
     const runtimePayload = {
-      cwd: input.workspacePath,
+      agentKind: input.agentKind ?? 'workspace',
+      cwd: input.providerCwd ?? input.workspacePath,
+      workspacePath: input.workspacePath,
+      providerCwd: input.providerCwd ?? input.workspacePath,
       model: input.model,
-      resumeThreadId: input.providerThreadId,
       ...(input.tokenUsage ? { tokenUsage: input.tokenUsage } : {}),
       ...(input.providerOptions ? { providerOptions: input.providerOptions } : {}),
       ...(Object.keys(capabilityMetadata).length > 0 ? { capabilityMetadata } : {})
@@ -42,7 +44,7 @@ export class ProviderSessionDirectory implements ProviderConnectionStore {
       threadId: input.threadId,
       provider: input.providerPackageId,
       runtimeMode: input.runtimeMode,
-      cwd: input.workspacePath,
+      cwd: input.providerCwd ?? input.workspacePath ?? '',
       providerThreadId: input.providerThreadId,
       status: input.status,
       model: input.model,
@@ -71,7 +73,14 @@ export class ProviderSessionDirectory implements ProviderConnectionStore {
       threadId: binding.threadId,
       providerPackageId: binding.provider,
       runtimeMode: binding.runtimeMode,
-      workspacePath: typeof runtimePayloadRecord?.cwd === 'string' ? runtimePayloadRecord.cwd : binding.cwd,
+      agentKind: runtimePayloadRecord?.agentKind === 'ephemeral' ? 'ephemeral' : 'workspace',
+      workspacePath:
+        typeof runtimePayloadRecord?.workspacePath === 'string'
+          ? runtimePayloadRecord.workspacePath
+          : runtimePayloadRecord?.workspacePath === null
+            ? null
+            : binding.cwd,
+      providerCwd: typeof runtimePayloadRecord?.providerCwd === 'string' ? runtimePayloadRecord.providerCwd : binding.cwd,
       providerThreadId: binding.providerThreadId,
       status: binding.status,
       model: typeof runtimePayloadRecord?.model === 'string' ? runtimePayloadRecord.model : binding.model,

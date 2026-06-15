@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { validatePluginRuntimeContract } from '../../packages/core/src/core/extension/plugins/pluginManifest.js';
 import { PluginHost } from '../../packages/core/src/core/extension/plugins/pluginHost.js';
@@ -183,7 +184,6 @@ describe('external work spine storage', () => {
       summary: null,
       provider: 'default',
       providerThreadId: null,
-      resumeThreadId: null,
       providerStatus: 'ready',
       activeTurnId: null,
       createdAt: '2026-06-01T00:00:00.000Z',
@@ -229,6 +229,37 @@ describe('external work spine storage', () => {
 });
 
 describe('managed session creation', () => {
+  it('creates workspace paths only for workspace agents', () => {
+    const { root, store } = createStoreWithRoot();
+    const registry = new SessionRegistry(store, join(root, 'workspaces'), 'pi/default');
+
+    const workspace = registry.create({
+      scopeId: 'runtime',
+      transportResourceId: 'workspace-resource',
+      transportResourceName: 'workspace-resource',
+      requestedName: 'workspace session',
+      runtimeMode: 'full-access',
+      agentKind: 'workspace',
+      nowIso: '2026-06-07T00:00:00.000Z'
+    });
+    const ephemeral = registry.create({
+      scopeId: 'runtime',
+      transportResourceId: 'ephemeral-resource',
+      transportResourceName: 'ephemeral-resource',
+      requestedName: 'ephemeral session',
+      runtimeMode: 'approval-required',
+      agentKind: 'ephemeral',
+      nowIso: '2026-06-07T00:00:01.000Z'
+    });
+
+    expect(workspace.workspacePath).toBe(join(root, 'workspaces', workspace.sessionId));
+    expect(workspace.providerCwd).toBe(workspace.workspacePath);
+    expect(workspace.workspacePath && existsSync(workspace.workspacePath)).toBe(true);
+    expect(ephemeral.workspacePath).toBeNull();
+    expect(ephemeral.providerCwd).toBeNull();
+    expect(ephemeral.toolGrantIds).toEqual([]);
+  });
+
   it('preserves explicit session metadata when lifecycle adoption wins creation race', async () => {
     const { root, store } = createStoreWithRoot();
     const registry = new SessionRegistry(store, join(root, 'workspaces'), 'pi/default');

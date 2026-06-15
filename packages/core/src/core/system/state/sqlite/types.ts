@@ -1,4 +1,4 @@
-import type { PendingRuntimeRequestRecord, ProviderRuntimeEvent, ProviderSessionRecord, RuntimeModeName } from '../../../../types/runtime.js';
+import type { PendingRuntimeRequestRecord, ProviderResumeCursor, ProviderRuntimeEvent, ProviderSessionRecord, RuntimeAgentKind, RuntimeModeName } from '../../../../types/runtime.js';
 import type { SessionOwnerKind } from '../../../../types/plugin.js';
 import type {
   RuntimeExternalResourceRecord,
@@ -23,13 +23,16 @@ export interface RuntimeSessionRow {
   transportResourceId: string;
   threadId: string;
   transportResourceName: string;
-  workspacePath: string;
+  agentKind?: RuntimeAgentKind;
+  workspacePath: string | null;
+  providerCwd?: string | null;
   runtimeMode: RuntimeModeName;
   lifecycleStatus: SessionLifecycleStatus;
   summary: string | null;
   provider: ProviderSessionRecord['providerPackageId'];
   providerThreadId: string | null;
-  resumeThreadId: string | null;
+  resumeCursor?: ProviderResumeCursor | null;
+  toolGrantIds?: string[];
   providerStatus: ProviderSessionRecord['status'];
   providerAutoStartEnabled?: boolean;
   activeTurnId: string | null;
@@ -196,8 +199,10 @@ export interface DomainEventRow {
   createdAt: string;
 }
 
-export interface RuntimeSessionDbRow extends Omit<RuntimeSessionRow, 'providerAutoStartEnabled' | 'tags'> {
+export interface RuntimeSessionDbRow extends Omit<RuntimeSessionRow, 'providerAutoStartEnabled' | 'tags' | 'resumeCursor' | 'toolGrantIds'> {
   providerAutoStartEnabled: number;
+  resumeCursorJson: string | null;
+  toolGrantIdsJson: string | null;
   tagsJson: string | null;
 }
 
@@ -215,7 +220,10 @@ export function hydrateSession(row: RuntimeSessionDbRow | undefined): RuntimeSes
   }
   return {
     ...row,
+    agentKind: row.agentKind ?? 'workspace',
     providerAutoStartEnabled: row.providerAutoStartEnabled !== 0,
+    resumeCursor: safeReadJsonValue<ProviderResumeCursor>(row.resumeCursorJson).value ?? null,
+    toolGrantIds: safeReadJson(row.toolGrantIdsJson, isStringArray).value ?? [],
     tags: safeReadJson(row.tagsJson, isStringArray).value ?? []
   };
 }
@@ -322,13 +330,16 @@ export const RUNTIME_SESSION_SELECT = `
     transport_resource_id as transportResourceId,
     thread_id as threadId,
     transport_resource_name as transportResourceName,
+    COALESCE(agent_kind, 'workspace') as agentKind,
     workspace_path as workspacePath,
+    provider_cwd as providerCwd,
     runtime_mode as runtimeMode,
     lifecycle_status as lifecycleStatus,
     summary,
     provider,
     provider_thread_id as providerThreadId,
-    resume_thread_id as resumeThreadId,
+    resume_cursor_json as resumeCursorJson,
+    tool_grant_ids_json as toolGrantIdsJson,
     provider_status as providerStatus,
     provider_auto_start_enabled as providerAutoStartEnabled,
     active_turn_id as activeTurnId,

@@ -51,7 +51,7 @@ export class RuntimeIngestion {
                 ? 'error'
               : session.providerStatus,
       providerThreadId: event.type === 'thread.started' ? event.payload.providerThreadId : session.providerThreadId,
-      resumeThreadId: event.type === 'thread.started' ? event.payload.providerThreadId : session.resumeThreadId,
+      resumeCursor: event.type === 'thread.started' && event.payload.resumeCursor ? event.payload.resumeCursor : session.resumeCursor ?? null,
       activeTurnId:
         event.type === 'turn.started' ? event.turnId ?? session.activeTurnId : terminalTurnEvent ? null : session.activeTurnId,
       updatedAt: event.createdAt,
@@ -77,9 +77,9 @@ export class RuntimeIngestion {
         : existingBinding?.model ?? null;
     const runtimePayload = {
       ...parseJsonRecord(existingBinding?.runtimePayloadJson ?? null),
-      cwd: updated.workspacePath,
+      cwd: updated.providerCwd ?? updated.workspacePath,
       model,
-      resumeThreadId: updated.resumeThreadId,
+      resumeCursor: updated.resumeCursor,
       ...(event.type === 'thread.token-usage.updated'
         ? {
             tokenUsage: {
@@ -95,7 +95,7 @@ export class RuntimeIngestion {
       threadId: updated.threadId,
       provider: updated.provider,
       runtimeMode: updated.runtimeMode,
-      cwd: updated.workspacePath,
+      cwd: updated.providerCwd ?? updated.workspacePath ?? '',
       providerThreadId: updated.providerThreadId,
       status: updated.providerStatus,
       model,

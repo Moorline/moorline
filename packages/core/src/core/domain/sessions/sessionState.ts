@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import type { RuntimeModeName } from '../../../types/runtime.js';
+import type { RuntimeAgentKind, RuntimeModeName } from '../../../types/runtime.js';
 import type { SessionOwnerLink } from '../../../types/plugin.js';
 import { SqliteSessionStore, type RuntimeSessionRow } from '../../system/state/sqliteSessionStore.js';
 import { assertRuntimeOwnedWorkspacePath } from '../../shared/fs/runtimeOwnedPath.js';
@@ -60,17 +60,22 @@ export class SessionRegistry {
     transportResourceName: string;
     requestedName: string;
     runtimeMode: RuntimeModeName;
+    agentKind?: RuntimeAgentKind;
     nowIso: string;
     providerAutoStartEnabled?: boolean;
     owner?: SessionOwnerLink;
     objective?: string;
     tags?: string[];
     createdBy?: string;
+    providerCwd?: string | null;
   }): RuntimeSessionRow {
     const sessionId = uniqueSessionId(input.requestedName, input.nowIso, this.list());
     const threadId = `session:${sessionId}`;
-    const workspacePath = join(this.workspacesDir, sessionId);
-    mkdirSync(workspacePath, { recursive: true });
+    const agentKind = input.agentKind ?? 'workspace';
+    const workspacePath = agentKind === 'workspace' ? join(this.workspacesDir, sessionId) : null;
+    if (workspacePath) {
+      mkdirSync(workspacePath, { recursive: true });
+    }
 
     const row: RuntimeSessionRow = {
       sessionId,
@@ -78,13 +83,16 @@ export class SessionRegistry {
       transportResourceId: input.transportResourceId,
       threadId,
       transportResourceName: input.transportResourceName,
+      agentKind,
       workspacePath,
+      providerCwd: input.providerCwd ?? workspacePath,
       runtimeMode: input.runtimeMode,
       lifecycleStatus: 'hot',
       summary: null,
       provider: this.providerPackageId,
       providerThreadId: null,
-      resumeThreadId: null,
+      resumeCursor: null,
+      toolGrantIds: [],
       providerStatus: 'connecting',
       providerAutoStartEnabled: input.providerAutoStartEnabled !== false,
       activeTurnId: null,
@@ -107,7 +115,9 @@ export class SessionRegistry {
       this.store.upsertSession(row);
       return this.store.getSession(sessionId)!;
     } catch (error) {
-      rmSync(workspacePath, { recursive: true, force: true });
+      if (workspacePath) {
+        rmSync(workspacePath, { recursive: true, force: true });
+      }
       throw error;
     }
   }
@@ -160,21 +170,23 @@ export class SessionRegistry {
     if (!session || session.lifecycleStatus !== 'archived') {
       return null;
     }
-    let managedWorkspacePath: string;
-    try {
-      managedWorkspacePath = assertRuntimeOwnedWorkspacePath({
-        workspacesDir: this.workspacesDir,
-        workspacePath: session.workspacePath,
-        expectedWorkDirName: session.sessionId,
-        entityLabel: `Session ${session.sessionId}`
-      });
-    } catch (error) {
-      console.warn(
-        `[moorline.session.delete.blocked] sessionId=${session.sessionId} workspacePath=${session.workspacePath} reason=${error instanceof Error ? error.message : String(error)}`
-      );
-      throw error;
+    if (session.workspacePath) {
+      let managedWorkspacePath: string;
+      try {
+        managedWorkspacePath = assertRuntimeOwnedWorkspacePath({
+          workspacesDir: this.workspacesDir,
+          workspacePath: session.workspacePath,
+          expectedWorkDirName: session.sessionId,
+          entityLabel: `Session ${session.sessionId}`
+        });
+      } catch (error) {
+        console.warn(
+          `[moorline.session.delete.blocked] sessionId=${session.sessionId} workspacePath=${session.workspacePath} reason=${error instanceof Error ? error.message : String(error)}`
+        );
+        throw error;
+      }
+      rmSync(managedWorkspacePath, { recursive: true, force: true });
     }
-    rmSync(managedWorkspacePath, { recursive: true, force: true });
     this.store.deleteSession(session.sessionId);
     return session;
   }

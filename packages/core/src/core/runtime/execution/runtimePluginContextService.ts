@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
 import {
   type AdminConfig,
   usesProviderDefaultModel,
@@ -11,20 +12,27 @@ import type { RuntimeDomainEvent } from './runtimeDomain.js';
 import type { RuntimeActivityRecord, RuntimeActivityStore } from '../../system/projection/runtimeActivityStore.js';
 import type { ProjectionStateStore } from '../../system/projection/projectionStateStore.js';
 import type { RuntimeSnapshotQuery } from '../../system/projection/runtimeSnapshotQuery.js';
-import type { RuntimeProvider } from '../../../types/provider.js';
+import type {
+  ProviderResourceBundle,
+  ProviderToolDefinition,
+  ProviderToolExecutor,
+  ProviderToolPolicyConfig,
+  RuntimeProvider
+} from '../../../types/provider.js';
 import type { CanonicalEventLogStore } from '../../system/state/canonicalEventLogStore.js';
-import type { RuntimePluginAdminConfig, RuntimePluginContext } from '../../../types/plugin.js';
+import type { RuntimePluginAdminConfig, RuntimePluginContext, RuntimeToolDefinition } from '../../../types/plugin.js';
 import type { PluginHost } from '../../extension/plugins/pluginHost.js';
 import type { RuntimeActionGuard } from '../../system/policy/runtimeActionGuard.js';
 import type { SidecarManager } from '../supervision/sidecarManager.js';
 import type { SkillRegistry } from '../../extension/skills/skillRegistry.js';
+import { writeSkill } from '../../extension/skills/skillWriter.js';
 import type { RuntimeSessionRow, SqliteSessionStore } from '../../system/state/sqliteSessionStore.js';
 import type {
   RuntimeAttachmentPayload,
   RuntimeActorIdentity,
   RuntimeMessagePayload
 } from '../../../types/transport.js';
-import { parseRuntimeModeName } from '../../../types/runtime.js';
+import { parseRuntimeModeName, type RuntimeAgentKind } from '../../../types/runtime.js';
 import type { RuntimeCommandRunner } from '../../../types/runtime.js';
 import type {
   RuntimeGateRunRecord,
@@ -52,6 +60,7 @@ export { defaultSessionOwner } from './pluginContext/defaultSessionOwner.js';
 
 interface RuntimePluginContextServiceDeps {
   config: AppliedMoorlineConfig;
+  providerToolPolicy: ProviderToolPolicyConfig;
   configPath?: string;
   runtimeRoot: string;
   homeRoot: string;
@@ -900,11 +909,13 @@ export class RuntimePluginContextService {
               transportResourceId: created.transportResourceId,
               actorId,
               actorLabel: this.contextPackageId(actorId),
-              text: prompt,
+              message: prompt,
               session: created.session,
               cwd: created.session.workspacePath,
               runtimeMode,
-              basePromptSections: await this.loadSessionPromptSections(created.session),
+              context: {
+                systemPromptSections: await this.loadSessionPromptSections(this.toInternalSessionRow(created.session))
+              },
               promptSource: 'headless'
             });
             const text = reply.text ?? '';
@@ -1108,58 +1119,92 @@ export class RuntimePluginContextService {
         transportResourceId,
         actorId: promptActorId,
         actorLabel,
-        text,
+        message,
         attachments,
         session,
         cwd,
         runtimeMode,
-        basePromptSections,
+        toolGrantIds,
+        context: agentContext,
+        agentKind,
         promptSource
       }) => {
-        const promptSections = [
-          ...basePromptSections,
-          ...(await this.deps.getPluginHost().beforeAgentPrompt(
+        const activeSession =
+          session
+            ? this.toInternalSessionRow(session)
+            : await this.deps.ensureCoordinationSession(transportResourceId, cwd ?? this.deps.coordinationWorkspacePath);
+        const effectiveAgentKind: RuntimeAgentKind = agentKind ?? activeSession.agentKind ?? (session ? 'workspace' : 'ephemeral');
+        const contributions = await this.deps.getPluginHost().contributeAgentContext(
             {
               surface,
               transportResourceId,
               actorId: promptActorId,
               actorLabel,
-              text,
+              text: message,
               attachments,
               session
             },
             (pluginId) => this.createContext(`plugin:${pluginId}`)
-          ))
+          );
+        const contributionSystemSections = contributions.flatMap((entry) => entry.systemPromptSections ?? []);
+        const contributionContext = contributions.flatMap((entry) => entry.perTurnContext ?? []);
+        const contributionGrantIds = contributions.flatMap((entry) => entry.toolGrantIds ?? []);
+        const policyGrants = this.deps.providerToolPolicy[effectiveAgentKind].grants ?? [];
+        const resources = this.buildProviderResourceBundle([
+          ...(agentContext?.systemPromptSections ?? []),
+          ...contributionSystemSections
+        ]);
+        const providerContext = [
+          {
+            title: promptSource === 'orchestration' ? 'Orchestration instruction source' : 'Transport message source',
+            content:
+              promptSource === 'orchestration'
+                ? `${actorLabel} (${promptActorId})`
+                : describeTransportAuthor({
+                    authorId: promptActorId,
+                    authorUsername: actorLabel,
+                    authorGlobalName: null,
+                    authorDisplayName: actorLabel,
+                    authorLabel: actorLabel
+                  }),
+            source: 'moorline/runtime'
+          },
+          ...((attachments ?? []).length > 0
+            ? [{
+                title: 'Attachment summary',
+                content: `Attached image count: ${(attachments ?? []).length}`,
+                source: 'moorline/runtime'
+              }]
+            : []),
+          ...(agentContext?.perTurnContext ?? []),
+          ...contributionContext
         ];
-        const activeSession = session ?? (await this.deps.ensureCoordinationSession(transportResourceId, cwd));
-        const prompt = [
-          ...promptSections,
-          '',
-          promptSource === 'orchestration'
-            ? `Orchestration instruction from ${actorLabel} (${promptActorId}): ${text || '(no text content)'}`
-            : `Transport message from ${describeTransportAuthor({
-                authorId: promptActorId,
-                authorUsername: actorLabel,
-                authorGlobalName: null,
-                authorDisplayName: actorLabel,
-                authorLabel: actorLabel
-              })}: ${text || '(no text content)'}`,
-          ...((attachments ?? []).length > 0 ? [`Attached image count: ${(attachments ?? []).length}`] : [])
-        ].join('\n');
+        const resolvedGrantIds = [
+          ...(activeSession.toolGrantIds ?? []),
+          ...policyGrants,
+          ...(toolGrantIds ?? []),
+          ...contributionGrantIds,
+          ...(effectiveAgentKind === 'ephemeral' ? ['core.moorline_session'] : [])
+        ];
+        const providerTools = this.resolveProviderTools(effectiveAgentKind, resolvedGrantIds);
         const providerImages = await this.deps.prepareProviderImages(activeSession.threadId, attachments);
         const result = await this.deps.providerOrchestrator.runTurn({
           actorId,
           session: activeSession,
           transportResourceId: transportResourceId,
           surface,
-          promptContent: text,
+          promptContent: message,
           promptSource,
           authorId: promptActorId,
           authorLabel: actorLabel,
           providerInput: {
-            text: prompt,
-            ...(providerImages && providerImages.length > 0 ? { images: providerImages } : {})
-          }
+            text: message,
+            ...(providerImages && providerImages.length > 0 ? { images: providerImages } : {}),
+            ...(providerContext.length > 0 ? { context: providerContext } : {})
+          },
+          providerResources: resources,
+          providerTools,
+          providerToolExecutor: this.createProviderToolExecutor(providerTools)
         });
         const formattedResult = this.deps.normalizeReply(
           result.text || (result.attachments?.length ? '' : 'I could not finish that cleanly.')
@@ -1171,7 +1216,7 @@ export class RuntimePluginContextService {
             transportResourceId,
             actorId: promptActorId,
             actorLabel,
-            text,
+            text: message,
             attachments,
             session,
             replyMessage: formattedResult
@@ -1208,6 +1253,351 @@ export class RuntimePluginContextService {
     }
 
     return dynamicSections;
+  }
+
+  private toInternalSessionRow(session: RuntimeSessionRow): RuntimeSessionRow {
+    return session;
+  }
+
+  private buildProviderResourceBundle(systemPromptSections: string[]): ProviderResourceBundle {
+    const skills = this.deps.skillRegistry.list().map((skill) => ({
+      name: skill.name,
+      description: skill.description,
+      filePath: skill.path,
+      baseDir: skill.path.replace(/[\\/]SKILL\.md$/, ''),
+      metadata: skill.metadata as Record<string, unknown>
+    }));
+    return {
+      systemPromptSections: systemPromptSections.map((section) => section.trim()).filter(Boolean),
+      contextFiles: [],
+      skills,
+      promptTemplates: []
+    };
+  }
+
+  private coreSessionTool(): RuntimeToolDefinition {
+    return {
+      name: 'moorline_session',
+      description: 'Inspect, query, create, direct, archive, or delete Moorline managed sessions.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['query', 'inspect', 'create', 'direct', 'archive', 'delete_archived']
+          },
+          session_id: { type: 'string' },
+          transport_resource_id: { type: 'string' },
+          requested_name: { type: 'string' },
+          runtime_mode: { type: 'string' },
+          instruction: { type: 'string' },
+          objective: { type: 'string' },
+          reason: { type: 'string' },
+          include_archived: { type: 'boolean' },
+          limit: { type: 'number' }
+        },
+        required: ['action'],
+        additionalProperties: false
+      },
+      execute: async (input, context) => {
+        const action = typeof input.action === 'string' ? input.action : '';
+        const sessionId = typeof input.session_id === 'string' ? input.session_id.trim() : '';
+        const transportResourceId = typeof input.transport_resource_id === 'string' ? input.transport_resource_id.trim() : '';
+        switch (action) {
+          case 'query': {
+            return await this.deps.runGuardedAction({
+              action: 'session.inspect',
+              actor: context.actorId,
+              target: 'sessions',
+              title: 'Session query blocked',
+              execute: async () => {
+                const sessions = this.deps.snapshots.querySessions({
+                  includeArchived: input.include_archived === true,
+                  limit: typeof input.limit === 'number' ? input.limit : undefined
+                });
+                return {
+                  content:
+                    sessions.length === 0
+                      ? 'No sessions matched.'
+                      : [
+                          'Sessions:',
+                          ...sessions.map(({ session }) =>
+                            [
+                              `- ${session.sessionId}`,
+                              `kind=${session.agentKind ?? 'workspace'}`,
+                              `lifecycle=${session.lifecycleStatus}`,
+                              `mode=${session.runtimeMode}`,
+                              `provider=${session.providerStatus}`,
+                              session.objective ? `objective=${session.objective}` : null
+                            ].filter(Boolean).join(' | ')
+                          )
+                        ].join('\n')
+                };
+              }
+            });
+          }
+          case 'inspect': {
+            return await this.deps.runGuardedAction({
+              action: 'session.inspect',
+              actor: context.actorId,
+              target: sessionId || transportResourceId || 'session',
+              title: 'Session inspect blocked',
+              execute: async () => {
+                const snapshot = sessionId
+                  ? this.deps.snapshots.getSessionById(sessionId)
+                  : transportResourceId
+                    ? this.deps.snapshots.getSessionByTransportResourceId(transportResourceId)
+                    : null;
+                return { content: snapshot ? JSON.stringify(snapshot, null, 2) : 'No matching session found.' };
+              }
+            });
+          }
+          case 'create': {
+            const requestedName = typeof input.requested_name === 'string' ? input.requested_name.trim() : '';
+            if (!requestedName) return { content: 'create error: requested_name is required.' };
+            const runtimeMode = parseRuntimeModeName(input.runtime_mode, 'runtime_mode');
+            return await this.deps.runGuardedAction({
+              action: 'session.create',
+              actor: context.actorId,
+              target: requestedName,
+              title: 'Session create blocked',
+              execute: async () => {
+                const created = await this.deps.workManagement.createManagedSession({
+                  actorId: 'runtime:provider/tool',
+                  requestedName,
+                  runtimeMode,
+                  objective: typeof input.objective === 'string' ? input.objective : undefined
+                });
+                return { content: `Created session ${created.session.sessionId} (${created.transportResourceId}).` };
+              }
+            });
+          }
+          case 'direct': {
+            const instruction = typeof input.instruction === 'string' ? input.instruction.trim() : '';
+            if (!instruction) return { content: 'direct error: instruction is required.' };
+            return await this.deps.runGuardedAction({
+              action: 'session.direct',
+              actor: context.actorId,
+              target: sessionId || transportResourceId || 'session',
+              title: 'Session direct blocked',
+              execute: async () => {
+                const result = await this.deps.workManagement.directManagedSession({
+                  actorId: 'runtime:provider/tool',
+                  sessionId: sessionId || undefined,
+                  transportResourceId: transportResourceId || undefined,
+                  instruction,
+                  reason: typeof input.reason === 'string' ? input.reason : undefined
+                });
+                return { content: `Directed session ${result.session.sessionId}.\n${result.reply.text ?? ''}`.trim() };
+              }
+            });
+          }
+          case 'archive': {
+            return await this.deps.runGuardedAction({
+              action: 'session.archive',
+              actor: context.actorId,
+              target: sessionId || transportResourceId || 'session',
+              title: 'Session archive blocked',
+              execute: async () => {
+                const archived = await this.deps.workManagement.archiveManagedSession({
+                  actorId: 'runtime:provider/tool',
+                  sessionId: sessionId || undefined,
+                  transportResourceId: transportResourceId || undefined
+                });
+                return { content: archived ? `Archived session ${archived.sessionId}.` : 'No matching session found.' };
+              }
+            });
+          }
+          case 'delete_archived': {
+            return await this.deps.runGuardedAction({
+              action: 'session.delete',
+              actor: context.actorId,
+              target: sessionId || transportResourceId || 'session',
+              title: 'Session delete blocked',
+              execute: async () => {
+                const deleted = await this.deps.workManagement.deleteManagedSession({
+                  actorId: 'runtime:provider/tool',
+                  sessionId: sessionId || undefined,
+                  transportResourceId: transportResourceId || undefined
+                });
+                return { content: deleted ? `Deleted archived session ${deleted.sessionId}.` : 'No matching archived session found.' };
+              }
+            });
+          }
+          default:
+            return { content: 'moorline_session error: unknown action.' };
+        }
+      }
+    };
+  }
+
+  private coreSkillLoadTool(): RuntimeToolDefinition {
+    return {
+      name: 'moorline_skill.load',
+      description: 'Load a Moorline-managed skill by name.',
+      requiredCapability: 'fs.read',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' }
+        },
+        required: ['name'],
+        additionalProperties: false
+      },
+      execute: async (input) => {
+        const name = typeof input.name === 'string' ? input.name.trim() : '';
+        if (!name) {
+          return { content: 'moorline_skill.load error: name is required.' };
+        }
+        const skill = await this.deps.skillRegistry.load(name);
+        return {
+          content: skill ? JSON.stringify(skill, null, 2) : `No matching skill found: ${name}`
+        };
+      }
+    };
+  }
+
+  private coreSkillSaveTool(): RuntimeToolDefinition {
+    return {
+      name: 'moorline_skill.save',
+      description: 'Create or update a Moorline-managed runtime skill.',
+      requiredCapability: 'fs.write',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          description: { type: 'string' },
+          tags: { type: 'array', items: { type: 'string' } },
+          body: { type: 'string' },
+          directory_name: { type: 'string' },
+          resource_files: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                path: { type: 'string' },
+                content: { type: 'string' }
+              },
+              required: ['path', 'content'],
+              additionalProperties: false
+            }
+          }
+        },
+        required: ['name', 'body'],
+        additionalProperties: false
+      },
+      execute: async (input, context) => {
+        const name = typeof input.name === 'string' ? input.name.trim() : '';
+        const body = typeof input.body === 'string' ? input.body : '';
+        if (!name) {
+          return { content: 'moorline_skill.save error: name is required.' };
+        }
+        if (!body.trim()) {
+          return { content: 'moorline_skill.save error: body is required.' };
+        }
+        const resourceFiles = Array.isArray(input.resource_files)
+          ? input.resource_files
+              .filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object' && !Array.isArray(entry))
+              .map((entry) => ({
+                path: typeof entry.path === 'string' ? entry.path : '',
+                content: typeof entry.content === 'string' ? entry.content : ''
+              }))
+          : [];
+        const written = writeSkill({
+          rootDir: join(this.deps.runtimeRoot, 'packages', 'skills'),
+          name,
+          description: typeof input.description === 'string' ? input.description : undefined,
+          tags: Array.isArray(input.tags) ? input.tags.filter((tag): tag is string => typeof tag === 'string') : undefined,
+          body,
+          directoryName: typeof input.directory_name === 'string' ? input.directory_name : undefined,
+          resourceFiles
+        });
+        this.deps.skillRegistry.invalidateCache();
+        recordHistoryCheckpoint({
+          homeRoot: this.deps.homeRoot,
+          actor: context.actorId,
+          reason: `Updated skill ${name}.`,
+          operation: `provider tool write skill ${typeof input.directory_name === 'string' ? input.directory_name : name}`,
+          absoluteTargets: [written.skillDir]
+        });
+        return { content: JSON.stringify(written, null, 2) };
+      }
+    };
+  }
+
+  private allProviderRuntimeTools(): RuntimeToolDefinition[] {
+    return [
+      { ...this.coreSessionTool(), pluginId: 'core' },
+      { ...this.coreSkillLoadTool(), pluginId: 'core' },
+      { ...this.coreSkillSaveTool(), pluginId: 'core' },
+      ...this.deps.getPluginHost().listTools((pluginId) => this.createContext(`plugin:${pluginId}`))
+    ];
+  }
+
+  private toolId(tool: RuntimeToolDefinition): string {
+    return tool.pluginId === 'core' ? `core.${tool.name}` : `plugin:${tool.pluginId ?? 'unknown'}.${tool.name}`;
+  }
+
+  private resolveProviderTools(agentKind: RuntimeAgentKind, grantIds: string[]): ProviderToolDefinition[] {
+    const grants = new Set(grantIds);
+    if (agentKind === 'ephemeral') {
+      grants.add('core.moorline_session');
+    }
+    return this.allProviderRuntimeTools()
+      .filter((tool) => grants.has(this.toolId(tool)))
+      .map((tool) => ({
+        id: this.toolId(tool),
+        name: tool.name,
+        description: tool.description ?? tool.name,
+        inputSchema: tool.inputSchema ?? { type: 'object', additionalProperties: true },
+        ...(tool.requiredCapability ? { requiredCapability: tool.requiredCapability } : {}),
+        source: tool.pluginId === 'core' ? 'core' : 'plugin',
+        ...(tool.pluginId && tool.pluginId !== 'core' ? { ownerPackageId: tool.pluginId } : {})
+      }));
+  }
+
+  private createProviderToolExecutor(tools: ProviderToolDefinition[]): ProviderToolExecutor {
+    const allowed = new Set(tools.map((tool) => tool.id));
+    return {
+      executeProviderTool: async ({ toolId, arguments: args, actor }) => {
+        if (!allowed.has(toolId)) {
+          throw new Error(`Provider tool is not granted for this session: ${toolId}`);
+        }
+        const runtimeTool = this.allProviderRuntimeTools().find((tool) => this.toolId(tool) === toolId);
+        if (!runtimeTool) {
+          throw new Error(`Unknown provider tool: ${toolId}`);
+        }
+        const context = this.createContext(runtimeTool.pluginId && runtimeTool.pluginId !== 'core' ? `plugin:${runtimeTool.pluginId}` : actor);
+        const run = async () => await runtimeTool.execute(args, context);
+        try {
+          const result = runtimeTool.requiredCapability
+            ? await this.deps.runGuardedAction({
+                action: runtimeTool.requiredCapability,
+                actor,
+                target: toolId,
+                title: 'Provider tool blocked',
+                execute: run
+              })
+            : await run();
+          this.deps.appendAuditEvent('provider.tool.executed', {
+            actor,
+            toolId,
+            ownerPackageId: runtimeTool.pluginId ?? 'core',
+            ok: true
+          });
+          return { content: result.content };
+        } catch (error) {
+          this.deps.appendAuditEvent('provider.tool.executed', {
+            actor,
+            toolId,
+            ownerPackageId: runtimeTool.pluginId ?? 'core',
+            ok: false,
+            error: error instanceof Error ? error.message : String(error)
+          });
+          throw error;
+        }
+      }
+    };
   }
 
   private normalizePluginSidecarScope(scope: { kind: 'global' } | { kind: 'session' | 'ephemeral'; key: string }) {

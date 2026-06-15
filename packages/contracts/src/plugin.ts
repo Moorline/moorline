@@ -38,7 +38,7 @@ export const KNOWN_PLUGIN_HOOKS = [
   'onExternalEvent',
   'onAction',
   'onRuntimeEvent',
-  'beforeAgentPrompt',
+  'contributeAgentContext',
   'afterAgentResponse',
   'onDomainEvent',
   'onRuntimeReceipt',

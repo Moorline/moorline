@@ -4,6 +4,7 @@ import type {
   BeforeAgentPromptInput,
   PluginManifest,
   RuntimeActionDispatchResult,
+  RuntimeAgentContextContribution,
   RuntimeManagementContribution,
   RuntimePlugin,
   RuntimePluginContext,
@@ -22,7 +23,7 @@ type PluginHookName =
   | 'onTransportEvent'
   | 'onExternalEvent'
   | 'onAction'
-  | 'beforeAgentPrompt'
+  | 'contributeAgentContext'
   | 'afterAgentResponse'
   | 'onRuntimeEvent'
   | 'onDomainEvent'
@@ -282,20 +283,25 @@ export class PluginHost {
     );
   }
 
-  async beforeAgentPrompt(input: BeforeAgentPromptInput, contextFactory: (pluginId: string) => RuntimePluginContext): Promise<string[]> {
-    const sections: string[] = [];
+  async contributeAgentContext(
+    input: BeforeAgentPromptInput,
+    contextFactory: (pluginId: string) => RuntimePluginContext
+  ): Promise<RuntimeAgentContextContribution[]> {
+    const contributions: RuntimeAgentContextContribution[] = [];
     for (const plugin of this.plugins) {
-      if ((plugin.manifest.hooks ?? []).includes('beforeAgentPrompt')) {
-        const pluginSections = await this.runHook(
-          plugin,
-          'beforeAgentPrompt',
-          async () => (await plugin.beforeAgentPrompt?.(input, contextFactory(plugin.id))) ?? [],
-          []
+      if ((plugin.manifest.hooks ?? []).includes('contributeAgentContext')) {
+        contributions.push(
+          await this.runHook(
+            plugin,
+            'contributeAgentContext',
+            async () => (await plugin.contributeAgentContext?.(input, contextFactory(plugin.id))) ?? {},
+            {}
+          )
         );
-        sections.push(...pluginSections);
+        continue;
       }
     }
-    return sections;
+    return contributions;
   }
 
   async afterAgentResponse(input: AfterAgentResponseInput, contextFactory: (pluginId: string) => RuntimePluginContext): Promise<void> {
