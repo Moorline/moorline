@@ -9,24 +9,27 @@ export class SessionRepository {
     this.db
       .prepare(`
         INSERT INTO runtime_sessions (
-          session_id, scope_id, transport_resource_id, thread_id, transport_resource_name, workspace_path,
-          runtime_mode, lifecycle_status, summary, provider, provider_thread_id, resume_thread_id,
+          session_id, scope_id, transport_resource_id, thread_id, transport_resource_name, agent_kind, workspace_path, provider_cwd,
+          runtime_mode, lifecycle_status, summary, provider, provider_thread_id, resume_cursor_json, tool_grant_ids_json,
           provider_status, provider_auto_start_enabled, active_turn_id, created_at, updated_at, last_activity_at, archived_at, last_error,
           owner_kind, owner_id, owner_label, objective, tags_json, created_by, last_directed_at, last_directed_by
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(session_id) DO UPDATE SET
           scope_id = excluded.scope_id,
           transport_resource_id = excluded.transport_resource_id,
           thread_id = excluded.thread_id,
           transport_resource_name = excluded.transport_resource_name,
+          agent_kind = excluded.agent_kind,
           workspace_path = excluded.workspace_path,
+          provider_cwd = excluded.provider_cwd,
           runtime_mode = excluded.runtime_mode,
           lifecycle_status = excluded.lifecycle_status,
           summary = excluded.summary,
           provider = excluded.provider,
           provider_thread_id = excluded.provider_thread_id,
-          resume_thread_id = excluded.resume_thread_id,
+          resume_cursor_json = excluded.resume_cursor_json,
+          tool_grant_ids_json = excluded.tool_grant_ids_json,
           provider_status = excluded.provider_status,
           provider_auto_start_enabled = excluded.provider_auto_start_enabled,
           active_turn_id = excluded.active_turn_id,
@@ -50,13 +53,16 @@ export class SessionRepository {
         row.transportResourceId,
         row.threadId,
         row.transportResourceName,
+        row.agentKind ?? 'workspace',
         row.workspacePath,
+        row.providerCwd ?? null,
         row.runtimeMode,
         row.lifecycleStatus,
         row.summary,
         row.provider,
         row.providerThreadId,
-        row.resumeThreadId,
+        row.resumeCursor ? JSON.stringify(row.resumeCursor) : null,
+        JSON.stringify(row.toolGrantIds ?? []),
         row.providerStatus,
         row.providerAutoStartEnabled !== false ? 1 : 0,
         row.activeTurnId,

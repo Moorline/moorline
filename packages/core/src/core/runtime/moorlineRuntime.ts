@@ -13,7 +13,7 @@ import { createActorRulePolicyHook } from '../system/policy/actorRulePolicy.js';
 import { createNetworkPolicyHook } from '../system/policy/networkPolicy.js';
 import { RuntimeActionGuard } from '../system/policy/runtimeActionGuard.js';
 import type { PendingRuntimeRequestRecord } from '../../types/runtime.js';
-import type { RuntimeProvider } from '../../types/provider.js';
+import { DEFAULT_PROVIDER_TOOL_POLICY, type RuntimeProvider, type RuntimeProviderSessionInput } from '../../types/provider.js';
 import { SessionLifecycleService } from '../domain/sessions/sessionLifecycleService.js';
 import { SkillRegistry } from '../extension/skills/skillRegistry.js';
 import { type RuntimeSessionRow, SqliteSessionStore } from '../system/state/sqliteSessionStore.js';
@@ -287,7 +287,7 @@ export class MoorlineRuntime {
     await this.pluginHost.onRuntimeStarted((pluginId) => this.createPluginContext(`plugin:${pluginId}`));
     await this.sidecars.recover();
     await this.providerService.recoverSessions({
-      sessions: this.sessionRegistry.list(),
+      sessions: this.sessionRegistry.list().map((session) => this.toProviderSessionInput(session)),
       runtimeRoot: this.paths.runtimeRoot,
       ...(this.configuredProviderModel() ? { model: this.configuredProviderModel() } : {})
     });
@@ -478,11 +478,13 @@ export class MoorlineRuntime {
       transportResourceId: session.transportResourceId,
       actorId,
       actorLabel: 'Moorline Orchestrator',
-      text: content,
+      message: content,
       session,
       cwd: session.workspacePath,
       runtimeMode: session.runtimeMode,
-      basePromptSections: await this.pluginContexts.loadSessionPromptSections(session),
+      context: {
+        systemPromptSections: await this.pluginContexts.loadSessionPromptSections(session)
+      },
       promptSource: 'orchestration'
     });
   }
@@ -502,6 +504,30 @@ export class MoorlineRuntime {
       nowIso: this.now(),
       providerAutoStartEnabled: this.providerAutoStartDefault
     })!;
+  }
+
+  private toProviderSessionInput(session: RuntimeSessionRow): RuntimeProviderSessionInput {
+    const agentKind = session.agentKind ?? 'workspace';
+    if (agentKind === 'workspace' && !session.workspacePath) {
+      throw new Error(`Workspace provider session ${session.sessionId} is missing workspacePath.`);
+    }
+    if (agentKind === 'ephemeral' && session.workspacePath !== null) {
+      throw new Error(`Ephemeral provider session ${session.sessionId} must not have a workspacePath.`);
+    }
+    return {
+      sessionId: session.sessionId,
+      threadId: session.threadId,
+      transportResourceId: session.transportResourceId,
+      runtimeMode: session.runtimeMode,
+      agentKind,
+      workspacePath: session.workspacePath,
+      providerCwd: session.providerCwd ?? null,
+      resumeCursor: session.resumeCursor ?? null,
+      lifecycleStatus: session.lifecycleStatus,
+      providerAutoStartEnabled: session.providerAutoStartEnabled,
+      toolGrantIds: session.toolGrantIds ?? [],
+      toolPolicy: this.deps.providerToolPolicy ?? DEFAULT_PROVIDER_TOOL_POLICY
+    };
   }
 
   private providerAutoStartEnabled(session: RuntimeSessionRow): boolean {

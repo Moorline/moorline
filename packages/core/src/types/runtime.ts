@@ -3,11 +3,13 @@ export type {
   CanonicalRequestType,
   PendingRuntimeRequestRecord,
   ProviderInputImage,
+  ProviderResumeCursor,
   ProviderRuntimeEvent,
   ProviderSessionRecord,
   ProviderSessionStatus,
   ProviderThreadTokenUsage,
+  RuntimeAgentKind,
   RuntimeCommandRunner,
   RuntimeModeName
 } from '@moorline/contracts';
-export { parseRuntimeModeName } from '@moorline/contracts';
+export { parseRuntimeAgentKind, parseRuntimeModeName } from '@moorline/contracts';

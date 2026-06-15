@@ -3,6 +3,16 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { validatePackageId } from '../../packages/contracts/src/package.js';
+import { parseRuntimeAgentKind } from '../../packages/contracts/src/runtime.js';
+import {
+  DEFAULT_PROVIDER_TOOL_POLICY,
+  validateProviderPackageManifest,
+  validateProviderResourceBundle,
+  validateProviderResumeCursor,
+  validateProviderToolDefinition,
+  validateProviderToolPolicyConfig,
+  validateRuntimeProviderSessionInput
+} from '../../packages/contracts/src/provider.js';
 
 const root = process.cwd();
 const hostPackages = ['cli', 'contracts', 'control-api', 'core', 'http'];
@@ -83,6 +93,128 @@ describe('host repository split contract', () => {
 
   it('does not allow the retired official package namespace', () => {
     expect(() => validatePackageId('official/http', 'package id')).toThrow(/retired official\/\*/u);
+  });
+
+  it('validates provider-native tool policy without provider-specific core types', () => {
+    expect(DEFAULT_PROVIDER_TOOL_POLICY).toEqual({
+      workspace: {
+        nativePreset: 'provider-default'
+      },
+      ephemeral: {
+        nativePreset: 'none',
+        grants: ['core.moorline_session']
+      }
+    });
+    expect(validateProviderToolPolicyConfig({
+      workspace: {
+        nativePreset: 'provider-default',
+        denyNativeTools: ['bash']
+      },
+      ephemeral: {
+        nativePreset: 'none',
+        grants: ['core.moorline_session']
+      }
+    })).toMatchObject({
+      workspace: {
+        nativePreset: 'provider-default',
+        denyNativeTools: ['bash']
+      },
+      ephemeral: {
+        nativePreset: 'none',
+        grants: ['core.moorline_session']
+      }
+    });
+    expect(validateProviderPackageManifest({
+      id: 'acme/provider',
+      name: 'Acme Provider',
+      version: '1.0.0',
+      type: 'provider',
+      toolPolicy: DEFAULT_PROVIDER_TOOL_POLICY,
+      nativeToolDocumentation: {
+        nativeToolNames: ['read', 'write'],
+        defaultWorkspacePreset: 'provider-default',
+        defaultEphemeralPreset: 'none',
+        grantMapping: 'Moorline provider tools map to Acme custom tools.'
+      }
+    }).nativeToolDocumentation?.defaultEphemeralPreset).toBe('none');
+    expect(() => validateProviderToolPolicyConfig({
+      workspace: {
+        nativePreset: ''
+      },
+      ephemeral: {
+        nativePreset: 'none'
+      }
+    })).toThrow(/workspace\.nativePreset/u);
+  });
+
+  it('validates provider-native runtime session and resource contracts', () => {
+    expect(parseRuntimeAgentKind('workspace')).toBe('workspace');
+    expect(parseRuntimeAgentKind('ephemeral')).toBe('ephemeral');
+    expect(() => parseRuntimeAgentKind('main')).toThrow(/agent_kind/u);
+
+    expect(validateProviderResumeCursor({
+      provider: 'rync/pi',
+      value: { sessionFile: '/tmp/pi-session.json' }
+    })).toEqual({
+      provider: 'rync/pi',
+      value: { sessionFile: '/tmp/pi-session.json' }
+    });
+
+    expect(validateRuntimeProviderSessionInput({
+      sessionId: 'coordination-main',
+      threadId: 'coordination:main',
+      transportResourceId: 'discord:main',
+      runtimeMode: 'approval-required',
+      agentKind: 'ephemeral',
+      workspacePath: null,
+      providerCwd: null,
+      resumeCursor: null,
+      lifecycleStatus: 'hot',
+      toolGrantIds: ['core.moorline_session'],
+      toolPolicy: DEFAULT_PROVIDER_TOOL_POLICY
+    })).toMatchObject({
+      agentKind: 'ephemeral',
+      workspacePath: null,
+      toolGrantIds: ['core.moorline_session']
+    });
+    expect(() => validateRuntimeProviderSessionInput({
+      sessionId: 'bad',
+      threadId: 'bad',
+      transportResourceId: 'bad',
+      runtimeMode: 'approval-required',
+      agentKind: 'workspace',
+      workspacePath: null,
+      providerCwd: null,
+      resumeCursor: null,
+      lifecycleStatus: 'hot',
+      toolGrantIds: [],
+      toolPolicy: DEFAULT_PROVIDER_TOOL_POLICY
+    })).toThrow(/workspacePath is required/u);
+
+    expect(validateProviderResourceBundle({
+      systemPromptSections: ['Persona'],
+      contextFiles: [{ path: 'AGENTS.md', content: 'rules', source: 'moorline' }],
+      skills: [{
+        name: 'proof',
+        description: 'Proof skill',
+        filePath: '/tmp/proof/SKILL.md',
+        baseDir: '/tmp/proof',
+        metadata: {}
+      }],
+      promptTemplates: [{ name: 'brief', content: 'hello', source: 'moorline' }]
+    }).skills[0]?.name).toBe('proof');
+
+    expect(validateProviderToolDefinition({
+      id: 'core.moorline_session',
+      name: 'moorline_session',
+      description: 'Manage sessions',
+      inputSchema: { type: 'object' },
+      requiredCapability: 'session.inspect',
+      source: 'core'
+    })).toMatchObject({
+      id: 'core.moorline_session',
+      source: 'core'
+    });
   });
 
   it('builds release CLI artifacts from the split CLI package entrypoint', () => {

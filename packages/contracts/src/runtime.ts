@@ -9,8 +9,10 @@ export interface RuntimeCommandRunner {
 }
 
 export type RuntimeModeName = 'full-access' | 'approval-required';
+export type RuntimeAgentKind = 'workspace' | 'ephemeral';
 
 const RUNTIME_MODE_NAMES: RuntimeModeName[] = ['full-access', 'approval-required'];
+const RUNTIME_AGENT_KINDS: RuntimeAgentKind[] = ['workspace', 'ephemeral'];
 
 function isRuntimeModeName(value: unknown): value is RuntimeModeName {
   return value === 'full-access' || value === 'approval-required';
@@ -23,7 +25,23 @@ export function parseRuntimeModeName(value: unknown, label = 'runtime_mode'): Ru
   throw new Error(`${label} must be one of: ${RUNTIME_MODE_NAMES.join(', ')}.`);
 }
 
+function isRuntimeAgentKind(value: unknown): value is RuntimeAgentKind {
+  return value === 'workspace' || value === 'ephemeral';
+}
+
+export function parseRuntimeAgentKind(value: unknown, label = 'agent_kind'): RuntimeAgentKind {
+  if (isRuntimeAgentKind(value)) {
+    return value;
+  }
+  throw new Error(`${label} must be one of: ${RUNTIME_AGENT_KINDS.join(', ')}.`);
+}
+
 export type ProviderPackageId = string;
+
+export interface ProviderResumeCursor {
+  provider: ProviderPackageId;
+  value: unknown;
+}
 
 export type ProviderSessionStatus =
   | 'connecting'
@@ -80,12 +98,14 @@ export interface ProviderSessionRecord {
   nativeMetadata?: Record<string, unknown>;
   threadId: string;
   runtimeMode: RuntimeModeName;
+  agentKind?: RuntimeAgentKind;
   cwd: string;
   model?: string;
   status: ProviderSessionStatus;
   activeTurnId?: string;
   resumeCursor?: {
     threadId: string;
+    cursor?: ProviderResumeCursor;
   };
   createdAt: string;
   updatedAt: string;
@@ -122,6 +142,7 @@ export type ProviderRuntimeEvent =
       type: 'thread.started';
       payload: {
         providerThreadId: string;
+        resumeCursor?: ProviderResumeCursor;
       };
     })
   | (ProviderRuntimeEventBase & {

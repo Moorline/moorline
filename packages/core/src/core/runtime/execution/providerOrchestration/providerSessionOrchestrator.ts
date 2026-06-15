@@ -1,6 +1,13 @@
 import type { AppliedMoorlineConfig } from '../../../../types/config.js';
 import type { RuntimeMessagePayload } from '../../../../types/transport.js';
-import type { RuntimeProvider } from '../../../../types/provider.js';
+import {
+  type ProviderResourceBundle,
+  type ProviderToolDefinition,
+  type ProviderToolExecutor,
+  type ProviderToolPolicyConfig,
+  type RuntimeProvider,
+  type RuntimeProviderSessionInput
+} from '../../../../types/provider.js';
 import type { RuntimeSessionRow } from '../../../system/state/sqliteSessionStore.js';
 import type { SessionRegistry } from '../../../domain/sessions/sessionState.js';
 import type { ProviderConnectionStore } from '../providerProjectionTypes.js';
@@ -9,6 +16,7 @@ import { ProviderSessionCoordinator } from '../providerCoordination/providerSess
 
 interface ProviderSessionOrchestratorDeps extends ProviderGuardPort, ProviderModelPort {
   config: AppliedMoorlineConfig;
+  providerToolPolicy: ProviderToolPolicyConfig;
   runtimeRoot: string;
   provider: RuntimeProvider;
   connections: ProviderConnectionStore;
@@ -55,7 +63,12 @@ export class ProviderSessionOrchestrator {
   async ensureSession(
     session: RuntimeSessionRow,
     actor: string,
-    options: { persistSessionState?: boolean } = {}
+    options: {
+      persistSessionState?: boolean;
+      resources?: ProviderResourceBundle;
+      tools?: ProviderToolDefinition[];
+      toolExecutor?: ProviderToolExecutor;
+    } = {}
   ): Promise<void> {
     if (!this.providerAutoStartEnabled(session)) {
       this.markThreadFailure(session.threadId, this.providerStoppedReply(session));
@@ -68,19 +81,27 @@ export class ProviderSessionOrchestrator {
       return;
     }
 
+    const providerSessionInput = this.toProviderSessionInput(session);
     const providerSession = await this.deps.runGuardedProviderAction({
       action: 'net.connect',
       actor,
       target: this.deps.providerPolicyTarget(session.threadId, 'session'),
-      payload: { runtimeMode: session.runtimeMode, cwd: session.workspacePath },
+      payload: {
+        runtimeMode: providerSessionInput.runtimeMode,
+        agentKind: providerSessionInput.agentKind,
+        cwd: providerSessionInput.providerCwd ?? providerSessionInput.workspacePath
+      },
       threadId: session.threadId,
       title: 'Provider session blocked',
       execute: async () =>
         await this.deps.provider.startOrResumeSession({
-          session,
+          session: providerSessionInput,
           runtimeRoot: this.deps.runtimeRoot,
           actor,
-          ...(this.deps.configuredProviderModel() ? { model: this.deps.configuredProviderModel() } : {})
+          ...(this.deps.configuredProviderModel() ? { model: this.deps.configuredProviderModel() } : {}),
+          ...(options.resources ? { resources: options.resources } : {}),
+          ...(options.tools ? { tools: options.tools } : {}),
+          ...(options.toolExecutor ? { toolExecutor: options.toolExecutor } : {})
         })
     });
 
@@ -89,11 +110,35 @@ export class ProviderSessionOrchestrator {
         ...session,
         providerStatus: providerSession.status,
         providerThreadId: providerSession.resumeCursor?.threadId ?? session.providerThreadId,
-        resumeThreadId: providerSession.resumeCursor?.threadId ?? session.resumeThreadId,
+        resumeCursor: providerSession.resumeCursor?.cursor ?? session.resumeCursor ?? null,
         updatedAt: this.deps.now()
       });
     }
     this.clearThreadFailure(session.threadId);
+  }
+
+  private toProviderSessionInput(session: RuntimeSessionRow): RuntimeProviderSessionInput {
+    const agentKind = session.agentKind ?? 'workspace';
+    if (agentKind === 'workspace' && !session.workspacePath) {
+      throw new Error(`Workspace provider session ${session.sessionId} is missing workspacePath.`);
+    }
+    if (agentKind === 'ephemeral' && session.workspacePath !== null) {
+      throw new Error(`Ephemeral provider session ${session.sessionId} must not have a workspacePath.`);
+    }
+    return {
+      sessionId: session.sessionId,
+      threadId: session.threadId,
+      transportResourceId: session.transportResourceId,
+      runtimeMode: session.runtimeMode,
+      agentKind,
+      workspacePath: session.workspacePath,
+      providerCwd: session.providerCwd ?? null,
+      resumeCursor: session.resumeCursor ?? null,
+      lifecycleStatus: session.lifecycleStatus,
+      providerAutoStartEnabled: session.providerAutoStartEnabled,
+      toolGrantIds: session.toolGrantIds ?? [],
+      toolPolicy: this.deps.providerToolPolicy
+    };
   }
 
   refreshActiveSessionsForProviderDefault(): void {
@@ -117,7 +162,7 @@ export class ProviderSessionOrchestrator {
       this.deps.upsertSession({
         ...session,
         providerThreadId: null,
-        resumeThreadId: null,
+        resumeCursor: null,
         providerStatus: 'connecting',
         activeTurnId: null,
         updatedAt: this.deps.now(),

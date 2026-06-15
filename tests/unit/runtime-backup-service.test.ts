@@ -109,7 +109,6 @@ describe('runtime backup import', () => {
         summary: null,
         provider: 'rync/pi',
         providerThreadId: null,
-        resumeThreadId: null,
         providerStatus: 'closed',
         providerAutoStartEnabled: true,
         activeTurnId: null,

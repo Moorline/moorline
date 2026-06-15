@@ -1,4 +1,10 @@
-import type { RuntimeEnvironmentVerifier, RuntimeProviderFactory } from '../../types/provider.js';
+import {
+  DEFAULT_PROVIDER_TOOL_POLICY,
+  type ProviderToolPolicyConfig,
+  type RuntimeEnvironmentVerifier,
+  type RuntimeProviderFactory,
+  validateProviderToolPolicyConfig
+} from '../../types/provider.js';
 import { homeRootForRuntime, type MoorlineConfig } from '../../types/config.js';
 import { resolveMoorlineAssetRoot, ensureRuntimeLayout } from '../../core/runtime/hosting/runtimeLayout.js';
 import { GitHistoryService } from '../../core/system/vcs/gitHistoryService.js';
@@ -15,12 +21,24 @@ function selectedSurfaceConfig(config: MoorlineConfig, surface: 'transport' | 'p
   };
 }
 
+function resolveProviderToolPolicy(input: {
+  manifestToolPolicy?: ProviderToolPolicyConfig;
+  providerConfig: Record<string, unknown>;
+}): ProviderToolPolicyConfig {
+  const configuredPolicy = validateProviderToolPolicyConfig(
+    input.providerConfig.toolPolicy,
+    'provider config.toolPolicy'
+  );
+  return configuredPolicy ?? input.manifestToolPolicy ?? DEFAULT_PROVIDER_TOOL_POLICY;
+}
+
 export async function loadConfiguredRuntimePackages(input: {
   config: MoorlineConfig;
   commandRunner?: CommandRunner;
 }): Promise<{
   transport: RuntimeTransport;
   providerFactory: RuntimeProviderFactory;
+  providerToolPolicy: ProviderToolPolicyConfig;
   verifyEnvironment: RuntimeEnvironmentVerifier | null;
 }> {
   await ensureRuntimeLayout({
@@ -42,18 +60,24 @@ export async function loadConfiguredRuntimePackages(input: {
     })
   ]);
 
+  const transportConfig = selectedSurfaceConfig(input.config, 'transport');
+  const providerConfig = selectedSurfaceConfig(input.config, 'provider');
   return {
     transport: transportPackage.createTransport({
-      config: selectedSurfaceConfig(input.config, 'transport'),
+      config: transportConfig,
       commandRunner: input.commandRunner
     }),
     providerFactory: providerPackage.createProviderFactory({
-      config: selectedSurfaceConfig(input.config, 'provider'),
+      config: providerConfig,
       commandRunner: input.commandRunner
     }) as RuntimeProviderFactory,
+    providerToolPolicy: resolveProviderToolPolicy({
+      manifestToolPolicy: providerPackage.manifest.toolPolicy,
+      providerConfig
+    }),
     verifyEnvironment:
       providerPackage.createEnvironmentVerifier?.({
-        config: selectedSurfaceConfig(input.config, 'provider'),
+        config: providerConfig,
         commandRunner: input.commandRunner
       }) ?? null
   };

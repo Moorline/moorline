@@ -163,7 +163,7 @@ export class ManagedTransportResourceLifecycleService {
       lifecycleStatus: 'archived',
       archivedAt: session.archivedAt ?? nowIso,
       providerThreadId: null,
-      resumeThreadId: null,
+      resumeCursor: null,
       providerStatus: 'closed',
       activeTurnId: null,
       lastError: 'Managed transport resource deleted outside Moorline.',

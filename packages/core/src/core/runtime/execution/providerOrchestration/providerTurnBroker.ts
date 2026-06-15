@@ -11,7 +11,7 @@ import type {
   ProviderTurnSurface,
   TurnCompletionState
 } from './ports.js';
-import type { RuntimeProvider } from '../../../../types/provider.js';
+import type { ProviderResourceBundle, ProviderToolDefinition, ProviderToolExecutor, ProviderTurnInput, RuntimeProvider } from '../../../../types/provider.js';
 import type { ProviderSessionOrchestrator } from './providerSessionOrchestrator.js';
 
 const DEFAULT_PROVIDER_TURN_WAIT_TIMEOUT_MS = 10 * 60_000;
@@ -126,7 +126,11 @@ export interface RuntimeProviderTurnInput {
   providerInput: {
     text: string;
     images?: ProviderInputImage[];
+    context?: ProviderTurnInput['context'];
   };
+  providerResources?: ProviderResourceBundle;
+  providerTools?: ProviderToolDefinition[];
+  providerToolExecutor?: ProviderToolExecutor;
 }
 
 interface ProviderTurnBrokerDeps extends ProviderAuditPort, ProviderGuardPort, ProviderModelPort {
@@ -162,7 +166,11 @@ export class ProviderTurnBroker {
     this.deps.attribution.setThreadRequester(input.session.threadId, input.authorId);
     let turnId: string;
     try {
-      await this.deps.sessions.ensureSession(input.session, input.actorId);
+      await this.deps.sessions.ensureSession(input.session, input.actorId, {
+        resources: input.providerResources,
+        tools: input.providerTools,
+        toolExecutor: input.providerToolExecutor
+      });
       ({ turnId } = await this.deps.runGuardedProviderAction({
         action: 'net.connect',
         actor: input.actorId,

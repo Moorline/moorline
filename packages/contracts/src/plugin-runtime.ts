@@ -12,9 +12,11 @@ import type {
 } from './transport.js';
 import type {
   PendingRuntimeRequestRecord,
+  ProviderResumeCursor,
   ProviderRuntimeEvent,
   ProviderSessionStatus,
   ProviderThreadTokenUsage,
+  RuntimeAgentKind,
   RuntimeModeName
 } from './runtime.js';
 import type {
@@ -87,11 +89,14 @@ export type RuntimeSessionRow = RuntimeEntityRecord & {
   threadId: string;
   transportResourceId: string;
   transportResourceName: string;
-  workspacePath: string;
+  agentKind?: RuntimeAgentKind;
+  workspacePath: string | null;
+  providerCwd?: string | null;
   summary: string | null;
   provider: string;
   providerThreadId: string | null;
-  resumeThreadId: string | null;
+  resumeCursor?: ProviderResumeCursor | null;
+  toolGrantIds?: string[];
   providerStatus: ProviderSessionStatus;
   activeTurnId: string | null;
   createdAt: string;
@@ -122,7 +127,9 @@ export interface RuntimeProviderConnectionSnapshot {
   threadId: string;
   providerPackageId: string;
   runtimeMode: RuntimeModeName;
-  workspacePath: string;
+  agentKind?: RuntimeAgentKind;
+  workspacePath: string | null;
+  providerCwd?: string | null;
   providerThreadId: string | null;
   status: ProviderSessionStatus;
   model: string | null;
@@ -240,6 +247,12 @@ export interface BeforeAgentPromptInput {
 
 export interface AfterAgentResponseInput extends BeforeAgentPromptInput {
   replyMessage: string;
+}
+
+export interface RuntimeAgentContextContribution {
+  systemPromptSections?: string[];
+  perTurnContext?: Array<{ title: string; content: string; source: string }>;
+  toolGrantIds?: string[];
 }
 
 export interface CreatedSessionResult {
@@ -568,12 +581,17 @@ export interface RuntimePluginAgentCapability {
     transportResourceId: string;
     actorId: string;
     actorLabel: string;
-    text: string;
+    message: string;
     attachments?: RuntimeAttachmentPayload[];
     session: RuntimeSessionRow | null;
-    cwd: string;
+    cwd?: string | null;
     runtimeMode: RuntimeModeName;
-    basePromptSections: string[];
+    agentKind?: RuntimeAgentKind;
+    toolGrantIds?: string[];
+    context?: {
+      systemPromptSections?: string[];
+      perTurnContext?: Array<{ title: string; content: string; source: string }>;
+    };
     promptSource?: string;
   }): Promise<RuntimeMessagePayload>;
   drainRuntimeWork(): Promise<void>;
@@ -617,7 +635,10 @@ export interface RuntimePlugin {
     context: RuntimePluginContext
   ): Promise<RuntimeActionDispatchResult | boolean | void> | RuntimeActionDispatchResult | boolean | void;
   onRuntimeEvent?(event: ProviderRuntimeEvent, context: RuntimePluginContext): Promise<void> | void;
-  beforeAgentPrompt?(input: BeforeAgentPromptInput, context: RuntimePluginContext): Promise<string[]> | string[];
+  contributeAgentContext?(
+    input: BeforeAgentPromptInput,
+    context: RuntimePluginContext
+  ): Promise<RuntimeAgentContextContribution> | RuntimeAgentContextContribution;
   afterAgentResponse?(input: AfterAgentResponseInput, context: RuntimePluginContext): Promise<void> | void;
   onDomainEvent?(event: RuntimeDomainEvent, context: RuntimePluginContext): Promise<void> | void;
   onRuntimeReceipt?(receipt: RuntimeReceiptRecord, context: RuntimePluginContext): Promise<void> | void;

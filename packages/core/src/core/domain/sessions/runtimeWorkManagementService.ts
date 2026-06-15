@@ -248,7 +248,7 @@ export class RuntimeWorkManagementService {
       lifecycleStatus: 'archived',
       archivedAt: nowIso,
       providerThreadId: null,
-      resumeThreadId: null,
+      resumeCursor: null,
       providerStatus: 'closed',
       activeTurnId: null,
       updatedAt: nowIso

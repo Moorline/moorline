@@ -1,6 +1,7 @@
 import type {
   ProviderSessionStatus,
   ProviderThreadTokenUsage,
+  RuntimeAgentKind,
   RuntimeModeName
 } from '../../../types/runtime.js';
 import type { RuntimeProviderConnectionSnapshot } from '../../../types/plugin.js';
@@ -9,7 +10,9 @@ export interface ProviderConnectionRecord {
   threadId: string;
   providerPackageId: string;
   runtimeMode: RuntimeModeName;
-  workspacePath: string;
+  agentKind?: RuntimeAgentKind;
+  workspacePath: string | null;
+  providerCwd?: string | null;
   providerThreadId: string | null;
   status: ProviderSessionStatus;
   model: string | null;
@@ -36,7 +39,9 @@ export function toRuntimeProviderConnectionSnapshot(
     threadId: record.threadId,
     providerPackageId: record.providerPackageId,
     runtimeMode: record.runtimeMode,
+    agentKind: record.agentKind,
     workspacePath: record.workspacePath,
+    providerCwd: record.providerCwd,
     providerThreadId: record.providerThreadId,
     status: record.status,
     model: record.model,

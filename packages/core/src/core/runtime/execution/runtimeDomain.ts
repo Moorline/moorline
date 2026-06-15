@@ -62,7 +62,7 @@ export type RuntimeDomainEvent = RuntimeDomainEventBase &
       type: 'session.created' | 'session.resumed';
       payload: {
         runtimeMode: RuntimeModeName;
-        workspacePath: string;
+        workspacePath: string | null;
       };
     }
   | {
@@ -182,7 +182,7 @@ export function domainEventsFromProviderEvent(input: {
   const domainEvents: RuntimeDomainEvent[] = (() => {
   switch (event.type) {
     case 'thread.started':
-      if (!runtimeMode || !workspacePath) {
+      if (!runtimeMode) {
         return [];
       }
       return [

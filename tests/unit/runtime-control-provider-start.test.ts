@@ -15,7 +15,6 @@ function session(): RuntimeSessionRow {
     summary: null,
     provider: 'rync/pi',
     providerThreadId: null,
-    resumeThreadId: null,
     providerStatus: 'closed',
     activeTurnId: null,
     providerAutoStartEnabled: false,
