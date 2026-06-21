@@ -327,8 +327,8 @@ Package npm-compatible artifacts live in `Moorline/packages`.
 Initial public npm artifacts include:
 
 - `@rync/moorline-basic-essentials@0.0.2`
-- provider-specific default bundles from the packages repo
-- transport-specific default bundles from the packages repo
+- `@rync/moorline-pi@0.0.2`
+- `@rync/moorline-discord-default@0.0.2`
 
 Build personal npm-compatible package directories and tarballs:
 
@@ -348,8 +348,12 @@ dist/npm-packages/moorline-npm-summary.json
 Publishing is manual:
 
 ```bash
-npm publish dist/npm-packages/@moorline/<package-name> --access public
+npm publish dist/npm-packages/@rync/moorline-basic-essentials --access public
+npm publish dist/npm-packages/@rync/moorline-pi --access public
+npm publish dist/npm-packages/@rync/moorline-discord-default --access public
 ```
+
+All public Moorline npm packages should include the shared `moorline-package` keyword. Moorline discovers npm packages through that keyword and reads package kind/id from structured `package.json.moorline` metadata.
 
 Do not ask users to run `npm install` for Moorline packages. Users should install through:
 

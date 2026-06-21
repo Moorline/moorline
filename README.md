@@ -62,6 +62,16 @@ If setup is incomplete, the Control API stays in management-only mode so you can
 
 Install package bundles or individual packages for the transport, provider, plugins, and skills you want to run. Bundles install and activate their member packages while keeping every underlying API adapter, provider, transport, plugin, and skill independently inspectable. Optional bundles do not block setup readiness; setup readiness depends on one active API adapter, one active transport, and one active provider.
 
+Published package flow:
+
+```bash
+moorline package search <query>
+moorline package info <package-id> --kind <api-adapter|transport|provider|plugin|skill|bundle>
+moorline package install <package-id> --kind <api-adapter|transport|provider|plugin|skill|bundle>
+```
+
+Published Moorline package npm metadata uses the shared `moorline-package` keyword for discovery. Users install by Moorline package id, not by running `npm install` for runtime packages directly.
+
 Package trust note:
 - API adapter, provider, transport, and plugin packages are trusted runtime code once activated
 - bundle packages are metadata-only package groups; their members carry the runtime behavior

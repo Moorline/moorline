@@ -28,7 +28,9 @@ The workspace root is private and exists for workspaces, scripts, and dev toolin
 
 ## Package Rules
 
-Packages use short npm names like `@moorline/<package-name>`, while Moorline package identity lives in metadata as `moorline/<package-name>`.
+Core packages use `@moorline/*` npm names. Installable provider, transport, plugin, skill, and bundle packages use the author's npm scope, such as `@rync/moorline-pi`. Moorline package identity lives in structured package metadata, such as `moorline/http` or `rync/pi`.
+
+Public Moorline npm packages use one shared discovery keyword: `moorline-package`.
 
 Runtime package kinds are:
 - `api-adapter`
