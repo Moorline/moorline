@@ -1,6 +1,6 @@
 {
   "name": "@moorline/contracts",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Moorline package and runtime contract definitions",
   "type": "module",
   "private": false,

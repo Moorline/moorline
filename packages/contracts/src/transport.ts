@@ -1,19 +1,11 @@
 import type { JsonSchemaLike, PackageDependency, PackageManifestBase } from './package.js';
 import { validateJsonSchemaLike, validatePackageActivationRule, validatePackageDependencies, validatePackageId } from './package.js';
-import type { RuntimeCommandRunner } from './runtime.js';
+import type { RuntimeCommandRunner, RuntimeModeName } from './runtime.js';
 import type { RuntimeExternalResourceRef } from './external.js';
 
 export type RuntimeScopeId = string;
 export type RuntimeTransportResourceId = string;
 export type RuntimeThreadId = string;
-
-export interface RuntimeSurfaceNames {
-  mainCategoryName: string;
-  coordinationResourceName: string;
-  statusResourceName: string;
-  sessionsGroupName: string;
-  archiveGroupName: string;
-}
 
 export interface ManagedAdminAccessGroupConfig {
   enabled: boolean;
@@ -45,17 +37,9 @@ export interface RuntimeAccessGroupInput {
 
 export interface RuntimeSurfaceState {
   scopeId?: string;
-  mainCategoryId: string;
-  coordinationResourceId: string;
-  statusResourceId: string;
-  sessionsCategoryId: string;
-  archiveCategoryId: string;
-  adminAccessGroupId?: string;
-  memberAccessGroupId?: string;
-  adminAccessGroupName?: string;
-  memberAccessGroupName?: string;
-  adminAccessGroupSyncedAt?: string;
-  memberAccessGroupSyncedAt?: string;
+  surfaceId: string;
+  statusResourceId?: string;
+  coordinationResourceId?: string;
   createdAt: string;
   updatedAt: string;
   metadata?: Record<string, unknown>;
@@ -64,7 +48,6 @@ export interface RuntimeSurfaceState {
 export interface RuntimeSurfaceBootstrapInput {
   scopeId?: RuntimeScopeId;
   actorId?: string;
-  names?: Partial<RuntimeSurfaceNames>;
   managedAdminAccessGroup?: ManagedAdminAccessGroupConfig;
   managedMemberAccessGroup?: ManagedMemberAccessGroupConfig;
   explicitAdminRoleIds?: string[];
@@ -88,6 +71,12 @@ export interface RuntimeTransportResourceRecord {
   kind: 'root' | 'collection' | 'conversation' | 'item' | 'direct' | 'external';
   parentId: RuntimeTransportResourceId | null;
   metadata?: Record<string, unknown>;
+}
+
+export interface RuntimeTransportSessionOwner {
+  kind: 'run' | 'work_item' | 'external_resource' | 'operator';
+  id: string;
+  label?: string;
 }
 
 export interface RuntimeAttachmentPayload {
@@ -144,33 +133,65 @@ export interface RuntimeNativeInteraction {
   payload?: unknown;
 }
 
-export type RuntimeTransportEvent =
+export interface RuntimeTransportIntentBase {
+  intentId: string;
+  scopeId: RuntimeScopeId;
+  transportPackageId?: string;
+  occurredAt: string;
+  native?: RuntimeNativeInteraction;
+  metadata?: Record<string, unknown>;
+}
+
+export type RuntimeTransportIntent =
   | {
-      type: 'message.received';
-      scopeId: RuntimeScopeId;
+      type: 'transport.message.received';
       transportResourceId: RuntimeTransportResourceId;
       actor: RuntimeActorIdentity;
       message: RuntimeInboundMessage;
-    }
+    } & RuntimeTransportIntentBase
   | {
-      type: 'action.invoked';
-      scopeId: RuntimeScopeId;
+      type: 'transport.action.invoked';
       transportResourceId?: RuntimeTransportResourceId;
       actor: RuntimeActorIdentity;
       actionId: string;
       input: Record<string, unknown>;
-      native?: RuntimeNativeInteraction;
-    }
+    } & RuntimeTransportIntentBase
   | {
-      type: 'resource.lifecycle';
-      scopeId: RuntimeScopeId;
+      type: 'transport.session.ensure';
+      transportResourceId: RuntimeTransportResourceId;
+      requestedName: string;
+      actor?: RuntimeActorIdentity;
+      runtimeMode?: RuntimeModeName;
+      initialMessage?: RuntimeInboundMessage;
+      owner?: RuntimeTransportSessionOwner;
+    } & RuntimeTransportIntentBase
+  | {
+      type: 'transport.session.delete';
+      transportResourceId: RuntimeTransportResourceId;
+      actor?: RuntimeActorIdentity;
+      reason: string;
+      deleteWorkspace: boolean;
+    } & RuntimeTransportIntentBase
+  | {
+      type: 'transport.session.archive';
+      transportResourceId: RuntimeTransportResourceId;
+      actor?: RuntimeActorIdentity;
+      reason: string;
+    } & RuntimeTransportIntentBase
+  | {
+      type: 'transport.session.resume';
+      transportResourceId: RuntimeTransportResourceId;
+      actor?: RuntimeActorIdentity;
+      reason: string;
+    } & RuntimeTransportIntentBase
+  | {
+      type: 'transport.resource.observed';
       resource: RuntimeTransportResourceRecord;
       action: 'created' | 'updated' | 'deleted';
       previous?: Partial<RuntimeTransportResourceRecord>;
-    }
+    } & RuntimeTransportIntentBase
   | {
-      type: 'external.event.received';
-      scopeId: RuntimeScopeId;
+      type: 'transport.external.received';
       actor?: RuntimeActorIdentity;
       source: string;
       eventName: string;
@@ -178,7 +199,7 @@ export type RuntimeTransportEvent =
       payload: unknown;
       receivedAt: string;
       idempotencyKey?: string;
-    };
+    } & RuntimeTransportIntentBase;
 
 export interface RuntimeTransportAccessInput {
   authToken?: string;
@@ -254,6 +275,48 @@ export interface RuntimeNativeActionRegistration {
   actions: RuntimeActionDefinition[];
 }
 
+export type RuntimeTransportEffect =
+  | {
+      type: 'transport.message.send';
+      target: RuntimeMessageTarget;
+      payload: RuntimeMessagePayload;
+    } & RuntimeTransportEffectBase
+  | {
+      type: 'transport.resource.create';
+      input: RuntimeCreateTransportResourceInput;
+    } & RuntimeTransportEffectBase
+  | {
+      type: 'transport.resource.update';
+      input: RuntimeUpdateTransportResourceInput;
+    } & RuntimeTransportEffectBase
+  | {
+      type: 'transport.resource.delete';
+      input: RuntimeDeleteTransportResourceInput;
+    } & RuntimeTransportEffectBase
+  | {
+      type: 'transport.presence.set';
+      input: RuntimePresenceInput;
+    } & RuntimeTransportEffectBase
+  | {
+      type: 'transport.actions.register';
+      input: RuntimeNativeActionRegistration;
+    } & RuntimeTransportEffectBase;
+
+export interface RuntimeTransportEffectBase {
+  effectId: string;
+  scopeId?: RuntimeScopeId;
+  createdAt: string;
+  reason?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface RuntimeTransportEffectReceipt {
+  effectId: string;
+  appliedAt: string;
+  nativeId?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface RuntimeActionDefinition {
   id: string;
   title: string;
@@ -272,16 +335,8 @@ export interface RuntimeTransport {
   start(auth: RuntimeTransportAuth): Promise<void>;
   stop(): Promise<void>;
   capabilities(): RuntimeTransportCapabilities;
-  onEvent(handler: (event: RuntimeTransportEvent) => Promise<void>): void;
-  sendMessage(target: RuntimeMessageTarget, payload: RuntimeMessagePayload): Promise<RuntimeMessageReceipt>;
-  listTransportResources?(scopeId: RuntimeScopeId): Promise<RuntimeTransportResourceRecord[]>;
-  createTransportResource?(input: RuntimeCreateTransportResourceInput): Promise<RuntimeTransportResourceRecord>;
-  updateTransportResource?(input: RuntimeUpdateTransportResourceInput): Promise<RuntimeTransportResourceRecord>;
-  deleteTransportResource?(input: RuntimeDeleteTransportResourceInput): Promise<void>;
-  setPresence?(input: RuntimePresenceInput): Promise<void>;
-  registerNativeActions?(input: RuntimeNativeActionRegistration): Promise<void>;
-  ensureAccessGroup?(input: RuntimeAccessGroupInput): Promise<RuntimeAccessGroupRecord>;
-  reconcileRuntimeSurface?(input: RuntimeSurfaceBootstrapInput): Promise<RuntimeSurfaceState>;
+  onIntent?(handler: (intent: RuntimeTransportIntent) => Promise<void>): void;
+  applyEffect(effect: RuntimeTransportEffect): Promise<RuntimeTransportEffectReceipt>;
 }
 
 export interface TransportPackageManifest extends PackageManifestBase {

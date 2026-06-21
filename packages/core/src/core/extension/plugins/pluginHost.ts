@@ -1,4 +1,4 @@
-import type { RuntimeActionDefinition, RuntimeTransportEvent } from '../../../types/transport.js';
+import type { RuntimeActionDefinition, RuntimeTransportIntent } from '../../../types/transport.js';
 import type {
   AfterAgentResponseInput,
   BeforeAgentPromptInput,
@@ -16,11 +16,11 @@ import type { ProviderRuntimeEvent } from '../../../types/runtime.js';
 import type { RuntimeActivityRecord } from '../../system/projection/runtimeActivityStore.js';
 import type { RuntimeDomainEvent, RuntimeReceiptRecord } from '../../runtime/execution/runtimeDomain.js';
 
-type ActionEvent = Extract<RuntimeTransportEvent, { type: 'action.invoked' }>;
-type ExternalEvent = Extract<RuntimeTransportEvent, { type: 'external.event.received' }>;
+type ActionEvent = Extract<RuntimeTransportIntent, { type: 'transport.action.invoked' }>;
+type ExternalEvent = Extract<RuntimeTransportIntent, { type: 'transport.external.received' }>;
 type PluginHookName =
   | 'onRuntimeStarted'
-  | 'onTransportEvent'
+  | 'onTransportIntent'
   | 'onExternalEvent'
   | 'onAction'
   | 'contributeAgentContext'
@@ -186,33 +186,33 @@ export class PluginHost {
     }
   }
 
-  async handleTransportEvent(event: RuntimeTransportEvent, contextFactory: (pluginId: string) => RuntimePluginContext): Promise<RuntimeActionDispatchResult> {
+  async handleTransportIntent(intent: RuntimeTransportIntent, contextFactory: (pluginId: string) => RuntimePluginContext): Promise<RuntimeActionDispatchResult> {
     let result: RuntimeActionDispatchResult = { handled: false };
     for (const plugin of this.plugins) {
-      if (!(plugin.manifest.hooks ?? []).includes('onTransportEvent')) {
+      if (!(plugin.manifest.hooks ?? []).includes('onTransportIntent')) {
         continue;
       }
       const next = await this.runRequiredHook(
         plugin,
-        'onTransportEvent',
-        async () => normalizeDispatchResult(await plugin.onTransportEvent?.(event, contextFactory(plugin.id)))
+        'onTransportIntent',
+        async () => normalizeDispatchResult(await plugin.onTransportIntent?.(intent, contextFactory(plugin.id)))
       );
       if (!next.handled) {
         continue;
       }
       result = mergeDispatchResult(result, next);
       if (!next.continueDispatch) {
-        if (event.type === 'external.event.received') {
+        if (intent.type === 'transport.external.received') {
           break;
         }
         return result;
       }
     }
-    if (event.type === 'action.invoked') {
-      result = mergeDispatchResult(result, await this.handleAction(event, contextFactory));
+    if (intent.type === 'transport.action.invoked') {
+      result = mergeDispatchResult(result, await this.handleAction(intent, contextFactory));
     }
-    if (event.type === 'external.event.received') {
-      result = mergeDispatchResult(result, await this.handleExternalEvent(event, contextFactory));
+    if (intent.type === 'transport.external.received') {
+      result = mergeDispatchResult(result, await this.handleExternalEvent(intent, contextFactory));
     }
     return result;
   }
@@ -269,7 +269,9 @@ export class PluginHost {
   ): Promise<RuntimeActionDispatchResult> {
     return await this.handleAction(
       {
-        type: 'action.invoked',
+        type: 'transport.action.invoked',
+        intentId: `runtime.action.${Date.now()}`,
+        occurredAt: new Date().toISOString(),
         scopeId: actor.scopeId,
         ...(actor.transportResourceId ? { transportResourceId: actor.transportResourceId } : {}),
         actor: {

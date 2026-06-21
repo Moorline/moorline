@@ -144,6 +144,12 @@ Moorline uses the active provider package for model and turn execution.
 
 Runtime work can start from messages, transport-native actions, external events, scheduled package jobs, or plugin-managed work queues. Message-oriented transports are one transport shape, not the architectural center.
 
+### Transport intents and effects
+
+Transports emit intent records into Moorline, and Moorline emits effect records back to transports for native side effects. This keeps channel-like, issue-like, email-like, and single-room transports on the same contract without hard-coded archive/categories/admin surfaces.
+
+See [Transport Intents And Effects](docs/TRANSPORT_INTENTS.md).
+
 ### Admin control
 
 Configure admin authority in `~/.moorline/config.json`:
@@ -176,9 +182,10 @@ Admin authority is explicit by default, with a managed Moorline-scoped role boot
 - shares the managed coordination workspace under the runtime root
 
 ### Sessions
-- created by the active transport/plugin package surface
+- created by explicit transport or plugin requests
 - each session gets its own local workspace under the runtime root
 - session messages run through the active provider in the session workspace
+- archived sessions resume automatically when a message arrives for the same transport resource
 
 ### Model selection
 Provider packages can expose model-listing and model-selection commands through plugins.

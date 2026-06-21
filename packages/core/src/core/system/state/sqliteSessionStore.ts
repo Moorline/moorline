@@ -16,6 +16,7 @@ import { RuntimeHistoryPruningRepository, type RuntimeHistoryPruneInput, type Ru
 import { RuntimeReceiptRepository } from './sqlite/runtimeReceiptRepository.js';
 import { SessionRepository } from './sqlite/sessionRepository.js';
 import { SessionMetadataRepository } from './sqlite/sessionMetadataRepository.js';
+import { TransportIntentRepository } from './sqlite/transportIntentRepository.js';
 import { WorkItemRepository } from './sqlite/workItemRepository.js';
 import type {
   RuntimeExternalResourceRecord,
@@ -24,6 +25,7 @@ import type {
   RuntimeWorkItemRecord,
   RuntimeWorkItemStatus
 } from '../../../types/external.js';
+import type { RuntimeTransportIntent } from '../../../types/transport.js';
 import {
   type DomainEventRow,
   type PendingRuntimeRequestRecord,
@@ -62,6 +64,7 @@ export class SqliteSessionStore {
   private readonly providerEvents: ProviderEventLogRepository;
   private readonly runtimeReceipts: RuntimeReceiptRepository;
   private readonly sessions: SessionRepository;
+  private readonly transportIntents: TransportIntentRepository;
   private readonly workItems: WorkItemRepository;
 
   constructor(pathOrDb: string | DatabaseSync) {
@@ -86,6 +89,7 @@ export class SqliteSessionStore {
     this.providerEvents = new ProviderEventLogRepository(this.db);
     this.runtimeReceipts = new RuntimeReceiptRepository(this.db);
     this.sessions = new SessionRepository(this.db);
+    this.transportIntents = new TransportIntentRepository(this.db);
     this.workItems = new WorkItemRepository(this.db);
   }
 
@@ -284,6 +288,22 @@ export class SqliteSessionStore {
 
   listDomainEvents(threadId: string): DomainEventRow[] {
     return this.domainEvents.listDomainEvents(threadId);
+  }
+
+  appendTransportIntent(intent: RuntimeTransportIntent): EventPersistenceResult {
+    return this.transportIntents.appendIntent(intent);
+  }
+
+  markTransportIntentProcessed(intentId: string, processedAt: string): void {
+    this.transportIntents.markProcessed(intentId, processedAt);
+  }
+
+  markTransportIntentFailed(intentId: string, failedAt: string, failure: string): void {
+    this.transportIntents.markFailed(intentId, failedAt, failure);
+  }
+
+  listPendingTransportIntents(limit?: number): RuntimeTransportIntent[] {
+    return this.transportIntents.listPending(limit);
   }
 
   upsertPendingRequest(row: PendingRuntimeRequestRecord): void {

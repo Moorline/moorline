@@ -56,8 +56,9 @@ import {
   type RuntimeManagementSurfaceHandle
 } from './hosting/runtimeManagementPort.js';
 import { RuntimeWorkManagementService } from '../domain/sessions/runtimeWorkManagementService.js';
-import { ManagedTransportResourceLifecycleService } from './lifecycle/managedTransportResourceLifecycleService.js';
 import { RuntimeInteractionService } from './execution/runtimeInteractionService.js';
+import { RuntimeTransportEffectService } from './hosting/runtimeTransportEffectService.js';
+import { RuntimeTransportIntentService } from './hosting/runtimeTransportIntentService.js';
 import { RuntimeTransportSurfaceService } from './hosting/runtimeTransportSurfaceService.js';
 import { ProviderRequestAttributionService } from './execution/providerCoordination/providerRequestAttributionService.js';
 import { ProviderAttachmentResolver } from './execution/providerOrchestration/providerAttachmentResolver.js';
@@ -211,8 +212,9 @@ interface RuntimeExtensionGraph {
 }
 
 interface RuntimeTransportGraph {
-  managedTransportResourceLifecycle: ManagedTransportResourceLifecycleService;
   interactions: RuntimeInteractionService;
+  transportEffects: RuntimeTransportEffectService;
+  transportIntents: RuntimeTransportIntentService;
   transportSurface: RuntimeTransportSurfaceService;
   hostingService: RuntimeHostingService;
 }
@@ -367,9 +369,17 @@ export function buildMoorlineRuntimeServiceGraph(
     drainProviders: async () => await providerService.drain(),
     ensureProviderSession: async (session, actorId) => await providerOrchestrator.ensureSession(session, actorId)
   });
+  const transportEffects = new RuntimeTransportEffectService({
+    queue: async (key, work) => await enqueueWithDiagnostics(transportQueue, key, 'runtime-transport-surface', work),
+    guard: callbacks.requireGuard,
+    transport: () => transport,
+    now: callbacks.now,
+    appendAuditEvent: callbacks.appendAuditEvent
+  });
   const workManagement = new RuntimeWorkManagementService({
     config: normalizedConfig,
     getTransport: () => transport,
+    effects: () => transportEffects,
     getGuard: callbacks.requireGuard,
     requireSurfaceState: callbacks.requireSurfaceState,
     sessionRegistry,
@@ -387,24 +397,6 @@ export function buildMoorlineRuntimeServiceGraph(
     sendStatusUpdate: async (payload) => await callbacks.sendStatusUpdate(payload),
     appendAuditEvent: callbacks.appendAuditEvent,
     runOrchestrationTurn: callbacks.runOrchestrationTurn,
-    rejectTurnWaitersForThread: callbacks.rejectTurnWaitersForThread,
-    cleanupScopedSidecars: callbacks.cleanupScopedSidecars
-  });
-  const managedTransportResourceLifecycle = new ManagedTransportResourceLifecycleService({
-    config: normalizedConfig,
-    getSurfaceState: callbacks.getSurfaceState,
-    sessionRegistry,
-    providerService,
-    providerDirectory,
-    workManagement,
-    getProviderAutoStartDefault: callbacks.getProviderAutoStartDefault,
-    queue: async (key, work) => await enqueueWithDiagnostics(commandQueue, key, 'managed-work-lifecycle', work),
-    now: callbacks.now,
-    postTransportMessage: async (actor, transportResourceId, payload) => {
-      await callbacks.postTransportMessage(actor, transportResourceId, payload);
-    },
-    appendAuditEvent: callbacks.appendAuditEvent,
-    recordRuntimeActivity: callbacks.recordRuntimeActivity,
     rejectTurnWaitersForThread: callbacks.rejectTurnWaitersForThread,
     cleanupScopedSidecars: callbacks.cleanupScopedSidecars
   });
@@ -443,10 +435,17 @@ export function buildMoorlineRuntimeServiceGraph(
       }))
   });
   const transportSurface = new RuntimeTransportSurfaceService({
-    queue: async (key, work) => await enqueueWithDiagnostics(transportQueue, key, 'runtime-transport-surface', work),
-    guard: callbacks.requireGuard,
     transport: () => transport,
+    effects: () => transportEffects,
     getSurfaceState: callbacks.getSurfaceState
+  });
+  const transportIntents = new RuntimeTransportIntentService({
+    config: normalizedConfig,
+    store,
+    workManagement,
+    interactions,
+    now: callbacks.now,
+    appendAuditEvent: callbacks.appendAuditEvent
   });
   const providerAttribution = new ProviderRequestAttributionService();
   const providerModelPorts = {
@@ -779,6 +778,7 @@ export function buildMoorlineRuntimeServiceGraph(
   const hostingService = new RuntimeHostingService({
     config: normalizedConfig,
     transport,
+    effects: transportEffects,
     managementSurface,
     installationPath: paths.installationPath,
     now: callbacks.now,
@@ -825,8 +825,9 @@ export function buildMoorlineRuntimeServiceGraph(
     managementReadModel,
     runtimeControl,
     workManagement,
-    managedTransportResourceLifecycle,
     interactions,
+    transportEffects,
+    transportIntents,
     transportSurface,
     providerOrchestrator,
     projectionService,

@@ -34,7 +34,7 @@ export * from './plugin-runtime.js';
 
 export const KNOWN_PLUGIN_HOOKS = [
   'onRuntimeStarted',
-  'onTransportEvent',
+  'onTransportIntent',
   'onExternalEvent',
   'onAction',
   'onRuntimeEvent',

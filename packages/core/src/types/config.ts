@@ -176,19 +176,12 @@ export type AppliedMoorlineConfig = MoorlineConfig & {
 
 export interface RuntimeSurfaceState {
   scopeId?: string;
-  mainCategoryId: string;
-  coordinationResourceId: string;
-  statusResourceId: string;
-  sessionsCategoryId: string;
-  archiveCategoryId: string;
-  adminAccessGroupId?: string;
-  memberAccessGroupId?: string;
-  adminAccessGroupName?: string;
-  memberAccessGroupName?: string;
-  adminAccessGroupSyncedAt?: string;
-  memberAccessGroupSyncedAt?: string;
+  surfaceId: string;
+  coordinationResourceId?: string;
+  statusResourceId?: string;
   createdAt: string;
   updatedAt: string;
+  metadata?: Record<string, unknown>;
 }
 
 export type ManagedSurfaceState = RuntimeSurfaceState;

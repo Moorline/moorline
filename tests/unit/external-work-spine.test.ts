@@ -9,7 +9,7 @@ import { runMigrations } from '../../packages/core/src/core/system/state/migrati
 import { SqliteSessionStore } from '../../packages/core/src/core/system/state/sqliteSessionStore.js';
 import type { RuntimeWorkItemRecord } from '../../packages/core/src/types/external.js';
 import type { RuntimePlugin, RuntimePluginContext } from '../../packages/core/src/types/plugin.js';
-import type { RuntimeTransportEvent } from '../../packages/core/src/types/transport.js';
+import type { RuntimeTransportIntent } from '../../packages/core/src/types/transport.js';
 import { createTempRoot } from '../helpers/temp.js';
 
 function createStore(): SqliteSessionStore {
@@ -260,7 +260,7 @@ describe('managed session creation', () => {
     expect(ephemeral.toolGrantIds).toEqual([]);
   });
 
-  it('preserves explicit session metadata when lifecycle adoption wins creation race', async () => {
+  it('creates managed sessions from transport resource create effects', async () => {
     const { root, store } = createStoreWithRoot();
     const registry = new SessionRegistry(store, join(root, 'workspaces'), 'pi/default');
     const auditEvents: Array<{ event: string; payload: Record<string, unknown> }> = [];
@@ -272,8 +272,7 @@ describe('managed session creation', () => {
       metadata: {},
       parentId: 'sessions'
     };
-    const nowValues = ['2026-06-07T00:00:00.000Z', '2026-06-07T00:00:01.000Z'];
-    const now = () => nowValues.shift() ?? '2026-06-07T00:00:02.000Z';
+    const effectTypes: string[] = [];
     const service = new RuntimeWorkManagementService({
       config: {
         transport: {
@@ -287,36 +286,40 @@ describe('managed session creation', () => {
           resources: { create: true, update: true, delete: true },
           messages: { send: true },
           events: { subscribe: true }
-        }),
-        createTransportResource: async () => resource,
-        deleteTransportResource: async () => undefined
+        })
+      }),
+      effects: () => ({
+        createResource: async (_actor: string, input: { name: string }) => {
+          effectTypes.push('transport.resource.create');
+          return { ...resource, name: input.name };
+        },
+        deleteResource: async () => {
+          effectTypes.push('transport.resource.delete');
+          return { effectId: 'delete-effect', appliedAt: '2026-06-07T00:00:02.000Z' };
+        }
       }),
       getGuard: () => ({
         run: async ({ execute }: { execute: () => unknown }) => await execute()
       }),
-      requireSurfaceState: () => ({ sessionsCategoryId: 'sessions', archiveCategoryId: 'archive' }),
+      requireSurfaceState: () => ({ surfaceId: 'runtime', scopeId: 'runtime', createdAt: '2026-06-07T00:00:00.000Z', updatedAt: '2026-06-07T00:00:00.000Z' }),
       sessionRegistry: registry,
       snapshots: { querySessions: () => [] },
       reactor: {
-        createSession: () => {
+        createSession: (input: Parameters<SessionRegistry['create']>[0]) =>
           registry.create({
+            ...input,
             scopeId: 'runtime',
             transportResourceId: resource.id,
-            transportResourceName: resource.name,
-            requestedName: 'race case',
-            runtimeMode: 'read-only',
-            nowIso: '2026-06-07T00:00:00.500Z',
-            createdBy: 'runtime:transport/resource-lifecycle'
-          });
-          throw new Error('already adopted');
-        }
+            transportResourceName: input.transportResourceName,
+            nowIso: '2026-06-07T00:00:00.500Z'
+          })
       },
       providerService: { stopSession: () => undefined },
       providerDirectory: { delete: () => undefined },
       getProviderAutoStartDefault: () => false,
       defaultSessionOwner: () => ({ kind: 'user', id: 'actor-1', label: 'Actor One' }),
       queue: async (_key: string, work: () => Promise<unknown>) => await work(),
-      now,
+      now: () => '2026-06-07T00:00:01.000Z',
       postTransportMessage: async () => undefined,
       sendStatusUpdate: async () => undefined,
       appendAuditEvent: (event: string, payload: Record<string, unknown>) => auditEvents.push({ event, payload }),
@@ -334,6 +337,7 @@ describe('managed session creation', () => {
     });
 
     expect(created.transportResourceId).toBe(resource.id);
+    expect(effectTypes).toEqual(['transport.resource.create']);
     expect(created.session).toMatchObject({
       transportResourceId: resource.id,
       runtimeMode: 'full-access',
@@ -350,13 +354,13 @@ describe('managed session creation', () => {
       tags: ['smoke', 'race'],
       createdBy: 'actor-1'
     });
-    expect(auditEvents.map((entry) => entry.event)).toContain('session.created.race_recovered');
+    expect(auditEvents.map((entry) => entry.event)).toContain('session.created');
+    expect(auditEvents.map((entry) => entry.event)).not.toContain('session.created.race_recovered');
   });
 
-  it('archives and deletes persisted sessions when ephemeral transport resources are already gone', async () => {
+  it('archives state-only and deletes persisted sessions when ephemeral transport resources are already gone', async () => {
     const { root, store } = createStoreWithRoot();
     const registry = new SessionRegistry(store, join(root, 'workspaces'), 'pi/default');
-    let sessionWasArchivedBeforeTransportUpdate = false;
     const session = registry.create({
       scopeId: 'runtime',
       transportResourceId: 'missing-resource',
@@ -381,20 +385,17 @@ describe('managed session creation', () => {
           resources: { create: true, update: true, delete: true },
           messages: { send: true },
           events: { subscribe: true }
-        }),
-        updateTransportResource: async () => {
-          sessionWasArchivedBeforeTransportUpdate =
-            registry.getByTransportResourceId('missing-resource')?.lifecycleStatus === 'archived';
-          throw new Error('Unknown discord resource: missing-resource');
-        },
-        deleteTransportResource: async () => {
+        })
+      }),
+      effects: () => ({
+        deleteResource: async () => {
           throw new Error('Unknown discord resource: missing-resource');
         }
       }),
       getGuard: () => ({
         run: async ({ execute }: { execute: () => unknown }) => await execute()
       }),
-      requireSurfaceState: () => ({ sessionsCategoryId: 'sessions', archiveCategoryId: 'archive' }),
+      requireSurfaceState: () => ({ surfaceId: 'runtime', scopeId: 'runtime', createdAt: '2026-06-07T00:00:00.000Z', updatedAt: '2026-06-07T00:00:00.000Z' }),
       sessionRegistry: registry,
       snapshots: { querySessions: () => [] },
       reactor: { createSession: () => session },
@@ -417,8 +418,8 @@ describe('managed session creation', () => {
       lifecycleStatus: 'archived',
       providerStatus: 'closed'
     });
-    expect(auditEvents.map((entry) => entry.event)).toContain('session.archive.transport_update_failed');
-    expect(sessionWasArchivedBeforeTransportUpdate).toBe(true);
+    expect(auditEvents.map((entry) => entry.event)).toContain('session.archived');
+    expect(auditEvents.map((entry) => entry.event)).not.toContain('session.archive.transport_update_failed');
     await expect(service.deleteManagedSession({ actorId: 'actor-1', sessionId: session.sessionId })).resolves.toMatchObject({
       sessionId: session.sessionId,
       lifecycleStatus: 'archived'
@@ -482,7 +483,7 @@ describe('managed session creation', () => {
 
 describe('external event plugin dispatch', () => {
   it('dispatches external transport events to the dedicated hook', async () => {
-    const seen: RuntimeTransportEvent[] = [];
+    const seen: RuntimeTransportIntent[] = [];
     const plugin: RuntimePlugin = {
       id: 'acme/external-worker',
       manifest: {
@@ -500,10 +501,12 @@ describe('external event plugin dispatch', () => {
     };
 
     const host = new PluginHost([plugin]);
-    const result = await host.handleTransportEvent(
+    const result = await host.handleTransportIntent(
       {
-        type: 'external.event.received',
+        type: 'transport.external.received',
+        intentId: 'external-intent-1',
         scopeId: 'runtime',
+        occurredAt: '2026-06-01T00:00:00.000Z',
         source: 'external-system',
         eventName: 'item.opened',
         receivedAt: '2026-06-01T00:00:00.000Z',
@@ -521,7 +524,7 @@ describe('external event plugin dispatch', () => {
     expect(result.handled).toBe(true);
     expect(seen).toHaveLength(1);
     expect(seen[0]).toMatchObject({
-      type: 'external.event.received',
+      type: 'transport.external.received',
       eventName: 'item.opened'
     });
   });
@@ -536,9 +539,9 @@ describe('external event plugin dispatch', () => {
         version: '1.0.0',
         type: 'plugin',
         capabilities: ['package.work.manage'],
-        hooks: ['onTransportEvent']
+        hooks: ['onTransportIntent']
       },
-      onTransportEvent() {
+      onTransportIntent() {
         seen.push('transport');
         return { handled: true };
       }
@@ -560,10 +563,12 @@ describe('external event plugin dispatch', () => {
     };
 
     const host = new PluginHost([transportPlugin, externalPlugin]);
-    await host.handleTransportEvent(
+    await host.handleTransportIntent(
       {
-        type: 'external.event.received',
+        type: 'transport.external.received',
+        intentId: 'external-intent-2',
         scopeId: 'runtime',
+        occurredAt: '2026-06-01T00:00:00.000Z',
         source: 'external-system',
         eventName: 'item.opened',
         receivedAt: '2026-06-01T00:00:00.000Z',

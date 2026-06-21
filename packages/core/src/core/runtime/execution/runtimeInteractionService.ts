@@ -1,18 +1,16 @@
 import type { AppliedMoorlineConfig } from '../../../types/config.js';
 import type { RuntimePluginContext } from '../../../types/plugin.js';
 import type { RuntimeExternalResourceRef } from '../../../types/external.js';
-import type { RuntimeActionDefinition, RuntimeMessagePayload, RuntimeTransportEvent } from '../../../types/transport.js';
+import type { RuntimeActionDefinition, RuntimeMessagePayload, RuntimeTransportIntent } from '../../../types/transport.js';
 import type { PluginHost } from '../../extension/plugins/pluginHost.js';
 import type { RuntimeSnapshotQuery } from '../../system/projection/runtimeSnapshotQuery.js';
 import type { SessionLifecycleService } from '../../domain/sessions/sessionLifecycleService.js';
 import type { SessionRegistry } from '../../domain/sessions/sessionState.js';
 import { PendingRequestActionError } from './runtimePendingRequestService.js';
 
-type RuntimeMessageReceivedEvent = Extract<RuntimeTransportEvent, { type: 'message.received' }>;
-type RuntimeActionInvokedEvent = Extract<RuntimeTransportEvent, { type: 'action.invoked' }>;
+type RuntimeMessageReceivedIntent = Extract<RuntimeTransportIntent, { type: 'transport.message.received' }>;
+type RuntimeActionInvokedIntent = Extract<RuntimeTransportIntent, { type: 'transport.action.invoked' }>;
 
-const ARCHIVED_SESSION_MESSAGE =
-  'This session is archived. Create a new session if you want Moorline to continue work.';
 const DRAINING_ACTION_DENIED_MESSAGE =
   'Moorline is currently draining work. Only status, control, and pending-request commands are allowed.';
 const BUILT_IN_ACTION_POLICIES: Record<string, NonNullable<RuntimeActionDefinition['policy']>> = {
@@ -49,7 +47,7 @@ interface RuntimeInteractionServiceDeps {
   appendAuditEvent(event: string, payload: Record<string, unknown>): void;
   upsertExternalResource(resource: RuntimeExternalResourceRef): void;
   createPluginContext(actorId: string): RuntimePluginContext;
-  isAdminActor(input: RuntimeMessageReceivedEvent['actor']): boolean;
+  isAdminActor(input: RuntimeMessageReceivedIntent['actor']): boolean;
   respondToProviderRequest(
     actorId: string,
     threadId: string,
@@ -64,45 +62,45 @@ interface RuntimeInteractionServiceDeps {
     decision: 'accept' | 'decline' | 'cancel';
     deniedTitle: string;
     metadata?: Record<string, unknown>;
-    requestActor: RuntimeActionInvokedEvent['actor'];
+    requestActor: RuntimeActionInvokedIntent['actor'];
   }): Promise<void>;
 }
 
 export class RuntimeInteractionService {
   constructor(private readonly deps: RuntimeInteractionServiceDeps) {}
 
-  async handleTransportEvent(event: RuntimeTransportEvent): Promise<void> {
-    if (event.scopeId !== this.deps.config.transport.scopeId || !this.deps.getSurfaceReady()) {
+  async handleTransportIntent(intent: RuntimeTransportIntent): Promise<void> {
+    if (intent.scopeId !== this.deps.config.transport.scopeId || !this.deps.getSurfaceReady()) {
       return;
     }
-    if (event.type === 'message.received') {
-      await this.handleMessage(event);
+    if (intent.type === 'transport.message.received') {
+      await this.handleMessage(intent);
       return;
     }
-    if (event.type === 'action.invoked') {
-      if (this.shouldBypassActionQueue(event)) {
-        await this.handleAction(event);
+    if (intent.type === 'transport.action.invoked') {
+      if (this.shouldBypassActionQueue(intent)) {
+        await this.handleAction(intent);
         return;
       }
-      const queueKey = event.transportResourceId ?? `actor:${event.actor.actorId}`;
+      const queueKey = intent.transportResourceId ?? `actor:${intent.actor.actorId}`;
       await this.deps.queue(queueKey, async () => {
-        await this.handleAction(event);
+        await this.handleAction(intent);
       });
       return;
     }
-    if (event.type === 'external.event.received' && event.resource) {
-      this.deps.upsertExternalResource(event.resource);
+    if (intent.type === 'transport.external.received' && intent.resource) {
+      this.deps.upsertExternalResource(intent.resource);
     }
-    await this.deps.getPluginHost().handleTransportEvent(event, (pluginId) =>
+    await this.deps.getPluginHost().handleTransportIntent(intent, (pluginId) =>
       this.deps.createPluginContext(`plugin:${pluginId}`)
     );
   }
 
-  private shouldBypassActionQueue(event: RuntimeActionInvokedEvent): boolean {
+  private shouldBypassActionQueue(event: RuntimeActionInvokedIntent): boolean {
     return this.actionPolicy(event.actionId)?.bypassQueue === true;
   }
 
-  private async handleMessage(event: RuntimeMessageReceivedEvent): Promise<void> {
+  private async handleMessage(event: RuntimeMessageReceivedIntent): Promise<void> {
     await this.deps.queue(event.transportResourceId, async () => {
       if (!this.deps.getAcceptingNewWork()) {
         await this.deps.postTransportMessage('runtime:status', event.transportResourceId, {
@@ -113,21 +111,10 @@ export class RuntimeInteractionService {
 
       const session = this.deps.sessionRegistry.getByTransportResourceId(event.transportResourceId);
       if (session) {
-        if (session.lifecycleStatus === 'archived') {
-          await this.deps.postTransportMessage('runtime:archived-session', event.transportResourceId, {
-            text: ARCHIVED_SESSION_MESSAGE
-          });
-          this.deps.appendAuditEvent('session.archived.message_ignored', {
-            sessionId: session.sessionId,
-            transportResourceId: session.transportResourceId,
-            actorId: event.actor.actorId
-          });
-          return;
-        }
         this.deps.sessionLifecycle.recordActivity(session.threadId, this.deps.now());
       }
 
-      const result = await this.deps.getPluginHost().handleTransportEvent(event, (pluginId) =>
+      const result = await this.deps.getPluginHost().handleTransportIntent(event, (pluginId) =>
         this.deps.createPluginContext(`plugin:${pluginId}`)
       );
       if (result.reply) {
@@ -139,7 +126,7 @@ export class RuntimeInteractionService {
     });
   }
 
-  private async handleAction(event: RuntimeActionInvokedEvent): Promise<void> {
+  private async handleAction(event: RuntimeActionInvokedIntent): Promise<void> {
     if (!this.deps.getAcceptingNewWork() && !this.isAllowedWhileDraining(event.actionId)) {
       await this.replyToAction(event, DRAINING_ACTION_DENIED_MESSAGE);
       return;
@@ -149,7 +136,7 @@ export class RuntimeInteractionService {
         return;
       }
     }
-    const result = await this.deps.getPluginHost().handleTransportEvent(event, (pluginId) =>
+    const result = await this.deps.getPluginHost().handleTransportIntent(event, (pluginId) =>
       this.deps.createPluginContext(`plugin:${pluginId}`)
     );
     if (result.reply && event.transportResourceId) {
@@ -175,7 +162,7 @@ export class RuntimeInteractionService {
     return action?.policy ?? null;
   }
 
-  private async replyToAction(event: RuntimeActionInvokedEvent, message: string): Promise<void> {
+  private async replyToAction(event: RuntimeActionInvokedIntent, message: string): Promise<void> {
     if (hasNativeReply(event.native?.payload)) {
       await event.native.payload.reply({
         content: message,
@@ -190,7 +177,7 @@ export class RuntimeInteractionService {
     }
   }
 
-  private async handlePendingRequestAction(event: RuntimeActionInvokedEvent): Promise<boolean> {
+  private async handlePendingRequestAction(event: RuntimeActionInvokedIntent): Promise<boolean> {
     const requestId = stringInput(event.input, 'requestId');
     const decision = stringInput(event.input, 'decision');
     if (!requestId || (decision !== 'accept' && decision !== 'decline' && decision !== 'cancel')) {

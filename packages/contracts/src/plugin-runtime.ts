@@ -8,7 +8,7 @@ import type {
   RuntimeAttachmentPayload,
   RuntimeMessagePayload,
   RuntimeSurfaceState,
-  RuntimeTransportEvent
+  RuntimeTransportIntent
 } from './transport.js';
 import type {
   PendingRuntimeRequestRecord,
@@ -446,6 +446,7 @@ export interface RuntimeToolContext {
     session: RuntimeSessionRow;
     reply: RuntimeMessagePayload;
   }>;
+  resumeSession(input: { transportResourceId?: string; sessionId?: string; reason?: string }): Promise<RuntimeSessionRow | null>;
   archiveSession(input: { transportResourceId: string; sessionId?: string }): Promise<RuntimeSessionRow | null>;
   deleteArchivedSession(input: { transportResourceId: string; sessionId?: string }): Promise<RuntimeSessionRow | null>;
   sendMessage(transportResourceId: string, payload: RuntimeMessagePayload): Promise<void>;
@@ -622,16 +623,16 @@ export interface RuntimePlugin {
   managementContributions?(context: RuntimePluginContext): RuntimeManagementContribution[];
   tools?(context: RuntimeToolContext): RuntimeToolDefinition[];
   onRuntimeStarted?(context: RuntimePluginContext): Promise<void> | void;
-  onTransportEvent?(
-    event: RuntimeTransportEvent,
+  onTransportIntent?(
+    intent: RuntimeTransportIntent,
     context: RuntimePluginContext
   ): Promise<RuntimeActionDispatchResult | boolean | void> | RuntimeActionDispatchResult | boolean | void;
   onExternalEvent?(
-    event: Extract<RuntimeTransportEvent, { type: 'external.event.received' }>,
+    event: Extract<RuntimeTransportIntent, { type: 'transport.external.received' }>,
     context: RuntimePluginContext
   ): Promise<RuntimeActionDispatchResult | boolean | void> | RuntimeActionDispatchResult | boolean | void;
   onAction?(
-    event: Extract<RuntimeTransportEvent, { type: 'action.invoked' }>,
+    event: Extract<RuntimeTransportIntent, { type: 'transport.action.invoked' }>,
     context: RuntimePluginContext
   ): Promise<RuntimeActionDispatchResult | boolean | void> | RuntimeActionDispatchResult | boolean | void;
   onRuntimeEvent?(event: ProviderRuntimeEvent, context: RuntimePluginContext): Promise<void> | void;
