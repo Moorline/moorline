@@ -66,7 +66,7 @@ Operator-supported session modes:
 
 ## Managed Resource Setup And Recovery
 
-Transport packages may create managed resources, roles, or other native resources. Check the active transport package documentation for package-specific setup and recovery steps.
+Transport packages may interpret native resources directly or create managed resources, roles, or other native resources when their contract supports it. Check the active transport package documentation for package-specific setup and recovery steps.
 
 Generic recovery checklist:
 - rerun `moorline configure apply` after package config changes
@@ -324,11 +324,11 @@ If startup reports missing `node:sqlite` support, fix the runtime before opening
 
 Package npm-compatible artifacts live in `Moorline/packages`.
 
-Initial public npm artifacts include:
+Current public personal npm artifacts include:
 
 - `@rync/moorline-basic-essentials@0.0.2`
 - `@rync/moorline-pi@0.0.2`
-- `@rync/moorline-discord-default@0.0.2`
+- `@rync/moorline-discord-default@0.0.3`
 
 Build personal npm-compatible package directories and tarballs:
 
@@ -348,8 +348,6 @@ dist/npm-packages/moorline-npm-summary.json
 Publishing is manual:
 
 ```bash
-npm publish dist/npm-packages/@rync/moorline-basic-essentials --access public
-npm publish dist/npm-packages/@rync/moorline-pi --access public
 npm publish dist/npm-packages/@rync/moorline-discord-default --access public
 ```
 
