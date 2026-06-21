@@ -1,6 +1,6 @@
 # Transport Intents And Effects
 
-Moorline 0.1.0 uses a breaking transport contract:
+Moorline 0.0.3 uses a breaking transport contract:
 
 - transports emit `RuntimeTransportIntent` values into core;
 - core records each intent before processing it;
@@ -58,4 +58,4 @@ Plugin hooks use the same vocabulary:
 - `onExternalEvent`
 - `onAction`
 
-Older `onTransportEvent` hooks are not supported in 0.1.0.
+Older `onTransportEvent` hooks are not supported in 0.0.3.

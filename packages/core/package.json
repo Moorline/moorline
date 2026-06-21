@@ -1,6 +1,6 @@
 {
   "name": "@moorline/core",
-  "version": "0.1.0",
+  "version": "0.0.3",
   "description": "Moorline core runtime, state, package, policy, and control-plane services",
   "type": "module",
   "private": false,
@@ -48,7 +48,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@moorline/contracts": "0.1.0",
+    "@moorline/contracts": "0.0.3",
     "semver": "^7.7.4",
     "tar": "^7.4.3",
     "yauzl": "^3.2.0"

@@ -43,7 +43,7 @@ Bundles are metadata packages that reference those runtime package kinds.
 
 ## Transport Contract
 
-Transports use the 0.1.0 intent/effect contract. Inbound native activity is emitted as `RuntimeTransportIntent`; outbound visible/native work is applied through `RuntimeTransportEffect`.
+Transports use the 0.0.3 intent/effect contract. Inbound native activity is emitted as `RuntimeTransportIntent`; outbound visible/native work is applied through `RuntimeTransportEffect`.
 
 There is no compatibility layer for `RuntimeTransportEvent`, direct transport message/resource methods, or transport-managed Moorline archive/category surfaces. See `docs/TRANSPORT_INTENTS.md` before changing transport or plugin hooks.
 

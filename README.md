@@ -192,7 +192,7 @@ Provider packages can expose model-listing and model-selection commands through 
 
 ### Runtime Modes
 
-Moorline 0.1.x operator-facing session modes:
+Moorline 0.0.x operator-facing session modes:
 - `full-access`: the active provider runs with full local access and no approval gate.
 - `approval-required`: protected provider actions request approval before they continue.
 
