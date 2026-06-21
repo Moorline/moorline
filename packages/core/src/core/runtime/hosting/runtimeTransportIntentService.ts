@@ -41,6 +41,28 @@ export class RuntimeTransportIntentService {
     if (!inserted) {
       return;
     }
+    await this.processRecordedIntent(intent);
+  }
+
+  async drainPendingIntents(limit = 100): Promise<number> {
+    let drained = 0;
+    while (true) {
+      const pending = this.deps.store.listPendingTransportIntents(limit).filter((intent) => intent.scopeId === this.deps.config.transport.scopeId);
+      if (pending.length === 0) {
+        return drained;
+      }
+      drained += pending.length;
+      for (const intent of pending) {
+        try {
+          await this.processRecordedIntent(intent);
+        } catch {
+          // Failed pending intents are marked by processRecordedIntent and should not block later intents.
+        }
+      }
+    }
+  }
+
+  private async processRecordedIntent(intent: RuntimeTransportIntent): Promise<void> {
     try {
       await this.processIntent(intent);
       this.deps.store.markTransportIntentProcessed(intent.intentId, this.deps.now());
@@ -78,6 +100,8 @@ export class RuntimeTransportIntentService {
         if (intent.initialMessage && intent.actor) {
           await this.deps.interactions.handleTransportIntent({
             ...intent,
+            intentId: `${intent.intentId}:initial-message`,
+            occurredAt: this.deps.now(),
             type: 'transport.message.received',
             transportResourceId: session.transportResourceId,
             actor: intent.actor,

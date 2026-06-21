@@ -255,6 +255,7 @@ export class MoorlineRuntime {
         await this.transportIntents.handleIntent(intent);
       }
     });
+    await this.transportIntents.drainPendingIntents();
     this.providerService.on('providerEvent', (event) => {
       void this.providerQueue
         .push(event.threadId, async () => {
