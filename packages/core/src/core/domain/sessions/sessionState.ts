@@ -165,11 +165,53 @@ export class SessionRegistry {
     });
   }
 
+  resume(transportResourceId: string, nowIso: string): RuntimeSessionRow | null {
+    const session = this.getByTransportResourceId(transportResourceId);
+    if (!session) {
+      return null;
+    }
+    return this.updateSession({
+      ...session,
+      lifecycleStatus: 'hot',
+      archivedAt: null,
+      lastError: null,
+      providerStatus: session.providerStatus === 'closed' ? 'connecting' : session.providerStatus,
+      providerAutoStartEnabled: true,
+      updatedAt: nowIso,
+      lastActivityAt: nowIso
+    });
+  }
+
+  delete(transportResourceId: string): RuntimeSessionRow | null {
+    const session = this.getByTransportResourceId(transportResourceId);
+    if (!session) {
+      return null;
+    }
+    this.deleteSessionWorkspace(session);
+    this.store.deleteSession(session.sessionId);
+    return session;
+  }
+
+  deleteRecordOnly(transportResourceId: string): RuntimeSessionRow | null {
+    const session = this.getByTransportResourceId(transportResourceId);
+    if (!session) {
+      return null;
+    }
+    this.store.deleteSession(session.sessionId);
+    return session;
+  }
+
   deleteArchived(transportResourceId: string): RuntimeSessionRow | null {
     const session = this.getByTransportResourceId(transportResourceId);
     if (!session || session.lifecycleStatus !== 'archived') {
       return null;
     }
+    this.deleteSessionWorkspace(session);
+    this.store.deleteSession(session.sessionId);
+    return session;
+  }
+
+  private deleteSessionWorkspace(session: RuntimeSessionRow): void {
     if (session.workspacePath) {
       let managedWorkspacePath: string;
       try {
@@ -187,7 +229,5 @@ export class SessionRegistry {
       }
       rmSync(managedWorkspacePath, { recursive: true, force: true });
     }
-    this.store.deleteSession(session.sessionId);
-    return session;
   }
 }

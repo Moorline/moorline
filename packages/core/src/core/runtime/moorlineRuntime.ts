@@ -51,8 +51,8 @@ import { ManagementReadModelService } from '../system/projection/managementReadM
 import { RuntimeControlService } from './supervision/runtimeControlService.js';
 import type { RuntimeManagementSurfaceHandle } from './hosting/runtimeManagementPort.js';
 import { RuntimeWorkManagementService } from '../domain/sessions/runtimeWorkManagementService.js';
-import { ManagedTransportResourceLifecycleService } from './lifecycle/managedTransportResourceLifecycleService.js';
 import { RuntimeInteractionService } from './execution/runtimeInteractionService.js';
+import { RuntimeTransportIntentService } from './hosting/runtimeTransportIntentService.js';
 import { RuntimeTransportSurfaceService } from './hosting/runtimeTransportSurfaceService.js';
 import { ProviderOrchestrator } from './execution/providerOrchestration/providerOrchestrator.js';
 import { RuntimeProjectionService } from '../system/projection/runtimeProjectionService.js';
@@ -107,8 +107,8 @@ export class MoorlineRuntime {
   private readonly managementReadModel: ManagementReadModelService;
   private readonly runtimeControl: RuntimeControlService;
   private readonly workManagement: RuntimeWorkManagementService;
-  private readonly managedTransportResourceLifecycle: ManagedTransportResourceLifecycleService;
   private readonly interactions: RuntimeInteractionService;
+  private readonly transportIntents: RuntimeTransportIntentService;
   private readonly transportSurface: RuntimeTransportSurfaceService;
   private readonly providerOrchestrator: ProviderOrchestrator;
   private readonly projectionService: RuntimeProjectionService;
@@ -208,8 +208,8 @@ export class MoorlineRuntime {
     this.managementReadModel = graph.managementReadModel;
     this.runtimeControl = graph.runtimeControl;
     this.workManagement = graph.workManagement;
-    this.managedTransportResourceLifecycle = graph.managedTransportResourceLifecycle;
     this.interactions = graph.interactions;
+    this.transportIntents = graph.transportIntents;
     this.transportSurface = graph.transportSurface;
     this.providerOrchestrator = graph.providerOrchestrator;
     this.projectionService = graph.projectionService;
@@ -251,11 +251,8 @@ export class MoorlineRuntime {
     this.initializePolicyGuard();
     this.surfaceState = await this.hostingService.start({
       actions: this.pluginHost.listActions((pluginId) => this.createPluginContext(`plugin:${pluginId}`)),
-      onTransportEvent: async (event) => {
-        if (event.type === 'resource.lifecycle') {
-          await this.managedTransportResourceLifecycle.handleEvent(event);
-        }
-        await this.interactions.handleTransportEvent(event);
+      onTransportIntent: async (intent) => {
+        await this.transportIntents.handleIntent(intent);
       }
     });
     this.providerService.on('providerEvent', (event) => {
@@ -445,15 +442,7 @@ export class MoorlineRuntime {
   }
 
   private getEffectiveAdminConfig() {
-    const adminConfig = this.deps.config.admin ?? defaultAdminConfig();
-    const managedAccessGroupId =
-      adminConfig.managedRole.enabled === true ? this.surfaceState?.adminAccessGroupId ?? null : null;
-    const accessGroupIds = managedAccessGroupId ? Array.from(new Set([...adminConfig.accessGroupIds, managedAccessGroupId])) : adminConfig.accessGroupIds;
-
-    return {
-      ...adminConfig,
-      accessGroupIds
-    };
+    return this.deps.config.admin ?? defaultAdminConfig();
   }
 
   private createPluginContext(actorId: string): RuntimePluginContext {

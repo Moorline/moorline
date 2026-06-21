@@ -945,6 +945,13 @@ export class RuntimePluginContextService {
           instruction,
           reason
         }),
+      resumeSession: async ({ transportResourceId, sessionId, reason }) =>
+        await this.deps.workManagement.resumeManagedSession({
+          actorId,
+          transportResourceId,
+          sessionId,
+          reason
+        }),
       archiveSession: async ({ transportResourceId, sessionId }) =>
         await this.deps.workManagement.archiveManagedSession({
           actorId,
@@ -1107,7 +1114,7 @@ export class RuntimePluginContextService {
       sendStatusUpdate: async (payload) => {
         const surfaceState = this.deps.getSurfaceState();
         if (surfaceState) {
-          await this.deps.postTransportMessage(actorId, surfaceState.statusResourceId, payload);
+          await this.deps.postTransportMessage(actorId, surfaceState.statusResourceId ?? this.deps.config.transport.scopeId, payload);
         }
       },
       appendAuditEvent: (event, payload) => {

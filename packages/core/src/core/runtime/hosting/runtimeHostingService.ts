@@ -1,16 +1,14 @@
-import { defaultAdminConfig, type AppliedMoorlineConfig, type RuntimeSurfaceState } from '../../../types/config.js';
+import type { AppliedMoorlineConfig, RuntimeSurfaceState } from '../../../types/config.js';
 import type { RuntimeEnvironmentVerifier } from '../../../types/provider.js';
 import { loadInstallationState, saveInstallationState } from '../../system/config/configStore.js';
 import type { RuntimeManagementSurfaceHandle } from './runtimeManagementPort.js';
-import type {
-  RuntimeActionDefinition,
-  RuntimeTransport,
-  RuntimeTransportEvent
-} from '../../../types/transport.js';
+import type { RuntimeActionDefinition, RuntimeTransport, RuntimeTransportIntent } from '../../../types/transport.js';
+import type { RuntimeTransportEffectService } from './runtimeTransportEffectService.js';
 
 interface RuntimeHostingServiceDeps {
   config: AppliedMoorlineConfig;
   transport: RuntimeTransport;
+  effects: RuntimeTransportEffectService;
   managementSurface: RuntimeManagementSurfaceHandle;
   installationPath: string;
   now(): string;
@@ -20,7 +18,7 @@ interface RuntimeHostingServiceDeps {
 
 interface RuntimeHostingHandlers {
   actions: RuntimeActionDefinition[];
-  onTransportEvent(event: RuntimeTransportEvent): Promise<void>;
+  onTransportIntent(intent: RuntimeTransportIntent): Promise<void>;
 }
 
 export class RuntimeHostingService {
@@ -46,19 +44,23 @@ export class RuntimeHostingService {
       rollbackSteps.push(async () => {
         await this.deps.managementSurface.stop();
       });
-      if (this.deps.transport.capabilities().nativeActions && this.deps.transport.registerNativeActions) {
+      if (this.deps.transport.capabilities().nativeActions) {
         await this.deps.authorizeTransportSetup({
           target: this.deps.config.transport.scopeId ?? this.deps.config.transport.packageId,
           execute: async () =>
-            await this.deps.transport.registerNativeActions?.({
+            await this.deps.effects.registerActions('runtime:hosting', {
               scopeId: this.deps.config.transport.scopeId ?? '',
               actions: handlers.actions
             })
         });
       }
-      this.deps.transport.onEvent(async (event) => {
-        await handlers.onTransportEvent(event);
-      });
+      if (this.deps.transport.onIntent) {
+        this.deps.transport.onIntent(async (intent) => {
+          await handlers.onTransportIntent(intent);
+        });
+      } else {
+        throw new Error('Transport must implement onIntent.');
+      }
       return surfaceState;
     } catch (error) {
       this.startupFailure = error instanceof Error ? error.message : String(error);
@@ -103,29 +105,6 @@ export class RuntimeHostingService {
 
   private async bootstrapSurface(): Promise<RuntimeSurfaceState> {
     const existing = loadInstallationState(this.deps.installationPath);
-    const transportConfig = this.deps.config.transport.config;
-    if (this.deps.transport.reconcileRuntimeSurface) {
-      const adminConfig = this.deps.config.admin ?? defaultAdminConfig();
-      const reconciled = await this.deps.authorizeTransportSetup({
-        target: this.deps.config.transport.scopeId ?? this.deps.config.transport.packageId ?? 'transport',
-        execute: async () =>
-          await this.deps.transport.reconcileRuntimeSurface!({
-            scopeId: this.deps.config.transport.scopeId,
-            actorId: typeof transportConfig.actorId === 'string' ? transportConfig.actorId : undefined,
-            names: this.deps.config.surface,
-            managedAdminAccessGroup: adminConfig.managedRole,
-            managedMemberAccessGroup: adminConfig.managedUserRole,
-            explicitAdminRoleIds: adminConfig.accessGroupIds,
-            explicitAdminUserIds: adminConfig.userIds,
-            previousState: existing,
-            nowIso: this.deps.now(),
-            config: transportConfig
-          })
-      });
-      saveInstallationState(this.deps.installationPath, reconciled);
-      return reconciled;
-    }
-
     if (existing && (!this.deps.config.transport.scopeId || existing.scopeId === this.deps.config.transport.scopeId)) {
       return existing;
     }
@@ -133,11 +112,9 @@ export class RuntimeHostingService {
     const nowIso = this.deps.now();
     const defaultState: RuntimeSurfaceState = {
       scopeId: this.deps.config.transport.scopeId,
-      mainCategoryId: this.deps.config.surface.mainCategoryName,
-      coordinationResourceId: this.deps.config.surface.coordinationResourceName,
+      surfaceId: this.deps.config.transport.scopeId ?? this.deps.config.transport.packageId,
       statusResourceId: this.deps.config.surface.statusResourceName,
-      sessionsCategoryId: this.deps.config.surface.sessionsGroupName,
-      archiveCategoryId: this.deps.config.surface.archiveGroupName,
+      coordinationResourceId: this.deps.config.surface.coordinationResourceName,
       createdAt: nowIso,
       updatedAt: nowIso
     };

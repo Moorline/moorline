@@ -15,12 +15,14 @@ import { slugifyResourceName, truncatePreview } from './workManagement/transport
 import { enforceManagedSessionLimit } from './workManagement/managedSessionLimit.js';
 import { buildManagedTransportResourceMetadata } from '../../runtime/hosting/managedTransportResourceMetadata.js';
 import { MoorlineStatusError } from '../../shared/errors/statusError.js';
+import type { RuntimeTransportEffectService } from '../../runtime/hosting/runtimeTransportEffectService.js';
 
 const INITIAL_KICKOFF_PREVIEW_LIMIT = 700;
 
 interface RuntimeWorkManagementServiceDeps {
   config: AppliedMoorlineConfig;
   getTransport(): RuntimeTransport;
+  effects(): RuntimeTransportEffectService;
   getGuard(): RuntimeActionGuard;
   requireSurfaceState(): RuntimeSurfaceState;
   sessionRegistry: SessionRegistry;
@@ -52,7 +54,6 @@ export class RuntimeWorkManagementService {
     owner?: SessionOwnerLink;
     tags?: string[];
   }): Promise<{ session: RuntimeSessionRow; transportResourceId: string }> {
-    const surface = this.deps.requireSurfaceState();
     const owner = input.owner ?? this.deps.defaultSessionOwner(input.actorId);
     const objective = input.objective ?? null;
     enforceManagedSessionLimit(this.deps.snapshots, owner);
@@ -73,47 +74,21 @@ export class RuntimeWorkManagementService {
       action: 'transport.resource.create',
       actor: input.actorId,
       target: `${this.deps.config.transport.scopeId}:${transportResourceName}`,
-      execute: async () => await this.createRuntimeTransportResource(transportResourceName, surface.sessionsCategoryId)
+      execute: async () => await this.createRuntimeTransportResource(input.actorId, transportResourceName, null)
     });
-    let session: RuntimeSessionRow;
-    let recoveredFromLifecycleRace = false;
-    try {
-      session = this.deps.reactor.createSession({
-        scopeId: this.deps.config.transport.scopeId,
-        transportResourceId: resource.id,
-        transportResourceName: resource.name,
-        requestedName: input.requestedName,
-        runtimeMode: input.runtimeMode,
-        nowIso: this.deps.now(),
-        providerAutoStartEnabled: this.deps.getProviderAutoStartDefault(),
-        owner,
-        objective: objective ?? undefined,
-        tags: input.tags,
-        createdBy: input.actorId
-      });
-    } catch (error) {
-      // Resource lifecycle adoption can race with explicit managed session creation.
-      // If adoption already persisted the session for this new resource, reuse it.
-      const adopted = this.deps.sessionRegistry.getByTransportResourceId(resource.id);
-      if (adopted) {
-        recoveredFromLifecycleRace = adopted.createdBy === 'runtime:transport/resource-lifecycle';
-        session = this.deps.sessionRegistry.updateSession({
-          ...adopted,
-          runtimeMode: input.runtimeMode,
-          providerAutoStartEnabled: this.deps.getProviderAutoStartDefault(),
-          ownerKind: owner.kind,
-          ownerId: owner.id,
-          ownerLabel: owner.label,
-          objective: objective ?? adopted.objective,
-          tags: input.tags ?? adopted.tags ?? [],
-          createdBy: input.actorId,
-          updatedAt: this.deps.now()
-        });
-      } else {
-        await this.deleteRuntimeTransportResource(resource.id, 'best-effort');
-        throw error;
-      }
-    }
+    const session = this.deps.reactor.createSession({
+      scopeId: this.deps.config.transport.scopeId,
+      transportResourceId: resource.id,
+      transportResourceName: resource.name,
+      requestedName: input.requestedName,
+      runtimeMode: input.runtimeMode,
+      nowIso: this.deps.now(),
+      providerAutoStartEnabled: this.deps.getProviderAutoStartDefault(),
+      owner,
+      objective: objective ?? undefined,
+      tags: input.tags,
+      createdBy: input.actorId
+    });
     this.deps.appendAuditEvent('session.created', {
       sessionId: session.sessionId,
       transportResourceId: session.transportResourceId,
@@ -124,14 +99,6 @@ export class RuntimeWorkManagementService {
       tags: session.tags ?? [],
       actorId: input.actorId
     });
-    if (recoveredFromLifecycleRace) {
-      this.deps.appendAuditEvent('session.created.race_recovered', {
-        sessionId: session.sessionId,
-        transportResourceId: session.transportResourceId,
-        actorId: input.actorId
-      });
-    }
-
     if (input.initialInstruction?.trim()) {
       try {
         await this.deps.postTransportMessage(input.actorId, session.transportResourceId, {
@@ -173,6 +140,75 @@ export class RuntimeWorkManagementService {
     }
 
     return { session, transportResourceId: resource.id };
+  }
+
+  async bindManagedSessionToTransportResource(input: {
+    actorId: string;
+    transportResourceId: string;
+    transportResourceName: string;
+    requestedName?: string;
+    runtimeMode: RuntimeModeName;
+    owner?: SessionOwnerLink;
+    objective?: string;
+    tags?: string[];
+  }): Promise<RuntimeSessionRow> {
+    const existing = this.deps.sessionRegistry.getByTransportResourceId(input.transportResourceId);
+    if (existing) {
+      const updated = this.deps.sessionRegistry.updateSession({
+        ...existing,
+        transportResourceName: input.transportResourceName,
+        runtimeMode: input.runtimeMode,
+        ownerKind: input.owner?.kind ?? existing.ownerKind,
+        ownerId: input.owner?.id ?? existing.ownerId,
+        ownerLabel: input.owner?.label ?? existing.ownerLabel,
+        objective: input.objective ?? existing.objective,
+        tags: input.tags ?? existing.tags ?? [],
+        updatedAt: this.deps.now()
+      });
+      this.deps.appendAuditEvent('session.transport_binding.updated', {
+        sessionId: updated.sessionId,
+        transportResourceId: updated.transportResourceId,
+        actorId: input.actorId
+      });
+      return updated;
+    }
+
+    const owner = input.owner ?? this.deps.defaultSessionOwner(input.actorId);
+    const objective = input.objective ?? null;
+    enforceManagedSessionLimit(this.deps.snapshots, owner);
+    await this.deps.getGuard().run({
+      action: 'session.create',
+      actor: input.actorId,
+      target: `${this.deps.config.transport.scopeId}:${input.transportResourceId}`,
+      payload: {
+        runtimeMode: input.runtimeMode,
+        owner,
+        objective,
+        tags: input.tags ?? [],
+        source: 'transport-intent'
+      },
+      execute: async () => undefined
+    });
+    const session = this.deps.reactor.createSession({
+      scopeId: this.deps.config.transport.scopeId,
+      transportResourceId: input.transportResourceId,
+      transportResourceName: input.transportResourceName,
+      requestedName: input.requestedName ?? input.transportResourceName,
+      runtimeMode: input.runtimeMode,
+      nowIso: this.deps.now(),
+      providerAutoStartEnabled: this.deps.getProviderAutoStartDefault(),
+      owner,
+      objective: objective ?? undefined,
+      tags: input.tags,
+      createdBy: input.actorId
+    });
+    this.deps.appendAuditEvent('session.created.from_transport_intent', {
+      sessionId: session.sessionId,
+      transportResourceId: session.transportResourceId,
+      runtimeMode: session.runtimeMode,
+      actorId: input.actorId
+    });
+    return session;
   }
 
   async directManagedSession(input: {
@@ -231,7 +267,6 @@ export class RuntimeWorkManagementService {
     if (!session) {
       return null;
     }
-    const surface = this.deps.requireSurfaceState();
     await this.deps.getGuard().run({
       action: 'session.archive',
       actor: input.actorId,
@@ -252,27 +287,6 @@ export class RuntimeWorkManagementService {
       providerStatus: 'closed',
       activeTurnId: null,
       updatedAt: nowIso
-    });
-    await this.deps.getGuard().run({
-      action: 'transport.resource.update',
-      actor: input.actorId,
-      target: session.transportResourceId,
-      execute: async () => {
-        try {
-          await this.deps.getTransport().updateTransportResource?.({
-            scopeId: this.deps.config.transport.scopeId,
-            transportResourceId: session.transportResourceId,
-            parentId: surface.archiveCategoryId
-          });
-        } catch (error) {
-          this.deps.appendAuditEvent('session.archive.transport_update_failed', {
-            sessionId: session.sessionId,
-            transportResourceId: session.transportResourceId,
-            actorId: input.actorId,
-            error: error instanceof Error ? error.message : String(error)
-          });
-        }
-      }
     });
     this.deps.appendAuditEvent('session.archived', {
       sessionId: archived.sessionId,
@@ -317,6 +331,79 @@ export class RuntimeWorkManagementService {
       });
     }
     return deleted;
+  }
+
+  async deleteManagedSessionNow(input: {
+    actorId: string;
+    transportResourceId?: string;
+    sessionId?: string;
+    deleteWorkspace: boolean;
+    reason?: string;
+  }): Promise<RuntimeSessionRow | null> {
+    const session = this.resolveManagedWorkerSession(input);
+    if (!session) {
+      return null;
+    }
+    await this.deps.getGuard().run({
+      action: 'session.delete',
+      actor: input.actorId,
+      target: session.sessionId,
+      payload: {
+        deleteWorkspace: input.deleteWorkspace,
+        reason: input.reason ?? null
+      },
+      execute: async () => undefined
+    });
+    this.deps.providerService.stopSession(session.threadId);
+    this.deps.providerDirectory.delete(session.threadId);
+    this.deps.rejectTurnWaitersForThread(session.threadId, input.reason ?? `Session ${session.sessionId} was deleted.`);
+    await this.deps.cleanupScopedSidecars('session', session.sessionId, `session ${session.sessionId} deleted`);
+    const deleted = input.deleteWorkspace
+      ? this.deps.sessionRegistry.delete(session.transportResourceId)
+      : this.deleteSessionStateOnly(session);
+    if (deleted) {
+      this.deps.appendAuditEvent('session.deleted', {
+        sessionId: deleted.sessionId,
+        transportResourceId: deleted.transportResourceId,
+        workspacePath: deleted.workspacePath,
+        actorId: input.actorId,
+        deleteWorkspace: input.deleteWorkspace,
+        reason: input.reason ?? null
+      });
+    }
+    return deleted;
+  }
+
+  async resumeManagedSession(input: {
+    actorId: string;
+    transportResourceId?: string;
+    sessionId?: string;
+    reason?: string;
+  }): Promise<RuntimeSessionRow | null> {
+    const session = this.resolveManagedWorkerSession(input);
+    if (!session) {
+      return null;
+    }
+    if (session.lifecycleStatus !== 'archived' && session.lifecycleStatus !== 'cool') {
+      return session;
+    }
+    await this.deps.getGuard().run({
+      action: 'session.resume',
+      actor: input.actorId,
+      target: session.sessionId,
+      payload: { reason: input.reason ?? null },
+      execute: async () => undefined
+    });
+    const resumed = this.deps.sessionRegistry.resume(session.transportResourceId, this.deps.now());
+    if (resumed) {
+      this.deps.appendAuditEvent('session.resumed', {
+        sessionId: resumed.sessionId,
+        transportResourceId: resumed.transportResourceId,
+        actorId: input.actorId,
+        reason: input.reason ?? null
+      });
+    }
+    return resumed;
   }
 
   async archiveResourceTarget(input: { actorId: string; transportResourceId: string }): Promise<ArchivedTransportResourceTarget | null> {
@@ -371,6 +458,10 @@ export class RuntimeWorkManagementService {
     return null;
   }
 
+  private deleteSessionStateOnly(session: RuntimeSessionRow): RuntimeSessionRow {
+    return this.deps.sessionRegistry.deleteRecordOnly(session.transportResourceId) ?? session;
+  }
+
   private enqueueInitialManagedSessionKickoff(input: {
     actorId: string;
     transportResourceId: string;
@@ -411,14 +502,14 @@ export class RuntimeWorkManagementService {
     });
   }
 
-  private async createRuntimeTransportResource(name: string, parentId: string | null): Promise<RuntimeTransportResourceRecord> {
+  private async createRuntimeTransportResource(actor: string, name: string, parentId: string | null): Promise<RuntimeTransportResourceRecord> {
     const transport = this.deps.getTransport();
-    if (!transport.capabilities().resources.create || !transport.createTransportResource) {
+    if (!transport.capabilities().resources.create) {
       throw new Error(
         'Managed resource creation requires transport support for resources.create. Configure a transport with managed resource creation or disable managed sessions.'
       );
     }
-    return await transport.createTransportResource({
+    return await this.deps.effects().createResource(actor, {
       scopeId: this.deps.config.transport.scopeId,
       name,
       kind: 'conversation',
@@ -434,11 +525,11 @@ export class RuntimeWorkManagementService {
 
   private async deleteRuntimeTransportResource(transportResourceId: string, mode: 'strict' | 'best-effort'): Promise<void> {
     const transport = this.deps.getTransport();
-    if (!transport.capabilities().resources.delete || !transport.deleteTransportResource) {
+    if (!transport.capabilities().resources.delete) {
       return;
     }
     try {
-      await transport.deleteTransportResource({
+      await this.deps.effects().deleteResource('runtime:work-management', {
         scopeId: this.deps.config.transport.scopeId,
         transportResourceId: transportResourceId
       });

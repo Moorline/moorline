@@ -101,21 +101,6 @@ export class RuntimeLifecycleService {
       return;
     }
 
-    const surface = this.deps.getSurfaceState();
-    if (surface) {
-      await this.deps.requireGuard().run({
-        action: 'transport.resource.update',
-        actor: 'runtime:lifecycle/archive',
-        target: current.transportResourceId,
-        execute: async () =>
-          this.deps.transport.updateTransportResource?.({
-            scopeId: this.deps.transportScopeId,
-            transportResourceId: current.transportResourceId,
-            parentId: surface.archiveCategoryId
-          })
-      });
-    }
-
     const archived = this.deps.sessionRegistry.updateSession({
       ...current,
       lifecycleStatus: 'archived',

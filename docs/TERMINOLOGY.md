@@ -41,6 +41,10 @@ These are the safest default words for product copy.
   - A package that powers the agent runtime.
 - `transport`
   - A package that connects Moorline to an external surface. A transport may be message-oriented, event-like, API-like, or integration-specific.
+- `transport intent`
+  - A durable inbound request emitted by a transport for Moorline to process.
+- `transport effect`
+  - A durable outbound request from Moorline for a transport to apply to its native surface.
 - `plugin`
   - A package that adds runtime tools, commands, hooks, or integrations.
 - `skill`
