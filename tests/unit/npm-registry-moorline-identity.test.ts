@@ -106,12 +106,7 @@ describe('npm Moorline-owned package identity', () => {
         json: async () => ({
           name: '@moorline/not-http-alt-for-test',
           description: 'Mismatched package.',
-          keywords: [
-            'moorline-package',
-            'moorline-kind-api-adapter',
-            'moorline-namespace-moorline',
-            'moorline-id-moorline-http-alt-for-test'
-          ],
+          keywords: ['moorline-package'],
           'dist-tags': {
             latest: '1.0.0'
           },
@@ -119,12 +114,7 @@ describe('npm Moorline-owned package identity', () => {
             '1.0.0': {
               name: '@moorline/not-http-alt-for-test',
               version: '1.0.0',
-              keywords: [
-                'moorline-package',
-                'moorline-kind-api-adapter',
-                'moorline-namespace-moorline',
-                'moorline-id-moorline-http-alt-for-test'
-              ],
+              keywords: ['moorline-package'],
               dist: {
                 tarball: 'https://registry.example.test/@moorline/not-http-alt-for-test/-/pkg.tgz',
                 integrity: 'sha512-test'
@@ -198,7 +188,7 @@ describe('npm Moorline-owned package identity', () => {
     })).rejects.toThrow(/must be published as @rync\/moorline-discord-default/);
   });
 
-  it('accepts package-kit namespace keywords for personal npm packages', async () => {
+  it('accepts the shared Moorline package keyword for personal npm packages', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const rawUrl = String(url);
       if (rawUrl.includes('/-/v1/search')) {
@@ -220,12 +210,7 @@ describe('npm Moorline-owned package identity', () => {
         json: async () => ({
           name: '@rync/moorline-discord-default',
           description: 'Discord default bundle.',
-          keywords: [
-            'moorline-package',
-            'moorline-kind-bundle',
-            'moorline-namespace-rync',
-            'moorline-id-rync-discord-default'
-          ],
+          keywords: ['moorline-package'],
           'dist-tags': {
             latest: '0.0.2'
           },
@@ -233,12 +218,7 @@ describe('npm Moorline-owned package identity', () => {
             '0.0.2': {
               name: '@rync/moorline-discord-default',
               version: '0.0.2',
-              keywords: [
-                'moorline-package',
-                'moorline-kind-bundle',
-                'moorline-namespace-rync',
-                'moorline-id-rync-discord-default'
-              ],
+              keywords: ['moorline-package'],
               dist: {
                 tarball: 'https://registry.example.test/@rync/moorline-discord-default/-/pkg.tgz',
                 integrity: 'sha512-test'
@@ -295,12 +275,7 @@ describe('npm Moorline-owned package identity', () => {
         json: async () => ({
           name: '@moorline/acme-widget',
           description: 'Mismatched package.',
-          keywords: [
-            'moorline-package',
-            'moorline-kind-plugin',
-            'moorline-namespace-acme',
-            'moorline-id-acme-widget'
-          ],
+          keywords: ['moorline-package'],
           'dist-tags': {
             latest: '1.0.0'
           },
@@ -308,12 +283,7 @@ describe('npm Moorline-owned package identity', () => {
             '1.0.0': {
               name: '@moorline/acme-widget',
               version: '1.0.0',
-              keywords: [
-                'moorline-package',
-                'moorline-kind-plugin',
-                'moorline-namespace-acme',
-                'moorline-id-acme-widget'
-              ],
+              keywords: ['moorline-package'],
               dist: {
                 tarball: 'https://registry.example.test/@moorline/acme-widget/-/pkg.tgz',
                 integrity: 'sha512-test'

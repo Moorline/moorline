@@ -75,14 +75,6 @@ function scopedNpmPackageName(name: string | undefined): name is string {
   return typeof name === 'string' && /^@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/u.test(name);
 }
 
-function packageIdKeyword(packageId: string): string {
-  return `moorline-id-${packageId.replace('/', '-')}`;
-}
-
-function packageNamespace(packageId: string): string {
-  return packageId.split('/')[0] ?? '';
-}
-
 function isPackageKind(value: unknown): value is PackageKind {
   return value === 'api-adapter' || value === 'transport' || value === 'provider' || value === 'plugin' || value === 'skill' || value === 'bundle';
 }
@@ -192,9 +184,9 @@ export class NpmRegistryClient {
   }
 
   async findByPackageId(input: { packageId: string; kind?: PackageKind }): Promise<PackageRegistryEntry[]> {
-    const keyword = packageIdKeyword(input.packageId);
+    const npmName = npmNameForPackageId(input.packageId);
     const entries = await this.search({
-      query: keyword,
+      query: npmName ?? input.packageId,
       kind: input.kind,
       size: this.maxSearchResults
     });
@@ -262,13 +254,7 @@ export class NpmRegistryClient {
       return null;
     }
     const keywords = metadataKeywords(input.versionMetadata, input.packageMetadata);
-    const requiredKeywords = [
-      MOORLINE_KEYWORD,
-      `moorline-kind-${moorline.kind}`,
-      `moorline-namespace-${packageNamespace(moorline.packageId)}`,
-      packageIdKeyword(moorline.packageId)
-    ];
-    if (!requiredKeywords.every((keyword) => keywords.includes(keyword))) {
+    if (!keywords.includes(MOORLINE_KEYWORD)) {
       return null;
     }
     const version = input.versionMetadata.version;

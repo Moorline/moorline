@@ -27,5 +27,8 @@
     "type": "git",
     "url": "git+ssh://git@github.com/Moorline/moorline.git",
     "directory": "packages/contracts"
-  }
+  },
+  "keywords": [
+    "moorline-package"
+  ]
 }
