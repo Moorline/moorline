@@ -43,6 +43,25 @@ describe('default actor policy boundaries', () => {
     });
   });
 
+  it('allows transport actors to register native actions with the runtime effect capability', async () => {
+    const policyPath = join(root, 'packages', 'core', 'resources', 'policies', 'default-secure.json');
+    const rawPolicy = readFileSync(policyPath, 'utf8');
+    expect(rawPolicy).toContain('transport.actions.register');
+    expect(rawPolicy).not.toContain('transport.action.register');
+
+    const profile = loadPolicyProfile(policyPath);
+    const hook = createActorRulePolicyHook({ rules: profile.actorRules });
+
+    await expect(
+      hook({
+        actor: 'runtime:transport/register-commands',
+        action: 'transport.actions.register'
+      })
+    ).resolves.toMatchObject({
+      allowed: true
+    });
+  });
+
   it('allows active plugin actors only through manifest-derived capability rules', async () => {
     const policyPath = join(root, 'packages', 'core', 'resources', 'policies', 'default-secure.json');
     const profile = loadPolicyProfile(policyPath);

@@ -126,6 +126,44 @@ function moorlineNpmNameMatchesPackageId(npmName: string, packageId: string): bo
   return expectedName !== null && npmName === expectedName;
 }
 
+function normalizeKeywordTerm(value: string): string | null {
+  const normalized = value.trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9._-]*$/u.test(normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+function searchKeywordQueries(input: PackageSearchInput): string[] {
+  const queries = new Set<string>([`keywords:${MOORLINE_KEYWORD}`]);
+  if (input.kind) {
+    queries.add(`keywords:moorline-kind-${input.kind} keywords:${MOORLINE_KEYWORD}`);
+  }
+  const query = input.query?.trim();
+  if (!query) {
+    return [...queries];
+  }
+  const packageIdTag = normalizeKeywordTerm(`moorline-id-${query.replace('/', '-')}`);
+  if (packageIdTag) {
+    queries.add(`keywords:${packageIdTag} keywords:${MOORLINE_KEYWORD}`);
+  }
+  for (const token of query.split(/[^a-zA-Z0-9._-]+/u)) {
+    const keyword = normalizeKeywordTerm(token);
+    if (keyword) {
+      queries.add(`keywords:${keyword} keywords:${MOORLINE_KEYWORD}`);
+    }
+  }
+  return [...queries];
+}
+
+function dedupeRegistryEntries(entries: PackageRegistryEntry[]): PackageRegistryEntry[] {
+  const byKey = new Map<string, PackageRegistryEntry>();
+  for (const entry of entries) {
+    byKey.set(`${entry.kind}:${entry.packageId}:${entry.version ?? ''}`, entry);
+  }
+  return [...byKey.values()];
+}
+
 function sourceForNpm(input: {
   registryUrl: string;
   npmName: string;
@@ -159,14 +197,15 @@ export class NpmRegistryClient {
   }
 
   async search(input: PackageSearchInput = {}): Promise<PackageRegistryEntry[]> {
-    const query = [MOORLINE_KEYWORD, input.query?.trim()].filter(Boolean).join(' ');
-    const url = new URL(`${this.registryUrl}/-/v1/search`);
-    url.searchParams.set('text', query);
-    url.searchParams.set('size', String(input.size ?? this.maxSearchResults));
-    url.searchParams.set('from', String(input.from ?? 0));
-    const search = await this.fetchJson<NpmSearchResponse>(url.toString());
-    const entries = await Promise.all(
-      (search.objects ?? []).map(async (object) => {
+    const searches = await Promise.all(searchKeywordQueries(input).map(async (query) => {
+      const url = new URL(`${this.registryUrl}/-/v1/search`);
+      url.searchParams.set('text', query);
+      url.searchParams.set('size', String(input.size ?? this.maxSearchResults));
+      url.searchParams.set('from', String(input.from ?? 0));
+      return await this.fetchJson<NpmSearchResponse>(url.toString());
+    }));
+    const searchEntries = await Promise.all(
+      searches.flatMap((search) => search.objects ?? []).map(async (object) => {
         const packageName = object.package?.name;
         if (!scopedNpmPackageName(packageName)) {
           return null;
@@ -178,9 +217,9 @@ export class NpmRegistryClient {
         }
       })
     );
-    return entries
+    return dedupeRegistryEntries(searchEntries
       .filter((entry): entry is PackageRegistryEntry => Boolean(entry))
-      .filter((entry) => !input.kind || entry.kind === input.kind);
+      .filter((entry) => !input.kind || entry.kind === input.kind));
   }
 
   async findByPackageId(input: { packageId: string; kind?: PackageKind }): Promise<PackageRegistryEntry[]> {

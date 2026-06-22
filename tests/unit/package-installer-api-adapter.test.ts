@@ -452,6 +452,54 @@ describe('api-adapter package installation', () => {
     expect(existsSync(join(record.installPath, 'node_modules', 'moorline-transitive-test', 'dist', 'index.js'))).toBe(true);
   });
 
+  it('hydrates production dependencies when installing archived npm-style packages', async () => {
+    const root = createTempRoot('moorline-archive-package-deps-');
+    const runtimeRoot = join(root, 'runtime');
+    const sourceDir = join(root, 'source');
+    const dependencyDir = join(root, 'runtime-dep');
+    const archivePath = join(root, 'package.tgz');
+    writeApiAdapterPackage(sourceDir);
+    mkdirSync(dependencyDir, { recursive: true });
+    writeFileSync(
+      join(dependencyDir, 'package.json'),
+      JSON.stringify({
+        name: 'moorline-test-runtime-dep',
+        version: '1.0.0',
+        type: 'module',
+        main: './index.mjs'
+      }, null, 2),
+      'utf8'
+    );
+    writeFileSync(join(dependencyDir, 'index.mjs'), 'export const hydrated = true;\n', 'utf8');
+    writeFileSync(
+      join(sourceDir, 'package.json'),
+      JSON.stringify({
+        type: 'module',
+        dependencies: {
+          'moorline-test-runtime-dep': `file:${dependencyDir}`
+        }
+      }, null, 2),
+      'utf8'
+    );
+    await create({
+      gzip: true,
+      file: archivePath,
+      cwd: sourceDir
+    }, ['.']);
+
+    const record = await new PackageInstaller(runtimeRoot, () => '2026-05-20T00:00:00.000Z').install({
+      surface: 'api-adapter',
+      source: {
+        kind: 'local_archive',
+        path: archivePath
+      }
+    });
+
+    expect(record.packageId).toBe('acme/http-alt');
+    expect(existsSync(join(record.installPath, 'node_modules', 'moorline-test-runtime-dep', 'index.mjs'))).toBe(true);
+    expect(existsSync(join(record.installPath, 'package-lock.json'))).toBe(false);
+  });
+
   it('verifies integrity before using bundled remote archive fallback', async () => {
     const root = createTempRoot('moorline-bundled-fallback-integrity-');
     const runtimeRoot = join(root, 'runtime');

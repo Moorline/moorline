@@ -253,6 +253,123 @@ describe('npm Moorline-owned package identity', () => {
     });
   });
 
+  it('discovers Moorline npm packages through keyword tags and filters small query terms locally', async () => {
+    const packages = [
+      {
+        npmName: '@rync/moorline-discord-default',
+        packageId: 'rync/discord-default',
+        kind: 'bundle' as const,
+        description: 'Discord transport plus status command and project resource routing.',
+        keywords: ['moorline-package', 'moorline-kind-bundle', 'moorline-id-rync-discord-default', 'rync', 'discord', 'default', 'bundle', 'transport']
+      },
+      {
+        npmName: '@rync/moorline-basic-essentials',
+        packageId: 'rync/basic-essentials',
+        kind: 'bundle' as const,
+        description: 'Basic essentials bundle.',
+        keywords: ['moorline-package', 'moorline-kind-bundle', 'moorline-id-rync-basic-essentials', 'rync', 'basic', 'essentials', 'bundle']
+      },
+      {
+        npmName: '@rync/moorline-pi',
+        packageId: 'rync/pi',
+        kind: 'provider' as const,
+        description: 'Rync Pi SDK provider package for Moorline.',
+        keywords: ['moorline-package', 'moorline-kind-provider', 'moorline-id-rync-pi', 'rync', 'pi', 'provider']
+      }
+    ];
+    const byName = new Map(packages.map((entry) => [entry.npmName, entry]));
+    const searchQueries: string[] = [];
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const rawUrl = String(url);
+      if (rawUrl.includes('/-/v1/search')) {
+        const parsed = new URL(rawUrl);
+        searchQueries.push(parsed.searchParams.get('text') ?? '');
+        return {
+          ok: true,
+          json: async () => ({
+            objects: packages.map((entry) => ({
+              package: {
+                name: entry.npmName,
+                version: '1.0.0',
+                description: entry.description,
+                keywords: entry.keywords
+              },
+              updated: '2026-06-21T00:00:00.000Z'
+            }))
+          })
+        } as Awaited<ReturnType<typeof fetch>>;
+      }
+      const encodedName = rawUrl.slice('https://registry.example.test/'.length);
+      const npmName = decodeURIComponent(encodedName);
+      const entry = byName.get(npmName);
+      if (!entry) {
+        return {
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+          json: async () => ({})
+        } as Awaited<ReturnType<typeof fetch>>;
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          name: entry.npmName,
+          description: entry.description,
+          keywords: entry.keywords,
+          'dist-tags': {
+            latest: '1.0.0'
+          },
+          time: {
+            '1.0.0': '2026-06-21T00:00:00.000Z'
+          },
+          versions: {
+            '1.0.0': {
+              name: entry.npmName,
+              version: '1.0.0',
+              description: entry.description,
+              keywords: entry.keywords,
+              dist: {
+                tarball: `https://registry.example.test/${entry.npmName}/-/pkg.tgz`,
+                integrity: 'sha512-test'
+              },
+              moorline: {
+                schemaVersion: 1,
+                packageId: entry.packageId,
+                kind: entry.kind,
+                manifestPath: 'manifest.json',
+                distroPath: 'moorline.dist.json'
+              }
+            }
+          }
+        })
+      } as Awaited<ReturnType<typeof fetch>>;
+    });
+
+    const service = new PackageRegistryService({
+      npmClient: new NpmRegistryClient({
+        registryUrl: 'https://registry.example.test'
+      })
+    });
+
+    await expect(service.search({ query: 'discord' })).resolves.toEqual([
+      expect.objectContaining({ packageId: 'rync/discord-default' })
+    ]);
+    await expect(service.search({ query: 'pi' })).resolves.toEqual([
+      expect.objectContaining({ packageId: 'rync/pi' })
+    ]);
+    await expect(service.search({ query: 'provider' })).resolves.toEqual([
+      expect.objectContaining({ packageId: 'rync/pi' })
+    ]);
+    const bundleResults = await service.search({ query: 'bundle', kind: 'bundle' });
+    expect(bundleResults).toHaveLength(2);
+    expect(bundleResults).toEqual(expect.arrayContaining([
+      expect.objectContaining({ packageId: 'rync/basic-essentials' }),
+      expect.objectContaining({ packageId: 'rync/discord-default' })
+    ]));
+    expect(searchQueries).toContain('keywords:moorline-package');
+  });
+
   it('reserves @moorline npm scope for matching package ids', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const rawUrl = String(url);
