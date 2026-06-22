@@ -1,6 +1,6 @@
 {
   "name": "moorline-workspace",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "private": true,
   "description": "Moorline host runtime, CLI, control API, and default HTTP adapter",
   "license": "MIT",
