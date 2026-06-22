@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
   packageFamilyForKind,
@@ -40,6 +41,47 @@ function packageInstallPath(runtimeRoot: string, surface: PackageKind, packageId
   const target = resolve(root, ...packageId.split('/'));
   assertWithinRoot(root, target, `Package ${packageId}`);
   return target;
+}
+
+function declaredRuntimeDependencyNames(packageDir: string): string[] {
+  const packageJsonPath = join(packageDir, 'package.json');
+  if (!existsSync(packageJsonPath)) {
+    return [];
+  }
+  const parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
+    dependencies?: Record<string, unknown>;
+  };
+  return Object.keys(parsed.dependencies ?? {}).sort();
+}
+
+function outputTail(value: string | null | undefined): string {
+  const trimmed = (value ?? '').trim();
+  return trimmed.length <= 2000 ? trimmed : trimmed.slice(-2000);
+}
+
+function hydrateArchivedRuntimeDependencies(packageDir: string): void {
+  const dependencies = declaredRuntimeDependencyNames(packageDir);
+  if (dependencies.length === 0) {
+    return;
+  }
+  const result = spawnSync('npm', [
+    'install',
+    '--omit=dev',
+    '--ignore-scripts',
+    '--no-audit',
+    '--no-fund',
+    '--package-lock=false'
+  ], {
+    cwd: packageDir,
+    encoding: 'utf8'
+  });
+  if (result.error) {
+    throw new Error(`Unable to install package runtime dependencies: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    const detail = outputTail(result.stderr) || outputTail(result.stdout);
+    throw new Error(`Unable to install package runtime dependencies${detail ? `: ${detail}` : '.'}`);
+  }
 }
 
 function assertReplacementSatisfiesExistingBundleOwners(input: {
@@ -127,6 +169,9 @@ export class PackageInstaller {
       mkdirSync(dirname(targetPath), { recursive: true });
       rmSync(stagingPath, { recursive: true, force: true });
       cpSync(resolved.packageDir, stagingPath, { recursive: true });
+      if (input.source.kind !== 'local_dir') {
+        hydrateArchivedRuntimeDependencies(stagingPath);
+      }
       try {
         await validateInstalledPackage(input.surface, stagingPath);
       } catch (error) {

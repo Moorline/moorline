@@ -16,7 +16,7 @@
   "allowCapabilities": [
     "command.exec",
     "transport.message.send",
-    "transport.action.register",
+    "transport.actions.register",
     "transport.resource.create",
     "transport.resource.update",
     "transport.resource.delete",
@@ -40,7 +40,7 @@
     {
       "actorPrefix": "runtime:transport/",
       "allowCapabilities": [
-        "transport.action.register",
+        "transport.actions.register",
         "transport.message.send",
         "transport.resource.update",
         "session.archive"

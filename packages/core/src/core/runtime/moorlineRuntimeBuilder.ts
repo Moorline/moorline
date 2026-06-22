@@ -785,7 +785,7 @@ export function buildMoorlineRuntimeServiceGraph(
     verifyEnvironment: normalizedDeps.verifyEnvironment ?? getDefaultRuntimeEnvironmentVerifier() ?? undefined,
     authorizeTransportSetup: async ({ target, execute }) =>
       await callbacks.requireGuard().run({
-        action: 'transport.action.register',
+        action: 'transport.actions.register',
         actor: 'runtime:transport/register-commands',
         target,
         execute

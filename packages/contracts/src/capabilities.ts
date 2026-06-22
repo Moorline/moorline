@@ -19,7 +19,6 @@ export const CAPABILITIES = [
   'runtime.control',
   'sidecar.manage',
   'transport.message.send',
-  'transport.action.register',
   'transport.actions.register',
   'transport.presence.set',
   'transport.resource.create',
