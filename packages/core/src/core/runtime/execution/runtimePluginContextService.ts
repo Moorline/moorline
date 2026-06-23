@@ -20,7 +20,14 @@ import type {
   RuntimeProvider
 } from '../../../types/provider.js';
 import type { CanonicalEventLogStore } from '../../system/state/canonicalEventLogStore.js';
-import type { RuntimePluginAdminConfig, RuntimePluginContext, RuntimeToolDefinition } from '../../../types/plugin.js';
+import type {
+  RuntimePluginAdminConfig,
+  RuntimePluginContext,
+  RuntimeToolDefinition,
+  RuntimeWorkflowDefinitionWithPackage,
+  RuntimeWorkflowRunOrigin,
+  RuntimeWorkflowRunRecord
+} from '../../../types/plugin.js';
 import type { PluginHost } from '../../extension/plugins/pluginHost.js';
 import type { RuntimeActionGuard } from '../../system/policy/runtimeActionGuard.js';
 import type { SidecarManager } from '../supervision/sidecarManager.js';
@@ -204,6 +211,135 @@ export class RuntimePluginContextService {
       if (!ok) {
         throw new Error(`Headless run output field ${key} must be ${expected}.`);
       }
+    }
+  }
+
+  private safeRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  }
+
+  private listRuntimeWorkflows(): RuntimeWorkflowDefinitionWithPackage[] {
+    return this.deps.getPluginHost().listWorkflows((pluginId) => this.createContext(`plugin:${pluginId}`));
+  }
+
+  private resolveWorkflow(packageId: string | undefined, workflowId: string): RuntimeWorkflowDefinitionWithPackage {
+    const workflows = this.listRuntimeWorkflows().filter((workflow) => workflow.id === workflowId);
+    const matches = packageId ? workflows.filter((workflow) => workflow.packageId === packageId) : workflows;
+    if (matches.length === 0) {
+      throw new Error(packageId ? `Unknown workflow: ${packageId}:${workflowId}` : `Unknown workflow: ${workflowId}`);
+    }
+    if (matches.length > 1) {
+      throw new Error(`Workflow id ${workflowId} is ambiguous. Provide package_id.`);
+    }
+    return matches[0]!;
+  }
+
+  private validateWorkflowInput(workflow: RuntimeWorkflowDefinitionWithPackage, input: Record<string, unknown>): void {
+    const schema = workflow.inputSchema;
+    if (!schema || typeof schema !== 'object' || Array.isArray(schema)) {
+      return;
+    }
+    const required = Array.isArray(schema.required) ? schema.required.filter((entry): entry is string => typeof entry === 'string') : [];
+    for (const key of required) {
+      if (input[key] === undefined) {
+        throw new Error(`Workflow ${workflow.packageId}:${workflow.id} input is missing required field: ${key}`);
+      }
+    }
+  }
+
+  private upsertWorkflowRun(record: RuntimeWorkflowRunRecord): RuntimeWorkflowRunRecord {
+    return this.deps.store.upsertWorkflowRun(record);
+  }
+
+  private async startWorkflowRun(input: {
+    packageId?: string;
+    workflowId: string;
+    input?: Record<string, unknown>;
+    actor: RuntimeWorkflowRunRecord['actor'];
+    origin?: RuntimeWorkflowRunOrigin;
+  }): Promise<{ runId: string; status: RuntimeWorkflowRunRecord['status'] }> {
+    const workflow = this.resolveWorkflow(input.packageId, input.workflowId);
+    const workflowInput = this.safeRecord(input.input);
+    this.validateWorkflowInput(workflow, workflowInput);
+    const runId = randomUUID();
+    const nowIso = this.deps.now();
+    const baseRun: RuntimeWorkflowRunRecord = {
+      runId,
+      packageId: workflow.packageId,
+      workflowId: workflow.id,
+      status: 'queued',
+      input: workflowInput,
+      actor: input.actor,
+      ...(input.origin ? { origin: input.origin } : {}),
+      result: null,
+      error: null,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      completedAt: null
+    };
+    this.upsertWorkflowRun(baseRun);
+    this.deps.appendAuditEvent('workflow.run.queued', {
+      runId,
+      packageId: workflow.packageId,
+      workflowId: workflow.id,
+      actor: input.actor.actorId
+    });
+
+    const running = this.upsertWorkflowRun({
+      ...baseRun,
+      status: 'running',
+      updatedAt: this.deps.now()
+    });
+    try {
+      const result = await this.deps.getPluginHost().executeWorkflow(
+        workflow.packageId,
+        workflow.id,
+        {
+          type: 'transport.action.invoked',
+          intentId: `runtime.workflow.${runId}`,
+          occurredAt: this.deps.now(),
+          scopeId: this.deps.config.transport.scopeId,
+          ...(input.origin?.transportResourceId ? { transportResourceId: input.origin.transportResourceId } : {}),
+          actor: input.actor,
+          input: {
+            ...workflowInput,
+            __workflowRunId: runId
+          }
+        },
+        (pluginId) => this.createContext(`plugin:${pluginId}`)
+      );
+      this.upsertWorkflowRun({
+        ...running,
+        status: 'completed',
+        result: {
+          handled: result.handled,
+          ...(result.reply ? { reply: result.reply } : {})
+        },
+        updatedAt: this.deps.now(),
+        completedAt: this.deps.now()
+      });
+      this.deps.appendAuditEvent('workflow.run.completed', {
+        runId,
+        packageId: workflow.packageId,
+        workflowId: workflow.id
+      });
+      return { runId, status: 'completed' };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      this.upsertWorkflowRun({
+        ...running,
+        status: 'failed',
+        error: detail,
+        updatedAt: this.deps.now(),
+        completedAt: this.deps.now()
+      });
+      this.deps.appendAuditEvent('workflow.run.failed', {
+        runId,
+        packageId: workflow.packageId,
+        workflowId: workflow.id,
+        error: detail
+      });
+      throw error;
     }
   }
 
@@ -937,6 +1073,9 @@ export class RuntimePluginContextService {
             };
           }
         }),
+      listWorkflows: () => this.listRuntimeWorkflows(),
+      startWorkflow: async (input) => await this.startWorkflowRun(input),
+      inspectWorkflowRun: (runId) => this.deps.store.getWorkflowRun(runId),
       directSession: async ({ sessionId, transportResourceId, instruction, reason }) =>
         await this.deps.workManagement.directManagedSession({
           actorId,
@@ -1464,6 +1603,90 @@ export class RuntimePluginContextService {
     };
   }
 
+  private coreWorkflowTool(): RuntimeToolDefinition {
+    return {
+      name: 'workflow',
+      description: 'List, start, or inspect Moorline workflows.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['list', 'start', 'inspect']
+          },
+          package_id: { type: 'string' },
+          workflow_id: { type: 'string' },
+          run_id: { type: 'string' },
+          input: { type: 'object' },
+          transport_resource_id: { type: 'string' },
+          session_id: { type: 'string' },
+          thread_id: { type: 'string' },
+          source_event_id: { type: 'string' }
+        },
+        required: ['action'],
+        additionalProperties: false
+      },
+      execute: async (input, context) => {
+        const action = typeof input.action === 'string' ? input.action : '';
+        switch (action) {
+          case 'list': {
+            return {
+              content: JSON.stringify(
+                this.listRuntimeWorkflows().map((workflow) => ({
+                  packageId: workflow.packageId,
+                  workflowId: workflow.id,
+                  title: workflow.title,
+                  description: workflow.description ?? null,
+                  requiredCapability: workflow.requiredCapability ?? null,
+                  trigger: workflow.trigger ?? null
+                })),
+                null,
+                2
+              )
+            };
+          }
+          case 'inspect': {
+            const runId = typeof input.run_id === 'string' ? input.run_id.trim() : '';
+            if (!runId) {
+              return { content: 'workflow inspect error: run_id is required.' };
+            }
+            const run = this.deps.store.getWorkflowRun(runId);
+            return { content: run ? JSON.stringify(run, null, 2) : `No workflow run found: ${runId}` };
+          }
+          case 'start': {
+            const workflowId = typeof input.workflow_id === 'string' ? input.workflow_id.trim() : '';
+            if (!workflowId) {
+              return { content: 'workflow start error: workflow_id is required.' };
+            }
+            const origin: RuntimeWorkflowRunOrigin = {};
+            if (typeof input.transport_resource_id === 'string' && input.transport_resource_id.trim()) {
+              origin.transportResourceId = input.transport_resource_id.trim();
+            }
+            if (typeof input.session_id === 'string' && input.session_id.trim()) {
+              origin.sessionId = input.session_id.trim();
+            }
+            if (typeof input.thread_id === 'string' && input.thread_id.trim()) {
+              origin.threadId = input.thread_id.trim();
+            }
+            if (typeof input.source_event_id === 'string' && input.source_event_id.trim()) {
+              origin.sourceEventId = input.source_event_id.trim();
+            }
+            const started = await this.startWorkflowRun({
+              packageId: typeof input.package_id === 'string' && input.package_id.trim() ? input.package_id.trim() : undefined,
+              workflowId,
+              input: this.safeRecord(input.input),
+              actor: { actorId: context.actorId },
+              ...(Object.keys(origin).length > 0 ? { origin } : {})
+            });
+            return { content: JSON.stringify(started, null, 2) };
+          }
+          default:
+            return { content: 'workflow error: unknown action.' };
+        }
+      }
+    };
+  }
+
   private coreSkillSaveTool(): RuntimeToolDefinition {
     return {
       name: 'moorline_skill.save',
@@ -1535,6 +1758,7 @@ export class RuntimePluginContextService {
   private allProviderRuntimeTools(): RuntimeToolDefinition[] {
     return [
       { ...this.coreSessionTool(), pluginId: 'core' },
+      { ...this.coreWorkflowTool(), pluginId: 'core' },
       { ...this.coreSkillLoadTool(), pluginId: 'core' },
       { ...this.coreSkillSaveTool(), pluginId: 'core' },
       ...this.deps.getPluginHost().listTools((pluginId) => this.createContext(`plugin:${pluginId}`))

@@ -84,7 +84,8 @@ export interface ProviderNativeToolDocumentation {
 
 export const DEFAULT_PROVIDER_TOOL_POLICY: ProviderToolPolicyConfig = {
   workspace: {
-    nativePreset: 'provider-default'
+    nativePreset: 'provider-default',
+    grants: ['core.workflow']
   },
   ephemeral: {
     nativePreset: 'none',

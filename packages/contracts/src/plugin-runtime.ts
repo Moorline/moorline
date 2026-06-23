@@ -598,6 +598,46 @@ export interface RuntimePluginAgentCapability {
   drainRuntimeWork(): Promise<void>;
 }
 
+export interface RuntimeWorkflowDefinitionWithPackage extends RuntimeWorkflowDefinition {
+  packageId: string;
+}
+
+export type RuntimeWorkflowRunStatus = 'queued' | 'running' | 'waiting' | 'completed' | 'failed' | 'canceled';
+
+export interface RuntimeWorkflowRunOrigin {
+  transportResourceId?: string;
+  sessionId?: string;
+  threadId?: string;
+  sourceEventId?: string;
+}
+
+export interface RuntimeWorkflowRunRecord {
+  runId: string;
+  packageId: string;
+  workflowId: string;
+  status: RuntimeWorkflowRunStatus;
+  input: Record<string, unknown>;
+  actor: RuntimeActorIdentity;
+  origin?: RuntimeWorkflowRunOrigin;
+  result?: Record<string, unknown> | null;
+  error?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string | null;
+}
+
+export interface RuntimePluginWorkflowCapability {
+  listWorkflows(): RuntimeWorkflowDefinitionWithPackage[];
+  startWorkflow(input: {
+    packageId?: string;
+    workflowId: string;
+    input?: Record<string, unknown>;
+    actor: RuntimeActorIdentity;
+    origin?: RuntimeWorkflowRunOrigin;
+  }): Promise<{ runId: string; status: RuntimeWorkflowRunStatus }>;
+  inspectWorkflowRun(runId: string): RuntimeWorkflowRunRecord | null;
+}
+
 export type RuntimePluginContext = RuntimeToolContext &
   RuntimePluginAdminCapability &
   RuntimePluginObservabilityCapability &
@@ -605,7 +645,8 @@ export type RuntimePluginContext = RuntimeToolContext &
   RuntimePluginWorkManagementCapability &
   RuntimePluginRuntimeControlCapability &
   RuntimePluginSidecarCapability &
-  RuntimePluginAgentCapability;
+  RuntimePluginAgentCapability &
+  RuntimePluginWorkflowCapability;
 
 export interface RuntimeToolDefinition {
   pluginId?: string;
