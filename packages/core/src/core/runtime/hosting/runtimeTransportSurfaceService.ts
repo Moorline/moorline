@@ -8,12 +8,25 @@ interface RuntimeTransportSurfaceServiceDeps {
   getSurfaceState(): RuntimeSurfaceState | null;
 }
 
+const TYPING_REFRESH_INTERVAL_MS = 8_000;
+
 export class RuntimeTransportSurfaceService {
   constructor(private readonly deps: RuntimeTransportSurfaceServiceDeps) {}
 
   startTypingLoop(actor: string, transportResourceId: string): () => void {
-    void this.setPresence(actor, transportResourceId, 'busy');
+    const transport = this.deps.transport();
+    if (!transport.capabilities().presence) {
+      return () => {};
+    }
+
+    const refreshTyping = () => {
+      void this.setPresence(actor, transportResourceId, 'busy');
+    };
+
+    refreshTyping();
+    const interval = globalThis.setInterval(refreshTyping, TYPING_REFRESH_INTERVAL_MS);
     return () => {
+      globalThis.clearInterval(interval);
       void this.setPresence(actor, transportResourceId, 'online');
     };
   }
