@@ -34,9 +34,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@moorline/contracts": "0.0.5",
-    "@moorline/core": "0.0.5",
-    "@moorline/control-api": "0.0.5"
+    "@moorline/contracts": "0.0.6",
+    "@moorline/core": "0.0.6",
+    "@moorline/control-api": "0.0.6"
   },
   "moorline": {
     "schemaVersion": 1,

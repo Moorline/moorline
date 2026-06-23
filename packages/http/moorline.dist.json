@@ -22,7 +22,7 @@
     "setupOrder": 5
   },
   "compatibility": {
-    "moorline": "~0.0.5"
+    "moorline": "~0.0.6"
   },
   "release": {
     "recommendedRef": "v0.0.6",
