@@ -37,6 +37,7 @@ export const KNOWN_PLUGIN_HOOKS = [
   'onTransportIntent',
   'onExternalEvent',
   'onAction',
+  'workflows',
   'onRuntimeEvent',
   'contributeAgentContext',
   'afterAgentResponse',

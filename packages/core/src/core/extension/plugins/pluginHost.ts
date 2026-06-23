@@ -7,6 +7,7 @@ import type {
   RuntimeAgentContextContribution,
   RuntimeManagementContribution,
   RuntimePlugin,
+  RuntimeWorkflowDefinition,
   RuntimePluginContext,
   RuntimeToolContext,
   RuntimeToolDefinition
@@ -23,6 +24,7 @@ type PluginHookName =
   | 'onTransportIntent'
   | 'onExternalEvent'
   | 'onAction'
+  | 'workflows'
   | 'contributeAgentContext'
   | 'afterAgentResponse'
   | 'onRuntimeEvent'
@@ -115,7 +117,10 @@ export class PluginHost {
     const seen = new Set<string>();
     return this.plugins.flatMap((plugin) => {
       const declaredCapabilities = new Set<string>(plugin.manifest.capabilities);
-      return (plugin.actions?.(contextFactory(plugin.id)) ?? []).map((action) => {
+      const context = contextFactory(plugin.id);
+      const actions = plugin.actions?.(context) ?? [];
+      const workflowActions = this.workflowActions(plugin, plugin.workflows?.(context) ?? []);
+      return [...actions, ...workflowActions].map((action) => {
         if (seen.has(action.id)) {
           throw new Error(`Duplicate runtime action id: ${action.id}`);
         }
@@ -134,6 +139,26 @@ export class PluginHost {
         };
       });
     });
+  }
+
+  private workflowActions(plugin: RuntimePlugin, workflows: RuntimeWorkflowDefinition[]): RuntimeActionDefinition[] {
+    return workflows.map((workflow) => ({
+      id: workflow.id,
+      title: workflow.title,
+      ...(workflow.description ? { description: workflow.description } : {}),
+      ...(workflow.inputSchema ? { inputSchema: workflow.inputSchema } : {}),
+      ...(workflow.requiredCapability ? { requiredCapability: workflow.requiredCapability } : {}),
+      metadata: {
+        ...(workflow.metadata ?? {}),
+        workflow: {
+          id: workflow.id,
+          title: workflow.title,
+          description: workflow.description ?? workflow.title,
+          packageId: plugin.id,
+          ...(workflow.trigger ? { trigger: workflow.trigger } : {})
+        }
+      }
+    }));
   }
 
   listManagementContributions(contextFactory: (pluginId: string) => RuntimePluginContext): RuntimeManagementContribution[] {
