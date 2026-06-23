@@ -9,6 +9,8 @@ export type {
   RuntimeMessageTarget,
   RuntimeNativeActionRegistration,
   RuntimePresenceInput,
+  RuntimeSurfaceBootstrapInput,
+  RuntimeSurfaceState,
   RuntimeTransportEffect,
   RuntimeTransportEffectReceipt,
   RuntimeTransportIntent,

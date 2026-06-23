@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "name": "moorline/http",
   "description": "Moorline HTTP adapter for the Moorline Control API.",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "display": {
     "name": "HTTP API Adapter",
     "description": "Expose Moorline control over HTTP with bearer-token auth.",
-    "version": "0.0.4",
+    "version": "0.0.5",
     "category": "Moorline API Adapters",
     "tags": [
       "moorline",
@@ -22,10 +22,10 @@
     "setupOrder": 5
   },
   "compatibility": {
-    "moorline": "~0.0.4"
+    "moorline": "~0.0.5"
   },
   "release": {
-    "recommendedRef": "v0.0.4",
+    "recommendedRef": "v0.0.5",
     "channel": "stable"
   }
 }

@@ -1,5 +1,7 @@
 import { fork, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { readdir, readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import type { RuntimeActorIdentity } from '../../../types/transport.js';
 import type {
   RuntimeControlAction,
@@ -74,12 +76,27 @@ type RuntimeSupervisorMessage =
   | WorkerControlExecutedMessage
   | SupervisorShutdownMessage;
 
+type ProcessSignal = Parameters<typeof process.kill>[1];
+
 interface RuntimeSupervisorOptions {
   entrypoint: string;
   configPath: string;
   execArgv?: string[];
   shutdownTimeoutMs?: number;
   readyTimeoutMs?: number;
+  staleWorkerCleanup?: RuntimeStaleWorkerCleanupOptions;
+}
+
+export interface RuntimeStaleWorkerProcess {
+  pid: number;
+  argv: string[];
+}
+
+export interface RuntimeStaleWorkerCleanupOptions {
+  findWorkers?: (input: { configPath: string }) => Promise<RuntimeStaleWorkerProcess[]>;
+  signalProcess?: (pid: number, signal: ProcessSignal) => void;
+  isProcessAlive?: (pid: number) => boolean;
+  waitMs?: number;
 }
 
 interface WorkerStartupState {
@@ -151,6 +168,16 @@ export class RuntimeSupervisor {
     suppressRestartUntilReady?: boolean;
     active?: boolean;
   } = {}): Promise<ChildProcess> {
+    await cleanupStaleRuntimeWorkers({
+      configPath: this.options.configPath,
+      excludePids: [
+        process.pid,
+        ...[...this.startupStates.keys()]
+          .map((child) => child.pid)
+          .filter((pid): pid is number => typeof pid === 'number')
+      ],
+      ...(this.options.staleWorkerCleanup ?? {})
+    });
     const child = fork(this.options.entrypoint, ['worker-run', '--config', this.options.configPath], {
       execArgv: this.options.execArgv ?? process.execArgv,
       stdio: ['inherit', 'inherit', 'inherit', 'ipc']
@@ -405,6 +432,99 @@ export class RuntimeSupervisor {
     startup.reject = undefined;
     reject?.(new Error(detail));
   }
+}
+
+export async function cleanupStaleRuntimeWorkers(input: {
+  configPath: string;
+  excludePids?: number[];
+} & RuntimeStaleWorkerCleanupOptions): Promise<number[]> {
+  const excluded = new Set([process.pid, ...(input.excludePids ?? [])]);
+  const findWorkers = input.findWorkers ?? findLinuxRuntimeWorkers;
+  const signalProcess = input.signalProcess ?? ((pid, signal) => process.kill(pid, signal));
+  const isProcessAlive = input.isProcessAlive ?? ((pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  const staleWorkers = (await findWorkers({ configPath: input.configPath })).filter((worker) => !excluded.has(worker.pid));
+  const killed: number[] = [];
+  for (const worker of staleWorkers) {
+    try {
+      signalProcess(worker.pid, 'SIGTERM');
+      killed.push(worker.pid);
+    } catch (error) {
+      const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code) : '';
+      if (code !== 'ESRCH') {
+        globalThis.console.warn(`[moorline] failed to terminate stale worker ${worker.pid}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  }
+  if (killed.length > 0) {
+    await new Promise<void>((resolveDelay) => {
+      globalThis.setTimeout(resolveDelay, input.waitMs ?? 500);
+    });
+  }
+  for (const pid of killed) {
+    if (!isProcessAlive(pid)) {
+      continue;
+    }
+    try {
+      signalProcess(pid, 'SIGKILL');
+    } catch (error) {
+      const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code) : '';
+      if (code !== 'ESRCH') {
+        globalThis.console.warn(`[moorline] failed to kill stale worker ${pid}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  }
+  return killed;
+}
+
+async function findLinuxRuntimeWorkers(input: { configPath: string }): Promise<RuntimeStaleWorkerProcess[]> {
+  if (process.platform !== 'linux') {
+    return [];
+  }
+  const expectedConfigPath = resolve(input.configPath);
+  let entries: string[];
+  try {
+    entries = await readdir('/proc');
+  } catch {
+    return [];
+  }
+  const workers: RuntimeStaleWorkerProcess[] = [];
+  await Promise.all(
+    entries.map(async (entry) => {
+      if (!/^\d+$/.test(entry)) {
+        return;
+      }
+      const pid = Number.parseInt(entry, 10);
+      let raw: Buffer;
+      try {
+        raw = await readFile(`/proc/${entry}/cmdline`);
+      } catch {
+        return;
+      }
+      const argv = raw
+        .toString('utf8')
+        .split('\0')
+        .filter((value) => value.length > 0);
+      if (!argv.includes('worker-run')) {
+        return;
+      }
+      const configIndex = argv.indexOf('--config');
+      if (configIndex === -1 || !argv[configIndex + 1]) {
+        return;
+      }
+      if (resolve(argv[configIndex + 1]) !== expectedConfigPath) {
+        return;
+      }
+      workers.push({ pid, argv });
+    })
+  );
+  return workers;
 }
 
 interface WorkerControlBridgeProcessRef {
