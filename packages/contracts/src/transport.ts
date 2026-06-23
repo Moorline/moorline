@@ -333,6 +333,7 @@ export interface RuntimeActionDefinition {
 export interface RuntimeTransport {
   verifyAccess(input: RuntimeTransportAccessInput): Promise<RuntimeTransportVerification>;
   start(auth: RuntimeTransportAuth): Promise<void>;
+  bootstrapSurface?(input: RuntimeSurfaceBootstrapInput): Promise<Partial<RuntimeSurfaceState>>;
   stop(): Promise<void>;
   capabilities(): RuntimeTransportCapabilities;
   onIntent?(handler: (intent: RuntimeTransportIntent) => Promise<void>): void;

@@ -105,21 +105,48 @@ export class RuntimeHostingService {
 
   private async bootstrapSurface(): Promise<RuntimeSurfaceState> {
     const existing = loadInstallationState(this.deps.installationPath);
-    if (existing && (!this.deps.config.transport.scopeId || existing.scopeId === this.deps.config.transport.scopeId)) {
-      return existing;
-    }
-
     const nowIso = this.deps.now();
+    const scopeId = this.deps.config.transport.scopeId;
+    const matchingExisting = existing && (!scopeId || existing.scopeId === scopeId) ? existing : null;
     const defaultState: RuntimeSurfaceState = {
-      scopeId: this.deps.config.transport.scopeId,
-      surfaceId: this.deps.config.transport.scopeId ?? this.deps.config.transport.packageId,
+      scopeId,
+      surfaceId: scopeId ?? this.deps.config.transport.packageId,
       statusResourceId: this.deps.config.surface.statusResourceName,
       coordinationResourceId: this.deps.config.surface.coordinationResourceName,
       createdAt: nowIso,
       updatedAt: nowIso
     };
-    saveInstallationState(this.deps.installationPath, defaultState);
-    return defaultState;
+    const baseState = matchingExisting ?? defaultState;
+    const transportState = await this.deps.transport.bootstrapSurface?.({
+      scopeId,
+      previousState: matchingExisting,
+      nowIso,
+      config: this.deps.config.transport.config
+    });
+    if (matchingExisting && !transportState) {
+      return matchingExisting;
+    }
+    const mergedState: RuntimeSurfaceState = {
+      ...baseState,
+      ...transportState,
+      scopeId: transportState?.scopeId ?? baseState.scopeId,
+      surfaceId: transportState?.surfaceId ?? baseState.surfaceId,
+      createdAt: baseState.createdAt,
+      updatedAt: baseState.updatedAt,
+      metadata: {
+        ...(baseState.metadata ?? {}),
+        ...(transportState?.metadata ?? {})
+      }
+    };
+    if (Object.keys(mergedState.metadata ?? {}).length === 0) {
+      delete mergedState.metadata;
+    }
+    if (matchingExisting && JSON.stringify(matchingExisting) === JSON.stringify(mergedState)) {
+      return matchingExisting;
+    }
+    mergedState.updatedAt = nowIso;
+    saveInstallationState(this.deps.installationPath, mergedState);
+    return mergedState;
   }
 
 }

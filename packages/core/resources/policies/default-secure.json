@@ -73,6 +73,10 @@
     {
       "actorPrefix": "runtime:provider/",
       "allowCapabilities": ["net.connect"]
+    },
+    {
+      "actorPrefix": "runtime:supervisor/control",
+      "allowCapabilities": ["net.connect"]
     }
   ]
 }

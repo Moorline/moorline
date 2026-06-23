@@ -102,19 +102,6 @@ export function createActorRulePolicyHook(input: {
     if (
       resolvedRules.some(
         (entry) =>
-          entry.rule.allowCapabilities.length > 0 &&
-          !entry.rule.allowCapabilities.includes(request.action as Capability)
-      )
-    ) {
-      return {
-        allowed: false,
-        reason: `Denied by actor policy: ${request.action}`
-      };
-    }
-
-    if (
-      resolvedRules.some(
-        (entry) =>
           entry.rule.allowCapabilities.length === 0 ||
           entry.rule.allowCapabilities.includes(request.action as Capability)
       )

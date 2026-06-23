@@ -95,4 +95,66 @@ describe('default actor policy boundaries', () => {
       allowed: false
     });
   });
+
+  it('unions equal-specificity plugin allow rules while keeping denies authoritative', async () => {
+    const hook = createActorRulePolicyHook({
+      rules: [
+        {
+          actorPrefix: 'plugin:rync/discord-runtime',
+          allowCapabilities: ['transport.message.send'],
+          denyCapabilities: [],
+          targetPrefixes: []
+        },
+        {
+          actorPrefix: 'plugin:rync/discord-runtime',
+          allowCapabilities: ['net.connect'],
+          denyCapabilities: [],
+          targetPrefixes: []
+        },
+        {
+          actorPrefix: 'plugin:rync/discord-runtime',
+          allowCapabilities: [],
+          denyCapabilities: ['fs.write'],
+          targetPrefixes: []
+        }
+      ]
+    });
+
+    await expect(
+      hook({
+        actor: 'plugin:rync/discord-runtime',
+        action: 'transport.message.send'
+      })
+    ).resolves.toMatchObject({ allowed: true });
+
+    await expect(
+      hook({
+        actor: 'plugin:rync/discord-runtime',
+        action: 'net.connect'
+      })
+    ).resolves.toMatchObject({ allowed: true });
+
+    await expect(
+      hook({
+        actor: 'plugin:rync/discord-runtime',
+        action: 'fs.write'
+      })
+    ).resolves.toMatchObject({ allowed: false });
+  });
+
+  it('allows runtime supervisor control to reach provider-local network surfaces', async () => {
+    const policyPath = join(root, 'packages', 'core', 'resources', 'policies', 'default-secure.json');
+    const profile = loadPolicyProfile(policyPath);
+    const hook = createActorRulePolicyHook({ rules: profile.actorRules });
+
+    await expect(
+      hook({
+        actor: 'runtime:supervisor/control',
+        action: 'net.connect',
+        target: 'provider:rync/pi'
+      })
+    ).resolves.toMatchObject({
+      allowed: true
+    });
+  });
 });
