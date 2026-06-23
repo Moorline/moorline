@@ -58,6 +58,21 @@ describe('host repository split contract', () => {
     expect((packageJson('cli').bin as Record<string, string>).moorline).toBe('dist/main.js');
   });
 
+  it('keeps host package versions in lockstep', () => {
+    const rootPackage = readJson(join(root, 'package.json'));
+    const expectedVersion = rootPackage.version;
+
+    for (const name of hostPackages) {
+      const pkg = packageJson(name);
+      expect(pkg.version).toBe(expectedVersion);
+      for (const [dependencyName, dependencyVersion] of Object.entries((pkg.dependencies ?? {}) as Record<string, string>)) {
+        if (dependencyName.startsWith('@moorline/')) {
+          expect(dependencyVersion).toBe(expectedVersion);
+        }
+      }
+    }
+  });
+
   it('declares package entrypoints that match flattened build output', () => {
     for (const name of ['contracts', 'core', 'control-api', 'http']) {
       const pkg = packageJson(name);

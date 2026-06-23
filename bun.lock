@@ -23,33 +23,33 @@
     },
     "packages/cli": {
       "name": "moorline",
-      "version": "0.0.5",
+      "version": "0.0.6",
       "bin": {
         "moorline": "dist/main.js",
       },
       "dependencies": {
-        "@moorline/contracts": "0.0.5",
-        "@moorline/control-api": "0.0.5",
-        "@moorline/core": "0.0.5",
+        "@moorline/contracts": "0.0.6",
+        "@moorline/control-api": "0.0.6",
+        "@moorline/core": "0.0.6",
         "@moorline/http": "0.0.6",
       },
     },
     "packages/contracts": {
       "name": "@moorline/contracts",
-      "version": "0.0.5",
+      "version": "0.0.6",
     },
     "packages/control-api": {
       "name": "@moorline/control-api",
-      "version": "0.0.5",
+      "version": "0.0.6",
       "dependencies": {
-        "@moorline/contracts": "0.0.5",
+        "@moorline/contracts": "0.0.6",
       },
     },
     "packages/core": {
       "name": "@moorline/core",
-      "version": "0.0.5",
+      "version": "0.0.6",
       "dependencies": {
-        "@moorline/contracts": "0.0.5",
+        "@moorline/contracts": "0.0.6",
         "semver": "^7.7.4",
         "tar": "^7.4.3",
         "yauzl": "^3.2.0",
@@ -59,9 +59,9 @@
       "name": "@moorline/http",
       "version": "0.0.6",
       "dependencies": {
-        "@moorline/contracts": "0.0.5",
-        "@moorline/control-api": "0.0.5",
-        "@moorline/core": "0.0.5",
+        "@moorline/contracts": "0.0.6",
+        "@moorline/control-api": "0.0.6",
+        "@moorline/core": "0.0.6",
       },
     },
   },
