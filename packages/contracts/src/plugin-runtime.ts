@@ -616,10 +616,24 @@ export interface RuntimeToolDefinition {
   execute(input: Record<string, unknown>, context: RuntimeToolContext): Promise<RuntimeToolResult> | RuntimeToolResult;
 }
 
+export interface RuntimeWorkflowDefinition {
+  id: string;
+  title: string;
+  description?: string;
+  inputSchema?: Record<string, unknown>;
+  requiredCapability?: Capability;
+  trigger?: {
+    label?: string;
+    sessionOnly?: boolean;
+  };
+  metadata?: Record<string, unknown>;
+}
+
 export interface RuntimePlugin {
   readonly id: string;
   readonly manifest: PluginManifest;
   actions?(context: RuntimePluginContext): RuntimeActionDefinition[];
+  workflows?(context: RuntimePluginContext): RuntimeWorkflowDefinition[];
   managementContributions?(context: RuntimePluginContext): RuntimeManagementContribution[];
   tools?(context: RuntimeToolContext): RuntimeToolDefinition[];
   onRuntimeStarted?(context: RuntimePluginContext): Promise<void> | void;
