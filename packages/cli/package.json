@@ -20,7 +20,7 @@
     "@moorline/contracts": "0.0.5",
     "@moorline/core": "0.0.5",
     "@moorline/control-api": "0.0.5",
-    "@moorline/http": "0.0.5"
+    "@moorline/http": "0.0.6"
   },
   "license": "MIT",
   "repository": {

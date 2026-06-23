@@ -22,6 +22,10 @@ function packageJson(name: string): Record<string, unknown> {
   return JSON.parse(readFileSync(join(root, 'packages', name, 'package.json'), 'utf8')) as Record<string, unknown>;
 }
 
+function readJson(path: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+}
+
 function readSourceTree(dir: string): string {
   return readdirSync(dir, { recursive: true })
     .filter((path) => String(path).endsWith('.ts') || String(path).endsWith('.js') || String(path).endsWith('.mjs'))
@@ -79,7 +83,7 @@ describe('host repository split contract', () => {
   });
 
   it('ships moorline/http as the default api-adapter package', () => {
-    const manifest = JSON.parse(readFileSync(join(root, 'packages', 'http', 'manifest.json'), 'utf8')) as Record<string, unknown>;
+    const manifest = readJson(join(root, 'packages', 'http', 'manifest.json'));
     expect(manifest.id).toBe('moorline/http');
     expect(manifest.type).toBe('api-adapter');
     expect(manifest.entrypoint).toBe('index.mjs');
@@ -89,6 +93,19 @@ describe('host repository split contract', () => {
       packageId: 'moorline/http',
       kind: 'api-adapter'
     });
+  });
+
+  it('keeps moorline/http publish metadata aligned across package, manifest, and distro surfaces', () => {
+    const pkg = packageJson('http');
+    const manifest = readJson(join(root, 'packages', 'http', 'manifest.json'));
+    const distro = readJson(join(root, 'packages', 'http', 'moorline.dist.json'));
+    const display = distro.display as Record<string, unknown>;
+
+    expect(manifest.id).toBe(pkg.moorline && (pkg.moorline as Record<string, unknown>).packageId);
+    expect(distro.name).toBe(manifest.id);
+    expect(manifest.version).toBe(pkg.version);
+    expect(distro.version).toBe(pkg.version);
+    expect(display.version).toBe(pkg.version);
   });
 
   it('does not allow the retired official package namespace', () => {
