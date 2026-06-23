@@ -479,7 +479,7 @@ export function buildMoorlineRuntimeServiceGraph(
   const providerTurnBroker = new ProviderTurnBroker({
     provider: providerService,
     sessions: providerSessionOrchestrator,
-    typing: transportSurface,
+    activity: transportSurface,
     attribution: providerAttribution,
     now: callbacks.now,
     turnWaitTimeoutMs: normalizedDeps.providerTurnWaitTimeoutMs,

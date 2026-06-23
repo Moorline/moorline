@@ -62,6 +62,30 @@ describe('default actor policy boundaries', () => {
     });
   });
 
+  it('allows only runtime activity actors to set transport activity', async () => {
+    const policyPath = join(root, 'packages', 'core', 'resources', 'policies', 'default-secure.json');
+    const profile = loadPolicyProfile(policyPath);
+    const hook = createActorRulePolicyHook({ rules: profile.actorRules });
+
+    await expect(
+      hook({
+        actor: 'runtime:activity/provider-turn',
+        action: 'transport.activity.set'
+      })
+    ).resolves.toMatchObject({
+      allowed: true
+    });
+
+    await expect(
+      hook({
+        actor: 'runtime:provider/pi',
+        action: 'transport.activity.set'
+      })
+    ).resolves.toMatchObject({
+      allowed: false
+    });
+  });
+
   it('allows active plugin actors only through manifest-derived capability rules', async () => {
     const policyPath = join(root, 'packages', 'core', 'resources', 'policies', 'default-secure.json');
     const profile = loadPolicyProfile(policyPath);

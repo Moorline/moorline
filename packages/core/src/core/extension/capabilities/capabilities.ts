@@ -20,6 +20,7 @@ const CAPABILITIES = [
   'sidecar.manage',
   'transport.message.send',
   'transport.actions.register',
+  'transport.activity.set',
   'transport.presence.set',
   'transport.resource.create',
   'transport.resource.update',

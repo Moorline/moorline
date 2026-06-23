@@ -29,6 +29,7 @@ Use intents for native events that should affect Moorline:
 Use effects for visible/native work requested by Moorline:
 
 - `transport.message.send`: post a message to a native target.
+- `transport.activity.set`: expose leased transient activity for a native resource while Moorline is actively working. This is not presence; transports choose their own native rendering and must clear the rendering when the lease expires.
 - `transport.presence.set`: expose status where the transport supports presence.
 - `transport.actions.register`: register native actions.
 - `transport.resource.create`: ask the transport to create a native resource for a Moorline-initiated session.

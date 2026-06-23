@@ -236,6 +236,7 @@ export interface RuntimeTransportCapabilities {
     update: boolean;
     delete: boolean;
   };
+  activity: boolean;
   presence: boolean;
   maxMessageTextLength?: number;
   maxAttachmentBytes?: number;
@@ -270,6 +271,16 @@ export interface RuntimePresenceInput {
   text?: string;
 }
 
+export interface RuntimeTransportActivityInput {
+  activityId: string;
+  transportResourceId: RuntimeTransportResourceId;
+  kind: 'work';
+  state: 'active' | 'inactive';
+  leaseMs?: number;
+  text?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface RuntimeNativeActionRegistration {
   scopeId: RuntimeScopeId;
   actions: RuntimeActionDefinition[];
@@ -296,6 +307,10 @@ export type RuntimeTransportEffect =
   | {
       type: 'transport.presence.set';
       input: RuntimePresenceInput;
+    } & RuntimeTransportEffectBase
+  | {
+      type: 'transport.activity.set';
+      input: RuntimeTransportActivityInput;
     } & RuntimeTransportEffectBase
   | {
       type: 'transport.actions.register';

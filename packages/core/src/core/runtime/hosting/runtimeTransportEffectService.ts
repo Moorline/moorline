@@ -5,6 +5,7 @@ import type {
   RuntimeMessageTarget,
   RuntimeNativeActionRegistration,
   RuntimePresenceInput,
+  RuntimeTransportActivityInput,
   RuntimeTransport,
   RuntimeTransportEffect,
   RuntimeTransportEffectReceipt,
@@ -76,6 +77,15 @@ export class RuntimeTransportEffectService {
       type: 'transport.presence.set',
       effectId: randomUUID(),
       scopeId: input.scopeId,
+      input,
+      createdAt: this.deps.now()
+    });
+  }
+
+  async setActivity(actor: string, input: RuntimeTransportActivityInput): Promise<RuntimeTransportEffectReceipt> {
+    return await this.applyQueued(actor, `${input.transportResourceId}:activity:${input.kind}:${input.activityId}`, {
+      type: 'transport.activity.set',
+      effectId: randomUUID(),
       input,
       createdAt: this.deps.now()
     });

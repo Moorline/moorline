@@ -17,7 +17,8 @@ const DEFAULT_DENY_UNMATCHED_RUNTIME_SENSITIVE_CAPABILITIES = new Set<Capability
   'command.exec',
   'fs.write',
   'net.connect',
-  'runtime.control'
+  'runtime.control',
+  'transport.activity.set'
 ]);
 
 function defaultAllowDecision(): PolicyDecision {
