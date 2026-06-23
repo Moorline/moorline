@@ -5,9 +5,9 @@ import type { RuntimeSessionRow } from '../../../system/state/sqliteSessionStore
 import { ProviderRequestAttributionService } from '../providerCoordination/providerRequestAttributionService.js';
 import type {
   ProviderAuditPort,
+  ProviderActivityPort,
   ProviderGuardPort,
   ProviderModelPort,
-  ProviderTypingPort,
   ProviderTurnSurface,
   TurnCompletionState
 } from './ports.js';
@@ -16,6 +16,7 @@ import type { ProviderSessionOrchestrator } from './providerSessionOrchestrator.
 
 const DEFAULT_PROVIDER_TURN_WAIT_TIMEOUT_MS = 10 * 60_000;
 const MAX_SEALED_TURN_KEYS = 2_048;
+const PROVIDER_TURN_ACTIVITY_ACTOR = 'runtime:activity/provider-turn';
 
 interface Waiter {
   threadId: string;
@@ -136,7 +137,7 @@ export interface RuntimeProviderTurnInput {
 interface ProviderTurnBrokerDeps extends ProviderAuditPort, ProviderGuardPort, ProviderModelPort {
   provider: RuntimeProvider;
   sessions: ProviderSessionOrchestrator;
-  typing: ProviderTypingPort;
+  activity: ProviderActivityPort;
   attribution: ProviderRequestAttributionService;
   now(): string;
   turnWaitTimeoutMs?: number;
@@ -195,7 +196,7 @@ export class ProviderTurnBroker {
 
     const waiterKey = `${input.session.threadId}:${turnId}`;
     this.sealedTurnKeys.delete(waiterKey);
-    const stopTyping = this.deps.typing.startTypingLoop(input.actorId, input.transportResourceId);
+    const stopActivity = this.deps.activity.startWorkActivity(PROVIDER_TURN_ACTIVITY_ACTOR, input.transportResourceId);
     try {
       return await new Promise<RuntimeMessagePayload>((resolve, reject) => {
         const timeout = globalThis.setTimeout(() => {
@@ -272,7 +273,7 @@ export class ProviderTurnBroker {
         this.flushTurnBuffer(waiterKey);
       });
     } finally {
-      stopTyping();
+      stopActivity();
     }
   }
 

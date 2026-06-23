@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { RuntimeMessagePayload, RuntimeTransport } from '../../../types/transport.js';
 import type { RuntimeSurfaceState } from '../../../types/config.js';
 import type { RuntimeTransportEffectService } from './runtimeTransportEffectService.js';
@@ -8,27 +9,60 @@ interface RuntimeTransportSurfaceServiceDeps {
   getSurfaceState(): RuntimeSurfaceState | null;
 }
 
-const TYPING_REFRESH_INTERVAL_MS = 8_000;
+const ACTIVITY_LEASE_MS = 15_000;
+const ACTIVITY_REFRESH_INTERVAL_MS = 8_000;
 
 export class RuntimeTransportSurfaceService {
   constructor(private readonly deps: RuntimeTransportSurfaceServiceDeps) {}
 
-  startTypingLoop(actor: string, transportResourceId: string): () => void {
+  startWorkActivity(actor: string, transportResourceId: string): () => void {
     const transport = this.deps.transport();
-    if (!transport.capabilities().presence) {
+    if (!transport.capabilities().activity) {
       return () => {};
     }
 
-    const refreshTyping = () => {
-      void this.setPresence(actor, transportResourceId, 'busy');
+    const activityId = randomUUID();
+    const refreshActivity = () => {
+      void this.setActivity(actor, transportResourceId, {
+        activityId,
+        kind: 'work',
+        state: 'active',
+        leaseMs: ACTIVITY_LEASE_MS
+      }).catch(() => {});
     };
 
-    refreshTyping();
-    const interval = globalThis.setInterval(refreshTyping, TYPING_REFRESH_INTERVAL_MS);
+    refreshActivity();
+    const interval = globalThis.setInterval(refreshActivity, ACTIVITY_REFRESH_INTERVAL_MS);
     return () => {
       globalThis.clearInterval(interval);
-      void this.setPresence(actor, transportResourceId, 'online');
+      void this.setActivity(actor, transportResourceId, {
+        activityId,
+        kind: 'work',
+        state: 'inactive'
+      }).catch(() => {});
     };
+  }
+
+  async setActivity(
+    actor: string,
+    transportResourceId: string,
+    input: {
+      activityId: string;
+      kind: 'work';
+      state: 'active' | 'inactive';
+      leaseMs?: number;
+      text?: string;
+      metadata?: Record<string, unknown>;
+    }
+  ): Promise<void> {
+    const transport = this.deps.transport();
+    if (!transport.capabilities().activity) {
+      return;
+    }
+    await this.deps.effects().setActivity(actor, {
+      transportResourceId,
+      ...input
+    });
   }
 
   async setPresence(actor: string, transportResourceId: string, status: 'online' | 'idle' | 'busy' | 'offline'): Promise<void> {

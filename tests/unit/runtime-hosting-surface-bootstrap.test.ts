@@ -111,6 +111,7 @@ function transport(): RuntimeTransport {
     capabilities: () => ({
       nativeActions: false,
       resources: { list: false, create: false, update: false, delete: false },
+      activity: false,
       presence: false
     }),
     onIntent: () => {},

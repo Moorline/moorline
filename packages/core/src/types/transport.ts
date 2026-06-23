@@ -11,6 +11,7 @@ export type {
   RuntimePresenceInput,
   RuntimeSurfaceBootstrapInput,
   RuntimeSurfaceState,
+  RuntimeTransportActivityInput,
   RuntimeTransportEffect,
   RuntimeTransportEffectReceipt,
   RuntimeTransportIntent,

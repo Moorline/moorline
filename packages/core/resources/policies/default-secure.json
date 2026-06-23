@@ -15,6 +15,7 @@
   "denyUnknownCapabilities": true,
   "allowCapabilities": [
     "command.exec",
+    "transport.activity.set",
     "transport.message.send",
     "transport.actions.register",
     "transport.resource.create",
@@ -37,6 +38,10 @@
     "sidecar.manage"
   ],
   "actorRules": [
+    {
+      "actorPrefix": "runtime:activity/",
+      "allowCapabilities": ["transport.activity.set"]
+    },
     {
       "actorPrefix": "runtime:transport/",
       "allowCapabilities": [

@@ -19,8 +19,8 @@ export interface ProviderGuardPort {
   }): Promise<T>;
 }
 
-export interface ProviderTypingPort {
-  startTypingLoop(actor: string, transportResourceId: string): () => void;
+export interface ProviderActivityPort {
+  startWorkActivity(actor: string, transportResourceId: string): () => void;
 }
 
 export interface PendingRequestPort {
