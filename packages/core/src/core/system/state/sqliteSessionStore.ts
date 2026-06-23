@@ -18,6 +18,7 @@ import { SessionRepository } from './sqlite/sessionRepository.js';
 import { SessionMetadataRepository } from './sqlite/sessionMetadataRepository.js';
 import { TransportIntentRepository } from './sqlite/transportIntentRepository.js';
 import { WorkItemRepository } from './sqlite/workItemRepository.js';
+import { WorkflowRunRepository } from './sqlite/workflowRunRepository.js';
 import type {
   RuntimeExternalResourceRecord,
   RuntimeExternalResourceRef,
@@ -39,6 +40,7 @@ import {
   type RuntimeReceiptRecord,
   type RuntimeSessionRow
 } from './sqlite/types.js';
+import type { RuntimeWorkflowRunRecord } from '../../../types/plugin.js';
 
 export type {
   RuntimeOrchestrationRequestRow,
@@ -66,6 +68,7 @@ export class SqliteSessionStore {
   private readonly sessions: SessionRepository;
   private readonly transportIntents: TransportIntentRepository;
   private readonly workItems: WorkItemRepository;
+  private readonly workflowRuns: WorkflowRunRepository;
 
   constructor(pathOrDb: string | DatabaseSync) {
     if (typeof pathOrDb === 'string') {
@@ -91,6 +94,7 @@ export class SqliteSessionStore {
     this.sessions = new SessionRepository(this.db);
     this.transportIntents = new TransportIntentRepository(this.db);
     this.workItems = new WorkItemRepository(this.db);
+    this.workflowRuns = new WorkflowRunRepository(this.db);
   }
 
   database(): DatabaseSync {
@@ -212,6 +216,23 @@ export class SqliteSessionStore {
     nowIso: string;
   }): RuntimeWorkItemRecord | null {
     return this.workItems.claim(input);
+  }
+
+  upsertWorkflowRun(record: RuntimeWorkflowRunRecord): RuntimeWorkflowRunRecord {
+    return this.workflowRuns.upsert(record);
+  }
+
+  getWorkflowRun(runId: string): RuntimeWorkflowRunRecord | null {
+    return this.workflowRuns.get(runId);
+  }
+
+  listWorkflowRuns(filter?: {
+    packageId?: string;
+    workflowId?: string;
+    status?: RuntimeWorkflowRunRecord['status'];
+    limit?: number;
+  }): RuntimeWorkflowRunRecord[] {
+    return this.workflowRuns.list(filter);
   }
 
   upsertGateRun(record: RuntimeGateRunRecord): RuntimeGateRunRecord {

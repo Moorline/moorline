@@ -8,6 +8,7 @@ import type {
   RuntimeManagementContribution,
   RuntimePlugin,
   RuntimeWorkflowDefinition,
+  RuntimeWorkflowDefinitionWithPackage,
   RuntimePluginContext,
   RuntimeToolContext,
   RuntimeToolDefinition
@@ -111,6 +112,24 @@ export class PluginHost {
 
   listPluginManifests(): PluginManifest[] {
     return this.plugins.map((plugin) => plugin.manifest);
+  }
+
+  listWorkflows(contextFactory: (pluginId: string) => RuntimePluginContext): RuntimeWorkflowDefinitionWithPackage[] {
+    return this.plugins.flatMap((plugin) => {
+      const declaredCapabilities = new Set<string>(plugin.manifest.capabilities);
+      const context = contextFactory(plugin.id);
+      return (plugin.workflows?.(context) ?? []).map((workflow) => {
+        if (workflow.requiredCapability && !declaredCapabilities.has(workflow.requiredCapability)) {
+          throw new Error(
+            `Plugin ${plugin.id} exposes workflow ${workflow.id} requiring undeclared capability ${workflow.requiredCapability}`
+          );
+        }
+        return {
+          ...workflow,
+          packageId: plugin.id
+        };
+      });
+    });
   }
 
   listActions(contextFactory: (pluginId: string) => RuntimePluginContext): RuntimeActionDefinition[] {
@@ -284,6 +303,39 @@ export class PluginHost {
       }
     }
     return result;
+  }
+
+  async executeWorkflow(
+    packageId: string,
+    workflowId: string,
+    event: Omit<ActionEvent, 'actionId'>,
+    contextFactory: (pluginId: string) => RuntimePluginContext
+  ): Promise<RuntimeActionDispatchResult> {
+    const plugin = this.plugins.find((entry) => entry.id === packageId);
+    if (!plugin) {
+      throw new Error(`Unknown workflow package: ${packageId}`);
+    }
+    const workflow = (plugin.workflows?.(contextFactory(plugin.id)) ?? []).find((entry) => entry.id === workflowId);
+    if (!workflow) {
+      throw new Error(`Unknown workflow: ${packageId}:${workflowId}`);
+    }
+    if (!(plugin.manifest.hooks ?? []).includes('onAction')) {
+      throw new Error(`Workflow ${packageId}:${workflowId} does not expose an action handler.`);
+    }
+    return await this.runRequiredHook(
+      plugin,
+      'onAction',
+      async () =>
+        normalizeDispatchResult(
+          await plugin.onAction?.(
+            {
+              ...event,
+              actionId: workflowId
+            },
+            contextFactory(plugin.id)
+          )
+        )
+    );
   }
 
   async executeAction(

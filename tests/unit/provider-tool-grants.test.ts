@@ -4,7 +4,9 @@ import { RuntimePluginContextService } from '../../packages/core/src/core/runtim
 function createService(input: {
   runGuardedAction?: (input: { action: string; actor: string; execute: () => Promise<unknown> }) => Promise<unknown>;
   appendAuditEvent?: (event: string, payload: Record<string, unknown>) => void;
+  getPluginHost?: () => unknown;
 } = {}) {
+  const workflowRuns = new Map<string, Record<string, unknown>>();
   const service = new RuntimePluginContextService({
     config: {
       runtimeRoot: '/tmp/moorline-test',
@@ -22,7 +24,13 @@ function createService(input: {
     homeRoot: '/tmp/moorline-test/home',
     sqlitePath: '/tmp/moorline-test/runtime.sqlite',
     coordinationWorkspacePath: '/tmp/moorline-test/coordination',
-    store: {},
+    store: {
+      upsertWorkflowRun: (record: Record<string, unknown>) => {
+        workflowRuns.set(record.runId as string, record);
+        return record;
+      },
+      getWorkflowRun: (runId: string) => workflowRuns.get(runId) ?? null
+    },
     sessionRegistry: {},
     skillRegistry: { list: () => [] },
     memoryStore: {},
@@ -40,7 +48,9 @@ function createService(input: {
     runtimeControl: {},
     sidecars: {},
     providerOrchestrator: {},
-    getPluginHost: () => ({
+    getPluginHost: input.getPluginHost ?? (() => ({
+      listWorkflows: () => [],
+      executeWorkflow: async () => ({ handled: false }),
       listTools: () => [
         {
           pluginId: 'rync/persona',
@@ -51,7 +61,7 @@ function createService(input: {
           execute: async () => ({ content: 'edited' })
         }
       ]
-    }),
+    })),
     getAdminConfig: () => ({ accessGroupIds: [], userIds: [], allowTransportAdmin: false }),
     isAdminActor: () => false,
     requireSurfaceState: () => ({ coordinationResourceId: 'coord', statusResourceId: 'status' }),
@@ -126,5 +136,61 @@ describe('provider tool grants', () => {
         }
       }
     ]);
+  });
+
+  it('lets granted provider agents list, start, and inspect workflow runs', async () => {
+    const service = createService({
+      getPluginHost: () => ({
+        listTools: () => [],
+        listWorkflows: () => [
+          {
+            packageId: 'rync/workflow-coder',
+            id: 'coding-workflow',
+            title: 'Coding workflow',
+            inputSchema: {
+              type: 'object',
+              required: ['idea'],
+              properties: {
+                idea: { type: 'string' }
+              }
+            }
+          }
+        ],
+        executeWorkflow: async () => ({ handled: true, reply: { text: 'started' } })
+      })
+    });
+    const tools = service.resolveProviderTools('workspace', ['core.workflow']);
+    const executor = service.createProviderToolExecutor(tools);
+
+    const listed = await executor.executeProviderTool({
+      threadId: 'thread-1',
+      toolId: 'core.workflow',
+      arguments: { action: 'list' },
+      actor: 'provider:test/provider'
+    });
+    expect(listed.content).toContain('coding-workflow');
+
+    const started = await executor.executeProviderTool({
+      threadId: 'thread-1',
+      toolId: 'core.workflow',
+      arguments: {
+        action: 'start',
+        package_id: 'rync/workflow-coder',
+        workflow_id: 'coding-workflow',
+        input: { idea: 'ship it' },
+        transport_resource_id: 'resource-1'
+      },
+      actor: 'provider:test/provider'
+    });
+    const startResult = JSON.parse(started.content) as { runId: string; status: string };
+    expect(startResult.status).toBe('completed');
+
+    const inspected = await executor.executeProviderTool({
+      threadId: 'thread-1',
+      toolId: 'core.workflow',
+      arguments: { action: 'inspect', run_id: startResult.runId },
+      actor: 'provider:test/provider'
+    });
+    expect(inspected.content).toContain('rync/workflow-coder');
   });
 });

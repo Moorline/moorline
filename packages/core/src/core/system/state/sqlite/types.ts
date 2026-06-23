@@ -1,5 +1,5 @@
 import type { PendingRuntimeRequestRecord, ProviderResumeCursor, ProviderRuntimeEvent, ProviderSessionRecord, RuntimeAgentKind, RuntimeModeName } from '../../../../types/runtime.js';
-import type { SessionOwnerKind } from '../../../../types/plugin.js';
+import type { RuntimeWorkflowRunRecord, SessionOwnerKind } from '../../../../types/plugin.js';
 import type {
   RuntimeExternalResourceRecord,
   RuntimeExternalResourceRef,
@@ -143,6 +143,21 @@ export interface RuntimeWorkItemRow {
   leaseOwner: string | null;
   leaseExpiresAt: string | null;
   lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+}
+
+export interface RuntimeWorkflowRunRow {
+  runId: string;
+  packageId: string;
+  workflowId: string;
+  status: RuntimeWorkflowRunRecord['status'];
+  inputJson: string;
+  actorJson: string;
+  originJson: string | null;
+  resultJson: string | null;
+  error: string | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
