@@ -101,6 +101,11 @@ describe('provider tool grants', () => {
     expect(service.resolveProviderTools('workspace', ['plugin:rync/persona.edit_soul']).map((tool) => tool.id)).toEqual([
       'plugin:rync/persona.edit_soul'
     ]);
+    expect(service.resolveProviderTools('workspace', ['core.workflow', 'core.runtime', 'core.package']).map((tool) => tool.id)).toEqual([
+      'core.workflow',
+      'core.runtime',
+      'core.package'
+    ]);
   });
 
   it('enforces session-control capabilities and audits provider tool execution', async () => {
@@ -192,5 +197,44 @@ describe('provider tool grants', () => {
       actor: 'provider:test/provider'
     });
     expect(inspected.content).toContain('rync/workflow-coder');
+  });
+
+  it('rejects direct starts for workflows that require interactive setup', async () => {
+    const service = createService({
+      getPluginHost: () => ({
+        listTools: () => [],
+        listWorkflows: () => [
+          {
+            packageId: 'rync/workflow-coder',
+            id: 'coding-workflow',
+            title: 'Coding workflow',
+            setup: {
+              enabled: true,
+              firstQuestion: 'What idea should this coding workflow work on?',
+              requiresConfirmation: true
+            }
+          }
+        ],
+        executeWorkflow: async () => {
+          throw new Error('setup workflow should not execute directly');
+        }
+      })
+    });
+    const tools = service.resolveProviderTools('workspace', ['core.workflow']);
+    const executor = service.createProviderToolExecutor(tools);
+
+    const result = await executor.executeProviderTool({
+      threadId: 'thread-1',
+      toolId: 'core.workflow',
+      arguments: {
+        action: 'start',
+        package_id: 'rync/workflow-coder',
+        workflow_id: 'coding-workflow',
+        input: { idea: 'ship it' }
+      },
+      actor: 'provider:test/provider'
+    });
+
+    expect(result.content).toContain('requires interactive setup');
   });
 });

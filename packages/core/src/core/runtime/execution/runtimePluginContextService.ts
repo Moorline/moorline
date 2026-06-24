@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
+import { OperatorPackageService } from '../../../app/bootstrap/operatorPackageService.js';
 import {
   type AdminConfig,
   usesProviderDefaultModel,
@@ -23,10 +24,12 @@ import type { CanonicalEventLogStore } from '../../system/state/canonicalEventLo
 import type {
   RuntimePluginAdminConfig,
   RuntimePluginContext,
+  RuntimeToolContext,
   RuntimeToolDefinition,
   RuntimeWorkflowDefinitionWithPackage,
   RuntimeWorkflowRunOrigin,
-  RuntimeWorkflowRunRecord
+  RuntimeWorkflowRunRecord,
+  RuntimeWorkflowSetupRecord
 } from '../../../types/plugin.js';
 import type { PluginHost } from '../../extension/plugins/pluginHost.js';
 import type { RuntimeActionGuard } from '../../system/policy/runtimeActionGuard.js';
@@ -257,7 +260,7 @@ export class RuntimePluginContextService {
     input?: Record<string, unknown>;
     actor: RuntimeWorkflowRunRecord['actor'];
     origin?: RuntimeWorkflowRunOrigin;
-  }): Promise<{ runId: string; status: RuntimeWorkflowRunRecord['status'] }> {
+  }): Promise<{ runId: string; status: RuntimeWorkflowRunRecord['status']; result?: RuntimeWorkflowRunRecord['result'] }> {
     const workflow = this.resolveWorkflow(input.packageId, input.workflowId);
     const workflowInput = this.safeRecord(input.input);
     this.validateWorkflowInput(workflow, workflowInput);
@@ -308,7 +311,7 @@ export class RuntimePluginContextService {
         },
         (pluginId) => this.createContext(`plugin:${pluginId}`)
       );
-      this.upsertWorkflowRun({
+      const completed = this.upsertWorkflowRun({
         ...running,
         status: 'completed',
         result: {
@@ -323,7 +326,7 @@ export class RuntimePluginContextService {
         packageId: workflow.packageId,
         workflowId: workflow.id
       });
-      return { runId, status: 'completed' };
+      return { runId, status: 'completed', result: completed.result };
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       this.upsertWorkflowRun({
@@ -341,6 +344,178 @@ export class RuntimePluginContextService {
       });
       throw error;
     }
+  }
+
+  private workflowSetupExpiresAt(nowIso: string): string {
+    return new Date(new Date(nowIso).getTime() + 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  private inferWorkflowOrigin(input: Record<string, unknown>, context: Pick<RuntimeToolContext, 'toolCall'>): RuntimeWorkflowRunOrigin {
+    const storeWithOptionalLookups = this.deps.store as SqliteSessionStore & {
+      getSession?: (sessionId: string) => RuntimeSessionRow | null;
+      getSessionByThreadId?: (threadId: string) => RuntimeSessionRow | null;
+      getSessionByTransportResourceId?: (transportResourceId: string) => RuntimeSessionRow | null;
+    };
+    const origin: RuntimeWorkflowRunOrigin = {};
+    const transportResourceId =
+      typeof input.transport_resource_id === 'string' && input.transport_resource_id.trim()
+        ? input.transport_resource_id.trim()
+        : context.toolCall?.transportResourceId;
+    const sessionId =
+      typeof input.session_id === 'string' && input.session_id.trim()
+        ? input.session_id.trim()
+        : context.toolCall?.sessionId;
+    const threadId =
+      typeof input.thread_id === 'string' && input.thread_id.trim()
+        ? input.thread_id.trim()
+        : context.toolCall?.threadId;
+    const sourceEventId =
+      typeof input.source_event_id === 'string' && input.source_event_id.trim()
+        ? input.source_event_id.trim()
+        : context.toolCall?.sourceEventId;
+
+    if (transportResourceId) origin.transportResourceId = transportResourceId;
+    if (sessionId) origin.sessionId = sessionId;
+    if (threadId) origin.threadId = threadId;
+    if (sourceEventId) origin.sourceEventId = sourceEventId;
+
+    if (!origin.transportResourceId && origin.sessionId) {
+      const session = storeWithOptionalLookups.getSession?.(origin.sessionId) ?? null;
+      if (session) {
+        origin.transportResourceId = session.transportResourceId;
+        origin.threadId ??= session.threadId;
+      }
+    }
+    if (!origin.transportResourceId && origin.threadId) {
+      const session = storeWithOptionalLookups.getSessionByThreadId?.(origin.threadId) ?? null;
+      if (session) {
+        origin.transportResourceId = session.transportResourceId;
+        origin.sessionId ??= session.sessionId;
+      }
+    }
+    if (origin.transportResourceId && !origin.sessionId) {
+      const session = storeWithOptionalLookups.getSessionByTransportResourceId?.(origin.transportResourceId) ?? null;
+      if (session) {
+        origin.sessionId = session.sessionId;
+        origin.threadId ??= session.threadId;
+      }
+    }
+    return origin;
+  }
+
+  private startWorkflowSetup(input: {
+    packageId?: string;
+    workflowId: string;
+    actor: RuntimeWorkflowSetupRecord['actor'];
+    origin?: RuntimeWorkflowRunOrigin;
+  }): RuntimeWorkflowSetupRecord {
+    const workflow = this.resolveWorkflow(input.packageId, input.workflowId);
+    if (!workflow.setup?.enabled) {
+      throw new Error(`Workflow ${workflow.packageId}:${workflow.id} does not define an interactive setup.`);
+    }
+    if ((workflow.trigger?.sessionOnly || workflow.manualTrigger?.requiresTransportResource) && !input.origin?.transportResourceId) {
+      throw new Error(`Workflow ${workflow.packageId}:${workflow.id} must be set up from a session transport resource.`);
+    }
+    const nowIso = this.deps.now();
+    const record = this.deps.store.upsertWorkflowSetup({
+      setupId: randomUUID(),
+      packageId: workflow.packageId,
+      workflowId: workflow.id,
+      status: 'collecting',
+      actor: input.actor,
+      ...(input.origin && Object.keys(input.origin).length > 0 ? { origin: input.origin } : {}),
+      answers: [],
+      currentQuestion: workflow.setup.firstQuestion,
+      draftInput: null,
+      draftSummary: null,
+      runId: null,
+      error: null,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      expiresAt: this.workflowSetupExpiresAt(nowIso)
+    });
+    this.deps.appendAuditEvent('workflow.setup.started', {
+      setupId: record.setupId,
+      packageId: record.packageId,
+      workflowId: record.workflowId,
+      actor: record.actor.actorId
+    });
+    return record;
+  }
+
+  private answerWorkflowSetup(setupId: string, answer: string): RuntimeWorkflowSetupRecord {
+    const current = this.deps.store.getWorkflowSetup(setupId);
+    if (!current) {
+      throw new Error(`Unknown workflow setup: ${setupId}`);
+    }
+    if (current.status !== 'collecting') {
+      throw new Error(`Workflow setup ${setupId} is ${current.status}, not collecting.`);
+    }
+    if (current.expiresAt && current.expiresAt <= this.deps.now()) {
+      const expired = this.deps.store.upsertWorkflowSetup({
+        ...current,
+        status: 'expired',
+        error: 'Workflow setup expired before confirmation.',
+        updatedAt: this.deps.now()
+      });
+      return expired;
+    }
+    const workflow = this.resolveWorkflow(current.packageId, current.workflowId);
+    const trimmed = answer.trim();
+    if (!trimmed) {
+      throw new Error('Workflow setup answer is required.');
+    }
+    const answers = [...current.answers, { answer: trimmed, answeredAt: this.deps.now() }];
+    const draftInput = { idea: answers.map((entry) => entry.answer).join('\n\n') };
+    const draftSummary = [
+      `Workflow: ${workflow.title}`,
+      '',
+      'Start parameters:',
+      `- package_id: ${workflow.packageId}`,
+      `- workflow_id: ${workflow.id}`,
+      `- idea: ${draftInput.idea}`
+    ].join('\n');
+    return this.deps.store.upsertWorkflowSetup({
+      ...current,
+      status: workflow.setup?.requiresConfirmation === false ? 'confirmed' : 'awaiting_confirmation',
+      answers,
+      currentQuestion: null,
+      draftInput,
+      draftSummary,
+      updatedAt: this.deps.now()
+    });
+  }
+
+  private async confirmWorkflowSetup(setupId: string): Promise<RuntimeWorkflowSetupRecord> {
+    const current = this.deps.store.getWorkflowSetup(setupId);
+    if (!current) {
+      throw new Error(`Unknown workflow setup: ${setupId}`);
+    }
+    if (current.status !== 'awaiting_confirmation' && current.status !== 'confirmed') {
+      throw new Error(`Workflow setup ${setupId} is ${current.status}, not awaiting confirmation.`);
+    }
+    const workflow = this.resolveWorkflow(current.packageId, current.workflowId);
+    if ((workflow.trigger?.sessionOnly || workflow.manualTrigger?.requiresTransportResource) && !current.origin?.transportResourceId) {
+      return this.deps.store.upsertWorkflowSetup({
+        ...current,
+        status: 'failed',
+        error: `Workflow ${workflow.packageId}:${workflow.id} must be started from a session transport resource.`,
+        updatedAt: this.deps.now()
+      });
+    }
+    const started = await this.startWorkflowRun({
+      packageId: current.packageId,
+      workflowId: current.workflowId,
+      input: current.draftInput ?? {},
+      actor: current.actor,
+      origin: current.origin
+    });
+    return this.deps.store.upsertWorkflowSetup({
+      ...current,
+      status: 'started',
+      runId: started.runId,
+      updatedAt: this.deps.now()
+    });
   }
 
   private transitionWorkItem(
@@ -406,7 +581,7 @@ export class RuntimePluginContextService {
     };
   }
 
-  createContext(actorId: string): RuntimePluginContext {
+  createContext(actorId: string, toolCall?: RuntimeToolContext['toolCall']): RuntimePluginContext {
     const capabilities = createPluginContextCapabilities({
       actorId,
       homeRoot: this.deps.homeRoot,
@@ -425,11 +600,12 @@ export class RuntimePluginContextService {
     return {
       actorId,
       config: this.deps.config,
+      ...(toolCall ? { toolCall } : {}),
       getAdminConfig: () => capabilities.admin!.getAdminConfig(),
       isAdminActor: (input) => this.deps.isAdminActor(input),
       getSurfaceState: () => this.deps.requireSurfaceState(),
-      getCurrentTransportResourceId: () => this.deps.getSurfaceState()?.coordinationResourceId ?? this.deps.config.transport.scopeId,
-      getCurrentThreadId: () => `coordination:${this.deps.getSurfaceState()?.coordinationResourceId ?? this.deps.config.transport.scopeId}`,
+      getCurrentTransportResourceId: () => toolCall?.transportResourceId ?? this.deps.getSurfaceState()?.coordinationResourceId ?? this.deps.config.transport.scopeId,
+      getCurrentThreadId: () => toolCall?.threadId ?? `coordination:${this.deps.getSurfaceState()?.coordinationResourceId ?? this.deps.config.transport.scopeId}`,
       getCurrentWorkspacePath: () => this.deps.coordinationWorkspacePath,
       getCoordinationWorkspacePath: () => this.deps.coordinationWorkspacePath,
       getRuntimeRootPath: () => this.deps.runtimeRoot,
@@ -1075,7 +1251,9 @@ export class RuntimePluginContextService {
         }),
       listWorkflows: () => this.listRuntimeWorkflows(),
       startWorkflow: async (input) => await this.startWorkflowRun(input),
+      startWorkflowSetup: (input) => this.startWorkflowSetup(input),
       inspectWorkflowRun: (runId) => this.deps.store.getWorkflowRun(runId),
+      inspectWorkflowSetup: (setupId) => this.deps.store.getWorkflowSetup(setupId),
       directSession: async ({ sessionId, transportResourceId, instruction, reason }) =>
         await this.deps.workManagement.directManagedSession({
           actorId,
@@ -1350,7 +1528,11 @@ export class RuntimePluginContextService {
           },
           providerResources: resources,
           providerTools,
-          providerToolExecutor: this.createProviderToolExecutor(providerTools)
+          providerToolExecutor: this.createProviderToolExecutor(providerTools, {
+            threadId: activeSession.threadId,
+            sessionId: activeSession.sessionId,
+            transportResourceId
+          })
         });
         const formattedResult = this.deps.normalizeReply(
           result.text || (result.attachments?.length ? '' : 'I could not finish that cleanly.')
@@ -1606,17 +1788,19 @@ export class RuntimePluginContextService {
   private coreWorkflowTool(): RuntimeToolDefinition {
     return {
       name: 'workflow',
-      description: 'List, start, or inspect Moorline workflows.',
+      description: 'List workflows, run interactive workflow setup, start direct workflows, or inspect workflow runs.',
       inputSchema: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
-            enum: ['list', 'start', 'inspect']
+            enum: ['list', 'start_setup', 'answer_setup', 'inspect_setup', 'confirm_setup', 'cancel_setup', 'start', 'inspect']
           },
           package_id: { type: 'string' },
           workflow_id: { type: 'string' },
+          setup_id: { type: 'string' },
           run_id: { type: 'string' },
+          answer: { type: 'string' },
           input: { type: 'object' },
           transport_resource_id: { type: 'string' },
           session_id: { type: 'string' },
@@ -1638,7 +1822,9 @@ export class RuntimePluginContextService {
                   title: workflow.title,
                   description: workflow.description ?? null,
                   requiredCapability: workflow.requiredCapability ?? null,
-                  trigger: workflow.trigger ?? null
+                  trigger: workflow.trigger ?? null,
+                  setup: workflow.setup ?? null,
+                  manualTrigger: workflow.manualTrigger ?? null
                 })),
                 null,
                 2
@@ -1653,26 +1839,112 @@ export class RuntimePluginContextService {
             const run = this.deps.store.getWorkflowRun(runId);
             return { content: run ? JSON.stringify(run, null, 2) : `No workflow run found: ${runId}` };
           }
+          case 'inspect_setup': {
+            const setupId = typeof input.setup_id === 'string' ? input.setup_id.trim() : '';
+            if (!setupId) {
+              return { content: 'workflow inspect_setup error: setup_id is required.' };
+            }
+            const setup = this.deps.store.getWorkflowSetup(setupId);
+            return { content: setup ? JSON.stringify(setup, null, 2) : `No workflow setup found: ${setupId}` };
+          }
+          case 'start_setup': {
+            const workflowId = typeof input.workflow_id === 'string' ? input.workflow_id.trim() : '';
+            if (!workflowId) {
+              return { content: 'workflow start_setup error: workflow_id is required.' };
+            }
+            const setup = this.startWorkflowSetup({
+              packageId: typeof input.package_id === 'string' && input.package_id.trim() ? input.package_id.trim() : undefined,
+              workflowId,
+              actor: { actorId: context.actorId },
+              origin: this.inferWorkflowOrigin(input, context)
+            });
+            return {
+              content: JSON.stringify(
+                {
+                  setupId: setup.setupId,
+                  status: setup.status,
+                  question: setup.currentQuestion,
+                  message: setup.currentQuestion
+                },
+                null,
+                2
+              )
+            };
+          }
+          case 'answer_setup': {
+            const setupId = typeof input.setup_id === 'string' ? input.setup_id.trim() : '';
+            const answer = typeof input.answer === 'string' ? input.answer.trim() : '';
+            if (!setupId) {
+              return { content: 'workflow answer_setup error: setup_id is required.' };
+            }
+            const setup = this.answerWorkflowSetup(setupId, answer);
+            return {
+              content: JSON.stringify(
+                {
+                  setupId: setup.setupId,
+                  status: setup.status,
+                  draftInput: setup.draftInput,
+                  draftSummary: setup.draftSummary,
+                  message:
+                    setup.status === 'awaiting_confirmation'
+                      ? `Review these workflow start parameters and call confirm_setup only after the user explicitly agrees.\n\n${setup.draftSummary ?? ''}`.trim()
+                      : setup.currentQuestion
+                },
+                null,
+                2
+              )
+            };
+          }
+          case 'confirm_setup': {
+            const setupId = typeof input.setup_id === 'string' ? input.setup_id.trim() : '';
+            if (!setupId) {
+              return { content: 'workflow confirm_setup error: setup_id is required.' };
+            }
+            const setup = await this.confirmWorkflowSetup(setupId);
+            return {
+              content: JSON.stringify(
+                {
+                  setupId: setup.setupId,
+                  status: setup.status,
+                  runId: setup.runId,
+                  error: setup.error
+                },
+                null,
+                2
+              )
+            };
+          }
+          case 'cancel_setup': {
+            const setupId = typeof input.setup_id === 'string' ? input.setup_id.trim() : '';
+            if (!setupId) {
+              return { content: 'workflow cancel_setup error: setup_id is required.' };
+            }
+            const current = this.deps.store.getWorkflowSetup(setupId);
+            if (!current) {
+              return { content: `No workflow setup found: ${setupId}` };
+            }
+            const setup = this.deps.store.upsertWorkflowSetup({
+              ...current,
+              status: 'cancelled',
+              updatedAt: this.deps.now()
+            });
+            return { content: JSON.stringify({ setupId: setup.setupId, status: setup.status }, null, 2) };
+          }
           case 'start': {
             const workflowId = typeof input.workflow_id === 'string' ? input.workflow_id.trim() : '';
             if (!workflowId) {
               return { content: 'workflow start error: workflow_id is required.' };
             }
-            const origin: RuntimeWorkflowRunOrigin = {};
-            if (typeof input.transport_resource_id === 'string' && input.transport_resource_id.trim()) {
-              origin.transportResourceId = input.transport_resource_id.trim();
+            const packageId = typeof input.package_id === 'string' && input.package_id.trim() ? input.package_id.trim() : undefined;
+            const workflow = this.resolveWorkflow(packageId, workflowId);
+            if (workflow.setup?.enabled) {
+              return {
+                content: `workflow start error: ${workflow.packageId}:${workflow.id} requires interactive setup. Use action=start_setup, then answer_setup, then confirm_setup after user approval.`
+              };
             }
-            if (typeof input.session_id === 'string' && input.session_id.trim()) {
-              origin.sessionId = input.session_id.trim();
-            }
-            if (typeof input.thread_id === 'string' && input.thread_id.trim()) {
-              origin.threadId = input.thread_id.trim();
-            }
-            if (typeof input.source_event_id === 'string' && input.source_event_id.trim()) {
-              origin.sourceEventId = input.source_event_id.trim();
-            }
+            const origin = this.inferWorkflowOrigin(input, context);
             const started = await this.startWorkflowRun({
-              packageId: typeof input.package_id === 'string' && input.package_id.trim() ? input.package_id.trim() : undefined,
+              packageId,
               workflowId,
               input: this.safeRecord(input.input),
               actor: { actorId: context.actorId },
@@ -1685,6 +1957,341 @@ export class RuntimePluginContextService {
         }
       }
     };
+  }
+
+  private coreRuntimeTool(): RuntimeToolDefinition {
+    return {
+      name: 'runtime',
+      description: 'Inspect or control the Moorline runtime. Mutating actions require a reason and use runtime control authorization.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['status', 'reload', 'set_accepting_new_work', 'drain']
+          },
+          accepting: { type: 'boolean' },
+          mode: { type: 'string', enum: ['graceful', 'force'] },
+          reason: { type: 'string' }
+        },
+        required: ['action'],
+        additionalProperties: false
+      },
+      execute: async (input, context) => {
+        const action = typeof input.action === 'string' ? input.action : '';
+        const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
+        switch (action) {
+          case 'status':
+            return {
+              content: JSON.stringify(
+                {
+                  runtime: this.deps.getRuntimeStatus(),
+                  control: this.deps.getRuntimeControlStatus(),
+                  provider: this.getProviderDiagnostics()
+                },
+                null,
+                2
+              )
+            };
+          case 'reload': {
+            if (!reason) return { content: 'runtime reload error: reason is required.' };
+            return await this.requestRuntimeToolApproval({ context, toolId: 'core.runtime', arguments: input, reason });
+          }
+          case 'set_accepting_new_work': {
+            if (!reason) return { content: 'runtime set_accepting_new_work error: reason is required.' };
+            if (typeof input.accepting !== 'boolean') {
+              return { content: 'runtime set_accepting_new_work error: accepting is required.' };
+            }
+            return await this.requestRuntimeToolApproval({ context, toolId: 'core.runtime', arguments: input, reason });
+          }
+          case 'drain': {
+            if (!reason) return { content: 'runtime drain error: reason is required.' };
+            return await this.requestRuntimeToolApproval({ context, toolId: 'core.runtime', arguments: input, reason });
+          }
+          default:
+            return { content: 'runtime error: unknown action.' };
+        }
+      }
+    };
+  }
+
+  private packageService(): OperatorPackageService {
+    if (!this.deps.configPath) {
+      throw new Error('Package management requires a persisted Moorline config path.');
+    }
+    const service = new OperatorPackageService(this.deps.config, this.deps.configPath, () => this.deps.now(), this.deps.homeRoot);
+    service.ensureInitialized();
+    return service;
+  }
+
+  private async requestRuntimeToolApproval(input: {
+    context: RuntimeToolContext;
+    toolId: 'core.runtime' | 'core.package';
+    arguments: Record<string, unknown>;
+    reason: string;
+  }): Promise<{ content: string }> {
+    if (!input.reason.trim()) {
+      return { content: `${input.toolId} approval error: reason is required.` };
+    }
+    const threadId = input.context.toolCall?.threadId;
+    const transportResourceId = input.context.toolCall?.transportResourceId;
+    if (!threadId || !transportResourceId) {
+      return { content: `${input.toolId} approval error: approval requires a session transport resource.` };
+    }
+    const requestId = randomUUID();
+    const nowIso = this.deps.now();
+    const approvalPayload = {
+      kind: 'moorline.runtime_tool_approval',
+      toolId: input.toolId,
+      arguments: input.arguments,
+      requestedBy: input.context.actorId,
+      reason: input.reason
+    };
+    this.deps.store.upsertPendingRequest({
+      requestId,
+      threadId,
+      turnId: null,
+      transportResourceId,
+      requesterUserId: null,
+      messageId: null,
+      requestType: 'dynamic_tool_call',
+      status: 'open',
+      detail: `${input.toolId} ${String(input.arguments.action ?? 'action')} requested: ${input.reason}`.slice(0, 1000),
+      questionsJson: JSON.stringify(approvalPayload),
+      decision: null,
+      createdAt: nowIso,
+      resolvedAt: null
+    });
+    await this.deps.postTransportMessage('runtime:status', transportResourceId, {
+      text: 'Moorline runtime tool approval requested.',
+      blocks: [
+        {
+          kind: 'fields',
+          title: 'Runtime Tool Approval',
+          tone: 'warning',
+          fields: [
+            { label: 'Request ID', value: requestId },
+            { label: 'Tool', value: input.toolId, inline: true },
+            { label: 'Action', value: String(input.arguments.action ?? 'unknown'), inline: true },
+            { label: 'Reason', value: input.reason.slice(0, 1000) }
+          ],
+          metadata: { createdAt: nowIso }
+        }
+      ],
+      actions: [
+        {
+          actionId: 'runtime.pending_request.respond',
+          label: 'Accept',
+          style: 'success',
+          input: { requestId, decision: 'accept' }
+        },
+        {
+          actionId: 'runtime.pending_request.respond',
+          label: 'Decline',
+          style: 'danger',
+          input: { requestId, decision: 'decline' }
+        },
+        {
+          actionId: 'runtime.pending_request.respond',
+          label: 'Cancel',
+          style: 'secondary',
+          input: { requestId, decision: 'cancel' }
+        }
+      ]
+    });
+    this.deps.appendAuditEvent('runtime.tool.approval.requested', {
+      requestId,
+      toolId: input.toolId,
+      action: input.arguments.action,
+      requestedBy: input.context.actorId
+    });
+    return { content: `Approval requested for ${input.toolId} ${String(input.arguments.action ?? 'action')}: ${requestId}` };
+  }
+
+  private corePackageTool(): RuntimeToolDefinition {
+    return {
+      name: 'package',
+      description: 'Search, inspect, install, remove, activate, deactivate, enable, disable, or apply Moorline packages.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['search', 'info', 'installed', 'install', 'remove', 'activate', 'deactivate', 'enable', 'disable', 'apply']
+          },
+          query: { type: 'string' },
+          kind: { type: 'string' },
+          surface: { type: 'string' },
+          package_id: { type: 'string' },
+          source: { type: 'string' },
+          cascade: { type: 'boolean' },
+          compatible_only: { type: 'boolean' },
+          reason: { type: 'string' }
+        },
+        required: ['action'],
+        additionalProperties: false
+      },
+      execute: async (input, context) => {
+        const action = typeof input.action === 'string' ? input.action : '';
+        const packageId = typeof input.package_id === 'string' ? input.package_id.trim() : '';
+        const kind = typeof input.kind === 'string' ? input.kind.trim() : undefined;
+        const surface = typeof input.surface === 'string' ? input.surface.trim() : kind;
+        const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
+        const service = this.packageService();
+        switch (action) {
+          case 'search':
+            return {
+              content: JSON.stringify(
+                await service.searchPackages({
+                  query: typeof input.query === 'string' ? input.query : undefined,
+                  kind: kind as never,
+                  compatibleOnly: input.compatible_only === true
+                }),
+                null,
+                2
+              )
+            };
+          case 'info':
+            if (!packageId) return { content: 'package info error: package_id is required.' };
+            return { content: JSON.stringify(await service.getPackageInfo({ packageId, kind: kind as never }), null, 2) };
+          case 'installed':
+            return { content: JSON.stringify(service.listInstalled(kind as never), null, 2) };
+          case 'install':
+            if (!reason) return { content: 'package install error: reason is required.' };
+            return await this.requestRuntimeToolApproval({ context, toolId: 'core.package', arguments: input, reason });
+          case 'remove':
+            if (!reason) return { content: 'package remove error: reason is required.' };
+            if (!packageId) return { content: 'package remove error: package_id is required.' };
+            return await this.requestRuntimeToolApproval({ context, toolId: 'core.package', arguments: input, reason });
+          case 'activate':
+            if (!reason) return { content: 'package activate error: reason is required.' };
+            if (!packageId || !surface) return { content: 'package activate error: surface and package_id are required.' };
+            return await this.requestRuntimeToolApproval({ context, toolId: 'core.package', arguments: input, reason });
+          case 'deactivate':
+            if (!reason) return { content: 'package deactivate error: reason is required.' };
+            if (!packageId || !surface) return { content: 'package deactivate error: surface and package_id are required.' };
+            return await this.requestRuntimeToolApproval({ context, toolId: 'core.package', arguments: input, reason });
+          case 'enable':
+            if (!reason) return { content: 'package enable error: reason is required.' };
+            if (!packageId || !surface) return { content: 'package enable error: surface and package_id are required.' };
+            return await this.requestRuntimeToolApproval({ context, toolId: 'core.package', arguments: input, reason });
+          case 'disable':
+            if (!reason) return { content: 'package disable error: reason is required.' };
+            if (!packageId || !surface) return { content: 'package disable error: surface and package_id are required.' };
+            return await this.requestRuntimeToolApproval({ context, toolId: 'core.package', arguments: input, reason });
+          case 'apply':
+            if (!reason) return { content: 'package apply error: reason is required.' };
+            return await this.requestRuntimeToolApproval({ context, toolId: 'core.package', arguments: input, reason });
+          default:
+            return { content: 'package error: unknown action.' };
+        }
+      }
+    };
+  }
+
+  async executeRuntimeToolApproval(input: {
+    requestId: string;
+    requestPayload: unknown;
+    approver: RuntimeToolContext['actorId'];
+  }): Promise<string> {
+    const payload = input.requestPayload && typeof input.requestPayload === 'object' && !Array.isArray(input.requestPayload)
+      ? (input.requestPayload as Record<string, unknown>)
+      : {};
+    if (payload.kind !== 'moorline.runtime_tool_approval') {
+      throw new Error('Pending request is not a Moorline runtime tool approval.');
+    }
+    const toolId = payload.toolId;
+    const args = payload.arguments && typeof payload.arguments === 'object' && !Array.isArray(payload.arguments)
+      ? (payload.arguments as Record<string, unknown>)
+      : {};
+    const reason = typeof payload.reason === 'string' ? payload.reason : `Approved runtime tool request ${input.requestId}.`;
+    if (toolId === 'core.runtime') {
+      const action = typeof args.action === 'string' ? args.action : '';
+      switch (action) {
+        case 'reload': {
+          const result = await this.deps.runtimeControl.requestRuntimeReload({
+            actorId: 'runtime:tool-approval',
+            mode: args.mode === 'force' ? 'force' : 'graceful',
+            reason,
+            requestedBy: { actorId: input.approver }
+          });
+          return JSON.stringify(result, null, 2);
+        }
+        case 'set_accepting_new_work': {
+          if (typeof args.accepting !== 'boolean') {
+            throw new Error('Approved runtime accepting request is missing accepting.');
+          }
+          await this.deps.runtimeControl.requestSetRuntimeAcceptingNewWork({
+            actorId: 'runtime:tool-approval',
+            accepting: args.accepting,
+            reason,
+            requestedBy: { actorId: input.approver }
+          });
+          return `Runtime accepting_new_work=${args.accepting}.`;
+        }
+        case 'drain':
+          await this.deps.drainRuntimeWork();
+          return 'Runtime work drained.';
+        default:
+          throw new Error(`Unsupported approved runtime action: ${action}`);
+      }
+    }
+    if (toolId === 'core.package') {
+      const action = typeof args.action === 'string' ? args.action : '';
+      const packageId = typeof args.package_id === 'string' ? args.package_id.trim() : '';
+      const kind = typeof args.kind === 'string' ? args.kind.trim() : undefined;
+      const surface = typeof args.surface === 'string' ? args.surface.trim() : kind;
+      const service = this.packageService();
+      const run = async <T>(title: string, execute: () => Promise<T> | T) =>
+        await this.deps.runGuardedAction({
+          action: 'runtime.control',
+          actor: 'runtime:tool-approval',
+          target: `package:${action}:${packageId || surface || kind || 'runtime'}`,
+          payload: { action, packageId, kind, surface, reason, requestId: input.requestId },
+          title,
+          execute: async () => await execute()
+        });
+      switch (action) {
+        case 'install':
+          return JSON.stringify(
+            await run('Package install blocked', async () =>
+              await service.installPackage({
+                kind: kind as never,
+                ...(packageId ? { packageId } : {}),
+                ...(typeof args.source === 'string' ? { source: { kind: 'npm', packageName: args.source } as never } : {})
+              })
+            ),
+            null,
+            2
+          );
+        case 'remove':
+          if (!packageId) throw new Error('Approved package remove request is missing package_id.');
+          return JSON.stringify(
+            await run('Package remove blocked', async () =>
+              await service.removePackage({ kind: kind as never, packageId, cascade: args.cascade === true })
+            ),
+            null,
+            2
+          );
+        case 'activate':
+          if (!packageId || !surface) throw new Error('Approved package activate request is missing surface or package_id.');
+          return JSON.stringify(await run('Package activate blocked', () => service.activatePackage(surface as never, packageId)), null, 2);
+        case 'deactivate':
+          if (!packageId || !surface) throw new Error('Approved package deactivate request is missing surface or package_id.');
+          return JSON.stringify(await run('Package deactivate blocked', () => service.deactivatePackage(surface as never, packageId)), null, 2);
+        case 'enable':
+          if (!packageId || !surface) throw new Error('Approved package enable request is missing surface or package_id.');
+          return JSON.stringify(await run('Package enable blocked', () => service.enablePackage(surface as never, packageId)), null, 2);
+        case 'disable':
+          if (!packageId || !surface) throw new Error('Approved package disable request is missing surface or package_id.');
+          return JSON.stringify(await run('Package disable blocked', () => service.disablePackage(surface as never, packageId)), null, 2);
+        case 'apply':
+          return JSON.stringify(await run('Package apply blocked', async () => await service.apply()), null, 2);
+        default:
+          throw new Error(`Unsupported approved package action: ${action}`);
+      }
+    }
+    throw new Error(`Unsupported runtime tool approval: ${String(toolId)}`);
   }
 
   private coreSkillSaveTool(): RuntimeToolDefinition {
@@ -1759,6 +2366,8 @@ export class RuntimePluginContextService {
     return [
       { ...this.coreSessionTool(), pluginId: 'core' },
       { ...this.coreWorkflowTool(), pluginId: 'core' },
+      { ...this.coreRuntimeTool(), pluginId: 'core' },
+      { ...this.corePackageTool(), pluginId: 'core' },
       { ...this.coreSkillLoadTool(), pluginId: 'core' },
       { ...this.coreSkillSaveTool(), pluginId: 'core' },
       ...this.deps.getPluginHost().listTools((pluginId) => this.createContext(`plugin:${pluginId}`))
@@ -1787,10 +2396,10 @@ export class RuntimePluginContextService {
       }));
   }
 
-  private createProviderToolExecutor(tools: ProviderToolDefinition[]): ProviderToolExecutor {
+  private createProviderToolExecutor(tools: ProviderToolDefinition[], defaultToolCall?: RuntimeToolContext['toolCall']): ProviderToolExecutor {
     const allowed = new Set(tools.map((tool) => tool.id));
     return {
-      executeProviderTool: async ({ toolId, arguments: args, actor }) => {
+      executeProviderTool: async ({ toolId, arguments: args, actor, threadId }) => {
         if (!allowed.has(toolId)) {
           throw new Error(`Provider tool is not granted for this session: ${toolId}`);
         }
@@ -1798,7 +2407,24 @@ export class RuntimePluginContextService {
         if (!runtimeTool) {
           throw new Error(`Unknown provider tool: ${toolId}`);
         }
-        const context = this.createContext(runtimeTool.pluginId && runtimeTool.pluginId !== 'core' ? `plugin:${runtimeTool.pluginId}` : actor);
+        const storeWithOptionalLookups = this.deps.store as SqliteSessionStore & {
+          getSessionByThreadId?: (threadId: string) => RuntimeSessionRow | null;
+          getSession?: (sessionId: string) => RuntimeSessionRow | null;
+        };
+        const session =
+          storeWithOptionalLookups.getSessionByThreadId?.(threadId) ??
+          (defaultToolCall?.sessionId ? storeWithOptionalLookups.getSession?.(defaultToolCall.sessionId) ?? null : null);
+        const toolCall = {
+          ...defaultToolCall,
+          threadId: threadId || defaultToolCall?.threadId,
+          ...(session
+            ? {
+                sessionId: session.sessionId,
+                transportResourceId: session.transportResourceId
+              }
+            : {})
+        };
+        const context = this.createContext(runtimeTool.pluginId && runtimeTool.pluginId !== 'core' ? `plugin:${runtimeTool.pluginId}` : actor, toolCall);
         const run = async () => await runtimeTool.execute(args, context);
         try {
           const result = runtimeTool.requiredCapability

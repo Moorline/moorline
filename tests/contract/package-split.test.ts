@@ -131,7 +131,7 @@ describe('host repository split contract', () => {
     expect(DEFAULT_PROVIDER_TOOL_POLICY).toEqual({
       workspace: {
         nativePreset: 'provider-default',
-        grants: ['core.workflow']
+        grants: ['core.workflow', 'core.runtime', 'core.package']
       },
       ephemeral: {
         nativePreset: 'none',

@@ -1,5 +1,5 @@
 import type { PendingRuntimeRequestRecord, ProviderResumeCursor, ProviderRuntimeEvent, ProviderSessionRecord, RuntimeAgentKind, RuntimeModeName } from '../../../../types/runtime.js';
-import type { RuntimeWorkflowRunRecord, SessionOwnerKind } from '../../../../types/plugin.js';
+import type { RuntimeWorkflowRunRecord, RuntimeWorkflowSetupRecord, SessionOwnerKind } from '../../../../types/plugin.js';
 import type {
   RuntimeExternalResourceRecord,
   RuntimeExternalResourceRef,
@@ -161,6 +161,24 @@ export interface RuntimeWorkflowRunRow {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+}
+
+export interface RuntimeWorkflowSetupRow {
+  setupId: string;
+  packageId: string;
+  workflowId: string;
+  status: RuntimeWorkflowSetupRecord['status'];
+  actorJson: string;
+  originJson: string | null;
+  answersJson: string;
+  currentQuestion: string | null;
+  draftInputJson: string | null;
+  draftSummary: string | null;
+  runId: string | null;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string | null;
 }
 
 export interface RuntimeSessionExternalResourceRow {

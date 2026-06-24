@@ -64,6 +64,11 @@ interface RuntimeInteractionServiceDeps {
     metadata?: Record<string, unknown>;
     requestActor: RuntimeActionInvokedIntent['actor'];
   }): Promise<void>;
+  resolveRuntimeToolApproval(input: {
+    requestId: string;
+    decision: 'accept' | 'decline' | 'cancel';
+    actor: RuntimeActionInvokedIntent['actor'];
+  }): Promise<string | null>;
 }
 
 export class RuntimeInteractionService {
@@ -171,6 +176,19 @@ export class RuntimeInteractionService {
     }
 
     try {
+      if (workflow.setup?.enabled) {
+        const setup = this.deps.createPluginContext('runtime:workflow-action').startWorkflowSetup({
+          packageId: workflow.packageId,
+          workflowId: workflow.id,
+          actor: event.actor,
+          origin
+        });
+        await this.replyToAction(
+          event,
+          [`Started workflow setup: ${workflow.title} (${setup.setupId}).`, setup.currentQuestion].filter(Boolean).join('\n\n')
+        );
+        return true;
+      }
       const started = await this.deps.createPluginContext('runtime:workflow-action').startWorkflow({
         packageId: workflow.packageId,
         workflowId: workflow.id,
@@ -241,6 +259,15 @@ export class RuntimeInteractionService {
     const decision = stringInput(event.input, 'decision');
     if (!requestId || (decision !== 'accept' && decision !== 'decline' && decision !== 'cancel')) {
       return false;
+    }
+    const runtimeToolApproval = await this.deps.resolveRuntimeToolApproval({
+      requestId,
+      decision,
+      actor: event.actor
+    });
+    if (runtimeToolApproval !== null) {
+      await this.replyToAction(event, runtimeToolApproval);
+      return true;
     }
     try {
       await this.deps.resolvePendingRequest({

@@ -19,6 +19,7 @@ import { SessionMetadataRepository } from './sqlite/sessionMetadataRepository.js
 import { TransportIntentRepository } from './sqlite/transportIntentRepository.js';
 import { WorkItemRepository } from './sqlite/workItemRepository.js';
 import { WorkflowRunRepository } from './sqlite/workflowRunRepository.js';
+import { WorkflowSetupRepository } from './sqlite/workflowSetupRepository.js';
 import type {
   RuntimeExternalResourceRecord,
   RuntimeExternalResourceRef,
@@ -40,7 +41,7 @@ import {
   type RuntimeReceiptRecord,
   type RuntimeSessionRow
 } from './sqlite/types.js';
-import type { RuntimeWorkflowRunRecord } from '../../../types/plugin.js';
+import type { RuntimeWorkflowRunRecord, RuntimeWorkflowSetupRecord } from '../../../types/plugin.js';
 
 export type {
   RuntimeOrchestrationRequestRow,
@@ -69,6 +70,7 @@ export class SqliteSessionStore {
   private readonly transportIntents: TransportIntentRepository;
   private readonly workItems: WorkItemRepository;
   private readonly workflowRuns: WorkflowRunRepository;
+  private readonly workflowSetups: WorkflowSetupRepository;
 
   constructor(pathOrDb: string | DatabaseSync) {
     if (typeof pathOrDb === 'string') {
@@ -95,6 +97,7 @@ export class SqliteSessionStore {
     this.transportIntents = new TransportIntentRepository(this.db);
     this.workItems = new WorkItemRepository(this.db);
     this.workflowRuns = new WorkflowRunRepository(this.db);
+    this.workflowSetups = new WorkflowSetupRepository(this.db);
   }
 
   database(): DatabaseSync {
@@ -233,6 +236,23 @@ export class SqliteSessionStore {
     limit?: number;
   }): RuntimeWorkflowRunRecord[] {
     return this.workflowRuns.list(filter);
+  }
+
+  upsertWorkflowSetup(record: RuntimeWorkflowSetupRecord): RuntimeWorkflowSetupRecord {
+    return this.workflowSetups.upsert(record);
+  }
+
+  getWorkflowSetup(setupId: string): RuntimeWorkflowSetupRecord | null {
+    return this.workflowSetups.get(setupId);
+  }
+
+  listWorkflowSetups(filter?: {
+    packageId?: string;
+    workflowId?: string;
+    status?: RuntimeWorkflowSetupRecord['status'];
+    limit?: number;
+  }): RuntimeWorkflowSetupRecord[] {
+    return this.workflowSetups.list(filter);
   }
 
   upsertGateRun(record: RuntimeGateRunRecord): RuntimeGateRunRecord {

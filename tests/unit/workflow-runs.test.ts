@@ -55,4 +55,50 @@ describe('workflow run storage', () => {
     });
     expect(store.listWorkflowRuns({ packageId: 'rync/workflow-coder' }).map((run) => run.runId)).toEqual(['run-1']);
   });
+
+  it('persists durable workflow setup state', () => {
+    const store = createStore();
+
+    const created = store.upsertWorkflowSetup({
+      setupId: 'setup-1',
+      packageId: 'rync/workflow-coder',
+      workflowId: 'coding-workflow',
+      status: 'collecting',
+      actor: { actorId: 'provider:rync/pi' },
+      origin: { transportResourceId: 'resource-1', sessionId: 'session-1', threadId: 'thread-1' },
+      answers: [],
+      currentQuestion: 'What idea should this coding workflow work on?',
+      draftInput: null,
+      draftSummary: null,
+      runId: null,
+      error: null,
+      createdAt: '2026-06-23T00:00:00.000Z',
+      updatedAt: '2026-06-23T00:00:00.000Z',
+      expiresAt: '2026-06-24T00:00:00.000Z'
+    });
+
+    expect(created).toMatchObject({
+      setupId: 'setup-1',
+      status: 'collecting',
+      currentQuestion: 'What idea should this coding workflow work on?',
+      origin: { transportResourceId: 'resource-1', sessionId: 'session-1', threadId: 'thread-1' }
+    });
+
+    store.upsertWorkflowSetup({
+      ...created,
+      status: 'awaiting_confirmation',
+      answers: [{ answer: 'prove workflow setup works', answeredAt: '2026-06-23T00:01:00.000Z' }],
+      currentQuestion: null,
+      draftInput: { idea: 'prove workflow setup works' },
+      draftSummary: 'Workflow: Coding workflow',
+      updatedAt: '2026-06-23T00:01:00.000Z'
+    });
+
+    expect(store.getWorkflowSetup('setup-1')).toMatchObject({
+      status: 'awaiting_confirmation',
+      answers: [{ answer: 'prove workflow setup works', answeredAt: '2026-06-23T00:01:00.000Z' }],
+      draftInput: { idea: 'prove workflow setup works' }
+    });
+    expect(store.listWorkflowSetups({ status: 'awaiting_confirmation' }).map((setup) => setup.setupId)).toEqual(['setup-1']);
+  });
 });

@@ -174,7 +174,9 @@ export class PluginHost {
           title: workflow.title,
           description: workflow.description ?? workflow.title,
           packageId: plugin.id,
-          ...(workflow.trigger ? { trigger: workflow.trigger } : {})
+          ...(workflow.trigger ? { trigger: workflow.trigger } : {}),
+          ...(workflow.setup ? { setup: workflow.setup } : {}),
+          ...(workflow.manualTrigger ? { manualTrigger: workflow.manualTrigger } : {})
         }
       }
     }));

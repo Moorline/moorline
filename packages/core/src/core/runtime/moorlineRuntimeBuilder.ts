@@ -432,7 +432,63 @@ export function buildMoorlineRuntimeServiceGraph(
         deniedTitle: input.deniedTitle,
         metadata: input.metadata,
         requestActor: input.requestActor
-      }))
+      })),
+    resolveRuntimeToolApproval: async ({ requestId, decision, actor }) => {
+      const request = snapshots.getOpenRequestById(requestId);
+      if (!request || request.requestType !== 'dynamic_tool_call' || !request.questionsJson) {
+        return null;
+      }
+      let payload: unknown;
+      try {
+        payload = JSON.parse(request.questionsJson) as unknown;
+      } catch {
+        return null;
+      }
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload) || (payload as { kind?: unknown }).kind !== 'moorline.runtime_tool_approval') {
+        return null;
+      }
+      if (decision !== 'accept') {
+        store.upsertPendingRequest({
+          ...request,
+          status: 'resolved',
+          decision,
+          resolvedAt: callbacks.now()
+        });
+        callbacks.appendAuditEvent('runtime.tool.approval.resolved', {
+          requestId,
+          decision,
+          actor: actor.actorId
+        });
+        return decision === 'decline' ? `Declined request ${requestId}.` : `Cancelled request ${requestId}.`;
+      }
+      let result: string;
+      try {
+        result = await pluginContexts.executeRuntimeToolApproval({
+          requestId,
+          requestPayload: payload,
+          approver: actor.actorId
+        });
+        store.upsertPendingRequest({
+          ...request,
+          status: 'resolved',
+          decision: 'accept',
+          resolvedAt: callbacks.now()
+        });
+        callbacks.appendAuditEvent('runtime.tool.approval.executed', {
+          requestId,
+          actor: actor.actorId
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        callbacks.appendAuditEvent('runtime.tool.approval.failed', {
+          requestId,
+          actor: actor.actorId,
+          error: message
+        });
+        throw error;
+      }
+      return `Approved request ${requestId}.\n\n${result}`.trim();
+    }
   });
   const transportSurface = new RuntimeTransportSurfaceService({
     transport: () => transport,
