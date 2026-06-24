@@ -75,7 +75,7 @@ export class ControlApiActionsService {
     return {
       version: 1,
       exportedAt: this.now(),
-      productVersion: process.env.npm_package_version ?? '0.0.2',
+      productVersion: process.env.npm_package_version ?? '0.0.7',
       config: buildShareableMoorlineConfig(config),
       packages: shareBundle.packages,
       notes: shareBundle.notes
