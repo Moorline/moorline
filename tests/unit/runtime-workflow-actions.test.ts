@@ -22,6 +22,7 @@ function workflowActionIntent(
 function createService(input: {
   transportResourceSession?: { sessionId: string; threadId: string } | null;
   startWorkflow?: (input: Record<string, unknown>) => Promise<{ runId: string; status: string }>;
+  startWorkflowSetup?: (input: Record<string, unknown>) => Record<string, unknown>;
   listWorkflows?: () => Array<Record<string, unknown>>;
   listActions?: () => Array<Record<string, unknown>>;
   handleTransportIntent?: () => Promise<Record<string, unknown>>;
@@ -70,24 +71,47 @@ function createService(input: {
             trigger: { sessionOnly: true }
           }
         ]),
-      startWorkflow: input.startWorkflow ?? (async () => ({ runId: 'run-1', status: 'completed' }))
+      startWorkflow: input.startWorkflow ?? (async () => ({ runId: 'run-1', status: 'completed' })),
+      startWorkflowSetup: input.startWorkflowSetup ?? (() => ({
+        setupId: 'setup-1',
+        status: 'collecting',
+        currentQuestion: 'What idea should this coding workflow work on?'
+      }))
     }),
     isAdminActor: () => false,
     respondToProviderRequest: async () => undefined,
-    resolvePendingRequest: async () => undefined
+    resolvePendingRequest: async () => undefined,
+    resolveRuntimeToolApproval: async () => null
   } as never);
 }
 
 describe('runtime workflow actions', () => {
-  it('starts a durable workflow run when a transport action maps to workflow metadata', async () => {
+  it('starts durable workflow setup when a transport action maps to setup metadata', async () => {
     const started: Record<string, unknown>[] = [];
     const replies: string[] = [];
     const service = createService({
       transportResourceSession: { sessionId: 'session-1', threadId: 'thread-1' },
-      startWorkflow: async (input) => {
+      startWorkflowSetup: (input) => {
         started.push(input);
-        return { runId: 'run-123', status: 'running' };
+        return {
+          setupId: 'setup-123',
+          status: 'collecting',
+          currentQuestion: 'What idea should this coding workflow work on?'
+        };
       },
+      listWorkflows: () => [
+        {
+          packageId: 'rync/workflow-coder',
+          id: 'coding-workflow',
+          title: 'Coding workflow',
+          trigger: { sessionOnly: true },
+          setup: {
+            enabled: true,
+            firstQuestion: 'What idea should this coding workflow work on?',
+            requiresConfirmation: true
+          }
+        }
+      ],
       handleTransportIntent: async () => {
         throw new Error('legacy action path should not run');
       }
@@ -110,7 +134,6 @@ describe('runtime workflow actions', () => {
       {
         packageId: 'rync/workflow-coder',
         workflowId: 'coding-workflow',
-        input: { idea: 'make slash workflows real' },
         actor: { actorId: 'user-1', displayName: 'User One' },
         origin: {
           sourceEventId: 'intent-workflow-1',
@@ -120,6 +143,45 @@ describe('runtime workflow actions', () => {
         }
       }
     ]);
+    expect(replies).toEqual(['Started workflow setup: Coding workflow (setup-123).\n\nWhat idea should this coding workflow work on?']);
+  });
+
+  it('starts a durable workflow run for direct workflows without setup metadata', async () => {
+    const started: Record<string, unknown>[] = [];
+    const replies: string[] = [];
+    const service = createService({
+      transportResourceSession: { sessionId: 'session-1', threadId: 'thread-1' },
+      startWorkflow: async (input) => {
+        started.push(input);
+        return { runId: 'run-123', status: 'running' };
+      },
+      listWorkflows: () => [
+        {
+          packageId: 'rync/workflow-coder',
+          id: 'coding-workflow',
+          title: 'Coding workflow',
+          trigger: { sessionOnly: true }
+        }
+      ],
+      handleTransportIntent: async () => {
+        throw new Error('legacy action path should not run');
+      }
+    });
+
+    await service.handleTransportIntent(
+      workflowActionIntent({
+        native: {
+          kind: 'discord.slash_command',
+          payload: {
+            reply: async (input: { content: string }) => {
+              replies.push(input.content);
+            }
+          }
+        }
+      })
+    );
+
+    expect(started).toHaveLength(1);
     expect(replies).toEqual(['Started workflow: Coding workflow (run-123).']);
   });
 

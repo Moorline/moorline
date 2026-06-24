@@ -259,7 +259,7 @@ describe('npm Moorline-owned package identity', () => {
         npmName: '@rync/moorline-discord-default',
         packageId: 'rync/discord-default',
         kind: 'bundle' as const,
-        description: 'Discord transport plus status command and project resource routing.',
+        description: 'Discord transport plus project resource routing.',
         keywords: ['moorline-package', 'moorline-kind-bundle', 'moorline-id-rync-discord-default', 'rync', 'discord', 'default', 'bundle', 'transport']
       },
       {

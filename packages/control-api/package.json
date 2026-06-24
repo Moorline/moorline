@@ -1,6 +1,6 @@
 {
   "name": "@moorline/control-api",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Typed Moorline control API contract and client",
   "type": "module",
   "private": false,
@@ -55,7 +55,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@moorline/contracts": "0.0.8"
+    "@moorline/contracts": "0.0.9"
   },
   "license": "MIT",
   "repository": {

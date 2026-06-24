@@ -329,6 +329,12 @@ export type RuntimePluginSurfaceState = RuntimeSurfaceState;
 export interface RuntimeToolContext {
   readonly actorId: string;
   readonly config: RuntimePluginConfig;
+  readonly toolCall?: {
+    threadId?: string;
+    sessionId?: string;
+    transportResourceId?: string;
+    sourceEventId?: string;
+  };
   getCurrentTransportResourceId(): string;
   getCurrentThreadId(): string;
   getCurrentWorkspacePath(): string;
@@ -626,6 +632,33 @@ export interface RuntimeWorkflowRunRecord {
   completedAt?: string | null;
 }
 
+export type RuntimeWorkflowSetupStatus =
+  | 'collecting'
+  | 'awaiting_confirmation'
+  | 'confirmed'
+  | 'started'
+  | 'cancelled'
+  | 'expired'
+  | 'failed';
+
+export interface RuntimeWorkflowSetupRecord {
+  setupId: string;
+  packageId: string;
+  workflowId: string;
+  status: RuntimeWorkflowSetupStatus;
+  actor: RuntimeActorIdentity;
+  origin?: RuntimeWorkflowRunOrigin;
+  answers: Array<{ answer: string; answeredAt: string }>;
+  currentQuestion: string | null;
+  draftInput: Record<string, unknown> | null;
+  draftSummary: string | null;
+  runId: string | null;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string | null;
+}
+
 export interface RuntimePluginWorkflowCapability {
   listWorkflows(): RuntimeWorkflowDefinitionWithPackage[];
   startWorkflow(input: {
@@ -634,8 +667,15 @@ export interface RuntimePluginWorkflowCapability {
     input?: Record<string, unknown>;
     actor: RuntimeActorIdentity;
     origin?: RuntimeWorkflowRunOrigin;
-  }): Promise<{ runId: string; status: RuntimeWorkflowRunStatus }>;
+  }): Promise<{ runId: string; status: RuntimeWorkflowRunStatus; result?: RuntimeWorkflowRunRecord['result'] }>;
+  startWorkflowSetup(input: {
+    packageId?: string;
+    workflowId: string;
+    actor: RuntimeActorIdentity;
+    origin?: RuntimeWorkflowRunOrigin;
+  }): RuntimeWorkflowSetupRecord;
   inspectWorkflowRun(runId: string): RuntimeWorkflowRunRecord | null;
+  inspectWorkflowSetup(setupId: string): RuntimeWorkflowSetupRecord | null;
 }
 
 export type RuntimePluginContext = RuntimeToolContext &
@@ -666,6 +706,17 @@ export interface RuntimeWorkflowDefinition {
   trigger?: {
     label?: string;
     sessionOnly?: boolean;
+  };
+  setup?: {
+    enabled: boolean;
+    firstQuestion: string;
+    requiresConfirmation?: boolean;
+  };
+  manualTrigger?: {
+    enabled: boolean;
+    label: string;
+    description?: string;
+    requiresTransportResource?: boolean;
   };
   metadata?: Record<string, unknown>;
 }
