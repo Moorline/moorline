@@ -1,5 +1,5 @@
 import type { AppliedMoorlineConfig } from '../../../types/config.js';
-import type { RuntimePluginContext } from '../../../types/plugin.js';
+import type { RuntimePluginContext, RuntimeWorkflowDefinitionWithPackage, RuntimeWorkflowRunOrigin } from '../../../types/plugin.js';
 import type { RuntimeExternalResourceRef } from '../../../types/external.js';
 import type { RuntimeActionDefinition, RuntimeMessagePayload, RuntimeTransportIntent } from '../../../types/transport.js';
 import type { PluginHost } from '../../extension/plugins/pluginHost.js';
@@ -136,6 +136,9 @@ export class RuntimeInteractionService {
         return;
       }
     }
+    if (await this.handleWorkflowAction(event)) {
+      return;
+    }
     const result = await this.deps.getPluginHost().handleTransportIntent(event, (pluginId) =>
       this.deps.createPluginContext(`plugin:${pluginId}`)
     );
@@ -145,6 +148,62 @@ export class RuntimeInteractionService {
     if (result.audit) {
       this.deps.appendAuditEvent(result.audit.event, result.audit.payload ?? {});
     }
+  }
+
+  private async handleWorkflowAction(event: RuntimeActionInvokedIntent): Promise<boolean> {
+    const workflow = this.workflowForAction(event.actionId);
+    if (!workflow) {
+      return false;
+    }
+    if (workflow.trigger?.sessionOnly && !event.transportResourceId) {
+      await this.replyToAction(event, `${workflow.title} must be started from a session transport resource.`);
+      return true;
+    }
+
+    const origin: RuntimeWorkflowRunOrigin = { sourceEventId: event.intentId };
+    if (event.transportResourceId) {
+      origin.transportResourceId = event.transportResourceId;
+      const session = this.deps.sessionRegistry.getByTransportResourceId(event.transportResourceId);
+      if (session) {
+        origin.sessionId = session.sessionId;
+        origin.threadId = session.threadId;
+      }
+    }
+
+    try {
+      const started = await this.deps.createPluginContext('runtime:workflow-action').startWorkflow({
+        packageId: workflow.packageId,
+        workflowId: workflow.id,
+        input: event.input,
+        actor: event.actor,
+        origin
+      });
+      await this.replyToAction(event, `Started workflow: ${workflow.title} (${started.runId}).`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await this.replyToAction(event, `Workflow start failed: ${message}`);
+    }
+    return true;
+  }
+
+  private workflowForAction(actionId: string): RuntimeWorkflowDefinitionWithPackage | null {
+    const action = this.deps.getPluginHost().listActions((pluginId) =>
+      this.deps.createPluginContext(`plugin:${pluginId}`)
+    ).find((entry) => entry.id === actionId);
+    const workflowMetadata = action?.metadata?.workflow;
+    if (!workflowMetadata || typeof workflowMetadata !== 'object' || Array.isArray(workflowMetadata)) {
+      return null;
+    }
+    const workflowRecord = workflowMetadata as { id?: unknown; packageId?: unknown };
+    if (typeof workflowRecord.id !== 'string' || typeof workflowRecord.packageId !== 'string') {
+      return null;
+    }
+    return (
+      this.deps
+        .createPluginContext('runtime:workflow-action')
+        .listWorkflows()
+        .find((workflow) => workflow.id === workflowRecord.id && workflow.packageId === workflowRecord.packageId) ?? null
+    );
   }
 
   private isAllowedWhileDraining(actionId: string): boolean {
