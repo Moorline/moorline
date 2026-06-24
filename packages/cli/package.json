@@ -1,6 +1,6 @@
 {
   "name": "moorline",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Moorline command line interface",
   "type": "module",
   "private": false,
@@ -17,10 +17,10 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@moorline/contracts": "0.0.6",
-    "@moorline/core": "0.0.6",
-    "@moorline/control-api": "0.0.6",
-    "@moorline/http": "0.0.6"
+    "@moorline/contracts": "0.0.7",
+    "@moorline/core": "0.0.7",
+    "@moorline/control-api": "0.0.7",
+    "@moorline/http": "0.0.7"
   },
   "license": "MIT",
   "repository": {

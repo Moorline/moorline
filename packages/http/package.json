@@ -1,6 +1,6 @@
 {
   "name": "@moorline/http",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Moorline HTTP API adapter",
   "type": "module",
   "private": false,
@@ -34,9 +34,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@moorline/contracts": "0.0.6",
-    "@moorline/core": "0.0.6",
-    "@moorline/control-api": "0.0.6"
+    "@moorline/contracts": "0.0.7",
+    "@moorline/core": "0.0.7",
+    "@moorline/control-api": "0.0.7"
   },
   "moorline": {
     "schemaVersion": 1,
